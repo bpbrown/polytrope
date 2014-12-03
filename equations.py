@@ -1,0 +1,64 @@
+import numpy as np
+from dedalus2.public import *
+
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
+class Incompressible_KH:
+    def __init__(self, domain):
+        self.domain = domain
+        
+    def set_problem(self, Rayleigh, Prandtl, epsilon=1e-4, gamma=5/3):
+        
+        logger.info("Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
+        
+        poly_n = 1/(gamma-1) - epsilon
+        
+        del_s0_factor = - epsilon/gamma
+        del_ln_rho_factor = -poly_n
+
+        Lz = np.max(self.domain.grid(-1))-np.min(self.domain.grid(-1))
+        logger.info("Lz = {:g}".format(Lz))
+
+        z = self.domain.grid(-1)
+        
+        z0 = 1. + Lz
+
+        del_ln_rho0 = del_ln_rho_factor/(z0 - z)
+
+        g_atmosphere = poly_n + 1
+        delta_s = del_s0_factor*np.log(z0)
+
+        # take constant nu, chi
+        nu = np.sqrt(Prandtl*(Lz**3*np.abs(delta_s)*g_atmosphere)/Rayleigh)
+        chi = nu/Prandtl
+        
+        self.problem = ParsedProblem( axis_names=['x', 'z'],
+                                field_names=['u','u_z','w','w_z','s', 's_z', 'pomega'],
+                                param_names=['nu', 'chi', 'del_ln_rho0'])
+
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(s) - s_z = 0")
+
+        self.problem.add_equation("dt(w) - nu*(dx(dx(w)) + dz(w_z))  + dz(pomega) - s*g = -(u*dx(w) + w*w_z)")
+        self.problem.add_equation("dt(u) - nu*(dx(dx(u)) + dz(u_z))  + dx(pomega)       = -(u*dx(u) + w*u_z)")
+        self.problem.add_equation("dt(s) - chi*(dx(dx(s)) + dz(s_z))                    = -(u*dx(s) + w*s_z)")
+        self.problem.add_equation("dx(u) + w_z + w* del_ln_rho0 = 0")
+            
+        self.problem.parameters['nu']  = nu
+        self.problem.parameters['chi'] = chi
+        self.problem.parameters['del_ln_rho0']  = del_ln_rho0
+
+        self.problem.add_left_bc( "s = 0")
+        self.problem.add_right_bc("s = 0")
+        self.problem.add_left_bc( "u = 0")
+        self.problem.add_right_bc("u = 0")
+        self.problem.add_left_bc( "w = 0", condition="dx != 0")
+        self.problem.add_left_bc( "pomega = 0", condition="dx == 0")
+        self.problem.add_right_bc("w = 0")
+
+        self.problem.expand(self.domain, order=2)
+
+        return self.problem
+    
