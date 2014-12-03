@@ -37,8 +37,8 @@ if domain.distributor.rank == 0:
   if not os.path.exists('{:s}/'.format(data_dir)):
     os.mkdir('{:s}/'.format(data_dir))
     
-anelastic = equations.anelastic_polytrope(domain)
-pde = anelastic.set_problem(Rayleigh, Prandtl)
+atmosphere = equations.polytrope(domain)
+pde = atmosphere.set_anelastic_problem(Rayleigh, Prandtl)
 
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
@@ -73,17 +73,17 @@ top_thermal_time = 1/chi
 g = solver.evaluator.vars['g']
 freefall_time = np.sqrt(Lz/g)
 
-logger.info("thermal_time = {:g}, top_thermal_time = {:g}, freefall_time = {:g}".format(thermal_time, top_thermal_time, freefall_time))
+logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(thermal_time, top_thermal_time))
 
 
-max_dt = 1e-2*thermal_time
+max_dt = atmosphere.buoyancy_time
 cfl_cadence = 1
 cfl = flow_tools.CFL_conv_2D(solver, max_dt, cfl_cadence=cfl_cadence)
 
 
 report_cadence = 1
-output_time_cadence = 10
-solver.stop_sim_time = thermal_time
+output_time_cadence = 0.1*atmosphere.buoyancy_time
+solver.stop_sim_time = 0.25*thermal_time
 solver.stop_iteration= np.inf
 solver.stop_wall_time = 0.25*3600
 

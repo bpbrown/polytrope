@@ -42,8 +42,8 @@ if domain.distributor.rank == 0:
   if not os.path.exists('{:s}/'.format(data_dir)):
     os.mkdir('{:s}/'.format(data_dir))
     
-anelastic = equations.anelastic_polytrope(domain, gamma=gamma, epsilon=epsilon)
-pde = anelastic.set_problem(Rayleigh, Prandtl)
+atmosphere = equations.polytrope(domain, gamma=gamma, epsilon=epsilon)
+pde = atmosphere.set_anelastic_problem(Rayleigh, Prandtl)
 
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4

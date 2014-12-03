@@ -4,7 +4,7 @@ from dedalus2.public import *
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-class anelastic_polytrope:
+class polytrope:
     def __init__(self, domain, epsilon=1e-4, gamma=5/3):
         self.domain = domain
         self._set_atmosphere(epsilon, gamma)
@@ -38,7 +38,7 @@ class anelastic_polytrope:
         logger.info("atmospheric timescales:")
         logger.info("min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
         
-    def set_problem(self, Rayleigh, Prandtl):
+    def set_anelastic_problem(self, Rayleigh, Prandtl):
 
         logger.info("problem parameters:")
         logger.info("Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
