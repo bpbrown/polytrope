@@ -19,8 +19,9 @@ logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 # save data in directory named after script
 data_dir = sys.argv[0].split('.py')[0]+'/'
 
-Rayleigh_thermal = -14000.0
+Rayleigh = 4e4
 Prandtl = 1
+
 # Set domain
 Lz = 1
 Lx = 3
@@ -36,9 +37,10 @@ if domain.distributor.rank == 0:
   if not os.path.exists('{:s}/'.format(data_dir)):
     os.mkdir('{:s}/'.format(data_dir))
 
-#TS = equations.thermosolutal_doubly_diffusive_convection(domain)
-KH = equations.Boussinesq_KH(domain)
-pde = KH.set_problem(Rayleigh_thermal, Prandtl)
+logger.info(z_basis.grid.shape)
+    
+anelastic = equations.anelastic_polytrope(domain)
+pde = anelastic.set_problem(Rayleigh, Prandtl)
 
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4

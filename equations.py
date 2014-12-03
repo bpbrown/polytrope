@@ -4,7 +4,7 @@ from dedalus2.public import *
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-class Incompressible_KH:
+class anelastic_polytrope:
     def __init__(self, domain):
         self.domain = domain
         
@@ -20,11 +20,15 @@ class Incompressible_KH:
         Lz = np.max(self.domain.grid(-1))-np.min(self.domain.grid(-1))
         logger.info("Lz = {:g}".format(Lz))
 
-        z = self.domain.grid(-1)
+        z = self.domain.grid(-1)[0,:]
         
         z0 = 1. + Lz
 
         del_ln_rho0 = del_ln_rho_factor/(z0 - z)
+        del_s0 = del_s0_factor/(z0 - z)
+        
+        logger.info(del_ln_rho0.shape)
+        logger.info(self.domain.grid(1).shape)
 
         g_atmosphere = poly_n + 1
         delta_s = del_s0_factor*np.log(z0)
@@ -35,20 +39,23 @@ class Incompressible_KH:
         
         self.problem = ParsedProblem( axis_names=['x', 'z'],
                                 field_names=['u','u_z','w','w_z','s', 's_z', 'pomega'],
-                                param_names=['nu', 'chi', 'del_ln_rho0'])
-
+                                param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'g', 'z0'])
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(s) - s_z = 0")
 
-        self.problem.add_equation("dt(w) - nu*(dx(dx(w)) + dz(w_z))  + dz(pomega) - s*g = -(u*dx(w) + w*w_z)")
-        self.problem.add_equation("dt(u) - nu*(dx(dx(u)) + dz(u_z))  + dx(pomega)       = -(u*dx(u) + w*u_z)")
-        self.problem.add_equation("dt(s) - chi*(dx(dx(s)) + dz(s_z))                    = -(u*dx(s) + w*s_z)")
-        self.problem.add_equation("dx(u) + w_z + w* del_ln_rho0 = 0")
+        self.problem.add_equation("        dt(w)  - nu*(dx(dx(w)) + dz(w_z)) + dz(pomega) - s*g  =        -(u*dx(w) + w*w_z)")
+        self.problem.add_equation("        dt(u)  - nu*(dx(dx(u)) + dz(u_z)) + dx(pomega)        =        -(u*dx(u) + w*u_z)")
+        self.problem.add_equation("(z-z0)*(dt(s) - chi*(dx(dx(s)) + dz(s_z)) - w*del_s0)         = -(z-z0)*(u*dx(s) + w*s_z)")
+        self.problem.add_equation("(z-z0)*(dx(u) + w_z + w*del_ln_rho0) = 0")
             
         self.problem.parameters['nu']  = nu
         self.problem.parameters['chi'] = chi
         self.problem.parameters['del_ln_rho0']  = del_ln_rho0
+        self.problem.parameters['del_s0']  = del_s0
+
+        self.problem.parameters['g']  = g_atmosphere
+        self.problem.parameters['z0']  = z0
 
         self.problem.add_left_bc( "s = 0")
         self.problem.add_right_bc("s = 0")
