@@ -69,7 +69,11 @@ logger.info("s = {:g} -- {:g}".format(np.min(s['g']), np.max(s['g'])))
 chi = solver.evaluator.vars['chi']
 thermal_time = Lz**2/chi
 top_thermal_time = 1/chi
-logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(thermal_time, top_thermal_time))
+
+g = solver.evaluator.vars['g']
+freefall_time = np.sqrt(Lz/g)
+
+logger.info("thermal_time = {:g}, top_thermal_time = {:g}, freefall_time = {:g}".format(thermal_time, top_thermal_time, freefall_time))
 
 
 max_dt = 1e-2*thermal_time
