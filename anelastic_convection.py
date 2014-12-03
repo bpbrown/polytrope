@@ -23,8 +23,8 @@ Rayleigh = 4e4
 Prandtl = 1
 
 # Set domain
-Lz = 1
-Lx = 3
+Lz = 100
+Lx = 3*Lz
 
 nx = np.int(64*3/2)
 nz = np.int(32*3/2)
@@ -36,8 +36,6 @@ domain = Domain([x_basis, z_basis], grid_dtype=np.float64)
 if domain.distributor.rank == 0:
   if not os.path.exists('{:s}/'.format(data_dir)):
     os.mkdir('{:s}/'.format(data_dir))
-
-logger.info(z_basis.grid.shape)
     
 anelastic = equations.anelastic_polytrope(domain)
 pde = anelastic.set_problem(Rayleigh, Prandtl)
@@ -54,38 +52,34 @@ z = domain.grid(1)
 # initial conditions
 u = solver.state['u']
 w = solver.state['w']
-T = solver.state['T']
+s = solver.state['s']
 
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
 
 A0 = 1e-6
-# initially stable stratification
-tanh_width = 0.025
-tanh_center = 0.25
-phi = 0.5*(1-np.tanh((z-tanh_center)/tanh_width)*np.tanh((z-0.5-tanh_center)/tanh_width))
 
-A_u = 2000
-
-T['g'] = phi + A0*np.sin(z/Lz)*np.random.randn(*T['g'].shape)
-u['g'] = A_u*phi
-#w['g'] = A_u*1e-2*np.sin(z/Lz)*np.cos(4*np.pi*x/Lx)
-w['g'] = 1e-3*A_u*np.sin(z/Lz)*np.random.randn(*w['g'].shape)
+s['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)
 
 logger.info("A0 = {:g}".format(A0))
-logger.info("Au = {:g}".format(A_u))
-logger.info("u = {:g} -- {:g}".format(np.min(u['g']), np.max(u['g'])))
-logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
+logger.info("s = {:g} -- {:g}".format(np.min(s['g']), np.max(s['g'])))
 
-# integrate parameters
 
-max_dt = 1e-1
+# determine characteristic timescales
+chi = solver.evaluator.vars['chi']
+thermal_time = Lz**2/chi
+top_thermal_time = 1/chi
+logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(thermal_time, top_thermal_time))
+
+
+max_dt = 1e-2*thermal_time
 cfl_cadence = 1
 cfl = flow_tools.CFL_conv_2D(solver, max_dt, cfl_cadence=cfl_cadence)
 
+
 report_cadence = 1
-output_time_cadence = 0.1/A_u
-solver.stop_sim_time = 1e-2
+output_time_cadence = 10
+solver.stop_sim_time = thermal_time
 solver.stop_iteration= np.inf
 solver.stop_wall_time = 0.25*3600
 
@@ -93,8 +87,8 @@ logger.info("output cadence = {:g}".format(output_time_cadence))
 
 analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", sim_dt=output_time_cadence, max_writes=20, parallel=False)
 
-analysis_slice.add_task("T", name="T")
-analysis_slice.add_task("T - Integrate(T, dx)/Lx", name="T'")
+analysis_slice.add_task("s", name="s")
+analysis_slice.add_task("s - Integrate(s, dx)/Lx", name="s'")
 analysis_slice.add_task("u", name="u")
 analysis_slice.add_task("w", name="w")
 analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
@@ -105,7 +99,7 @@ if do_checkpointing:
     checkpoint = Checkpoint(data_dir)
     checkpoint.set_checkpoint(solver, wall_dt=1800)
 
-solver.dt = max_dt/A_u
+solver.dt = max_dt
 
 start_time = time.time()
 while solver.ok:

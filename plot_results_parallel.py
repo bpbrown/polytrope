@@ -84,12 +84,10 @@ print()
 
 #plt.ion()
 # Options
-fnames = ["T","enstrophy"]
+fnames = ["s","enstrophy"]
 xstr = 'x/H'
 ystr = 'z/H'
 cmapname = 'Spectral_r'
-color_map = [('RdYlBu', 'diverging', 11), ('YlOrRd', 'sequential', 9)]
-color_map = [('RdYlBu', 'diverging', 11), ('Purples', 'sequential', 9)]
 color_map = [('RdYlBu', 'diverging', 11), ('BuPu', 'sequential', 9)]
 
 reverse_color_map = [True, True, True, True]

@@ -17,36 +17,36 @@ class anelastic_polytrope:
         del_s0_factor = - epsilon/gamma
         del_ln_rho_factor = -poly_n
 
-        Lz = np.max(self.domain.grid(-1))-np.min(self.domain.grid(-1))
-        logger.info("Lz = {:g}".format(Lz))
-
-        z = self.domain.grid(-1)[0,:]
+        z = self.domain.bases[-1].grid # need to access globally-sized z-basis
+        Lz = np.max(z)-np.min(z) # global size of Lz
         
         z0 = 1. + Lz
 
         del_ln_rho0 = del_ln_rho_factor/(z0 - z)
         del_s0 = del_s0_factor/(z0 - z)
         
-        logger.info(del_ln_rho0.shape)
-        logger.info(self.domain.grid(1).shape)
-
         g_atmosphere = poly_n + 1
         delta_s = del_s0_factor*np.log(z0)
 
         # take constant nu, chi
         nu = np.sqrt(Prandtl*(Lz**3*np.abs(delta_s)*g_atmosphere)/Rayleigh)
         chi = nu/Prandtl
-        
+
+        logger.info("Lz = {:g}".format(Lz))
+        logger.info("nu = {:g}, chi = {:g}".format(nu, chi))
+        logger.info("poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(poly_n, epsilon, gamma))
+                
         self.problem = ParsedProblem( axis_names=['x', 'z'],
                                 field_names=['u','u_z','w','w_z','s', 's_z', 'pomega'],
                                 param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'g', 'z0'])
+        
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(s) - s_z = 0")
 
         self.problem.add_equation("        dt(w)  - nu*(dx(dx(w)) + dz(w_z)) + dz(pomega) - s*g  =        -(u*dx(w) + w*w_z)")
         self.problem.add_equation("        dt(u)  - nu*(dx(dx(u)) + dz(u_z)) + dx(pomega)        =        -(u*dx(u) + w*u_z)")
-        self.problem.add_equation("(z-z0)*(dt(s) - chi*(dx(dx(s)) + dz(s_z)) - w*del_s0)         = -(z-z0)*(u*dx(s) + w*s_z)")
+        self.problem.add_equation("(z-z0)*(dt(s) - chi*(dx(dx(s)) + dz(s_z)) + w*del_s0)         = -(z-z0)*(u*dx(s) + w*s_z)")
         self.problem.add_equation("(z-z0)*(dx(u) + w_z + w*del_ln_rho0) = 0")
             
         self.problem.parameters['nu']  = nu
