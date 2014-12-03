@@ -77,9 +77,6 @@ logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(thermal_time, 
 
 
 max_dt = atmosphere.buoyancy_time
-cfl_cadence = 1
-cfl = flow_tools.CFL_conv_2D(solver, max_dt, cfl_cadence=cfl_cadence)
-
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
@@ -103,21 +100,30 @@ if do_checkpointing:
     checkpoint = Checkpoint(data_dir)
     checkpoint.set_checkpoint(solver, wall_dt=1800)
 
-solver.dt = max_dt
+
+    
+cfl_cadence = 1
+CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
+                     max_change=1.5, min_change=0.5, max_dt=max_dt)
+
+CFL.add_velocities(('u', 'w'))
+
+# Flow properties
+flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
+flow.add_property("sqrt(u*u + w*w)*Lz/ nu", name='Re')
+
 
 start_time = time.time()
 while solver.ok:
 
+    dt = CFL.compute_dt()
     # advance
-    solver.step(solver.dt)
-    
-    if solver.iteration % cfl_cadence == 0 and solver.iteration>=2*cfl_cadence:
-        domain.distributor.comm_world.Barrier()
-        solver.dt = cfl.compute_dt(cfl_safety_factor)
-    
+    solver.step(dt)
+        
     # update lists
     if solver.iteration % report_cadence == 0:
-        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e},'.format(solver.iteration, solver.sim_time, solver.dt)
+        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, Re: {:8.3e}/{:8.3e}'.format(solver.iteration, solver.sim_time, dt,
+                                                                                                flow.grid_average('Re'), flow.max('Re'))
         logger.info(log_string)
         
 end_time = time.time()
