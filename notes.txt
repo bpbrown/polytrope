@@ -1,0 +1,2 @@
+FC equations:
+     unclear whether S=0 boundary condition is being properly respected with nonlinear EOS approach.  Check.  Making a much narrower boundary layer (with odd, alternating plume structure) than corresponding anelastic problem.
