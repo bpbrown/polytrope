@@ -27,7 +27,7 @@ Lz = 100
 Lx = 3*Lz
 
 nx = np.int(64*3/2)
-nz = np.int(32*3/2)
+nz = np.int(64*3/2)
 
 x_basis = Fourier(nx,   interval=[0., Lx], dealias=2/3)
 z_basis = Chebyshev(nz, interval=[0., Lz], dealias=2/3)
@@ -53,13 +53,16 @@ z = domain.grid(1)
 u = solver.state['u']
 w = solver.state['w']
 T = solver.state['T1']
+s = solver.state['s']
+ln_rho = solver.state['ln_rho1']
 
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
 
 A0 = 1e-6
 
-T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*T['g'].shape) #/atmosphere.T0_local
+#T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*T['g'].shape) #/atmosphere.T0_local['g']
+ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0_local['g']
 
 logger.info("A0 = {:g}".format(A0))
 logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
