@@ -19,11 +19,17 @@ class polytrope:
         self.Lz = np.max(self.z)-np.min(self.z) # global size of Lz
         self.z0 = 1. + self.Lz
 
-        self.del_s0_factor = - self.epsilon/self.gamma
         self.del_ln_rho_factor = -self.poly_n
-
         self.del_ln_rho0 = self.del_ln_rho_factor/(self.z0 - self.z)
+
+        self.del_s0_factor = - self.epsilon/self.gamma
         self.del_s0 = self.del_s0_factor/(self.z0 - self.z)
+
+        self.delta_s = self.del_s0_factor*np.log(self.z0)
+        
+        self.T0 = z0 - self.z
+        self.del_T0 = -1
+
         
         self.g = self.poly_n + 1
 
@@ -37,19 +43,23 @@ class polytrope:
 
         logger.info("atmospheric timescales:")
         logger.info("min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
-        
-    def set_anelastic_problem(self, Rayleigh, Prandtl):
 
+    def _calc_diffusivity(self.Rayleigh, Prandtl):
+        
         logger.info("problem parameters:")
         logger.info("Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         
-        delta_s = self.del_s0_factor*np.log(self.z0)
-
         # take constant nu, chi
-        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(delta_s)*self.g)/Rayleigh)
+        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
         chi = nu/Prandtl
 
         logger.info("nu = {:g}, chi = {:g}".format(nu, chi))
+        
+        return nu, chi
+    
+    def set_anelastic_problem(self, Rayleigh, Prandtl):
+
+        nu, chi = self._calc_diffusivity(Rayleigh, Prandtl)
                 
         self.problem = ParsedProblem( axis_names=['x', 'z'],
                                 field_names=['u','u_z','w','w_z','s', 's_z', 'pomega'],
@@ -83,4 +93,90 @@ class polytrope:
         self.problem.expand(self.domain, order=2)
 
         return self.problem
-    
+
+
+    def set_FC_problem(self, Rayleigh, Prandtl):
+
+        nu, chi = self._calc_diffusivity(Rayleigh, Prandtl)
+                
+        self.problem = ParsedProblem(axis_names=['x', 'z'],
+                                     field_names=['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 's1'], #'ln_rho1_z', 's1', 's1_z'],
+                                     param_names=['T0', 'del_T0', 'del_ln_rho0', 'nu', 'chi', 'gamma', 'Cv_inv', 'z0', 'T0_local'])
+
+        # here, nu and chi are constants
+        viscous_term_u = (" - nu*(dx(dx(u)) + dz(u_z)) - nu/3.*(dx(dx(u)) + dx(w_z)) "
+                          " - nu*dx(w)*del_ln_rho0 - nu*del_ln_rho0*u_z ")
+
+        viscous_term_w = (" - nu*(dx(dx(w)) + dz(w_z)) - nu/3.*(dx(u_z)   + dz(w_z)) " 
+                          " - nu*w_z*del_ln_rho0   - nu*del_ln_rho0*w_z + 2/3*nu*del_ln_rho0*(dx(u) + w_z) ")
+
+        nonlinear_viscous_u = (" + nu*dx(u)*dx(ln_rho1) + nu*dx(w)*dz(ln_rho1) "
+                               " + nu*dx(ln_rho1)*dx(u) + nu*dz(ln_rho1)*u_z "
+                               " - 2/3*nu*dx(ln_rho1)*(dx(u)+w_z) ")
+
+        nonlinear_viscous_w = (" + nu*u_z*dx(ln_rho1) + nu*w_z*dz(ln_rho1) "
+                               " + nu*dx(ln_rho1)*dx(w) + nu*dz(ln_rho1)*w_z "
+                               " - 2/3*nu*dz(ln_rho1)*(dx(u)+w_z) ")
+
+        viscous_heating_term = ""
+
+        logger.info(viscous_term_u)
+
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
+        #self.problem.add_equation("dz(ln_rho1) - ln_rho1_z = 0")
+        #self.problem.add_equation("dz(s) - s_z = 0")
+
+        
+        self.problem.add_equation(("(z0-z)*(dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 " + viscous_term_w + ") = "
+                                   "(z0-z)*(-T1*dz(ln_rho1) - u*dx(w) - w*w_z " + nonlinear_viscous_w +")"))
+
+        self.problem.add_equation(("(z0-z)*(dt(u) + dx(T1) + T0*dx(ln_rho1)                    " + viscous_term_u + ") = "
+                                   "(z0-z)*(-T1*dx(ln_rho1) - u*dx(u) - w*u_z " + nonlinear_viscous_u+")"))
+
+        self.problem.add_equation(("(z0-z)*(dt(ln_rho1) + w*del_ln_rho0 + dx(u) + w_z ) = "
+                                   "(z0-z)*(-u*dx(ln_rho1) -w*dz(ln_rho1) )"))
+
+        # here we have assumed chi = constant in both rho and radius
+        self.problem.add_equation(("(z0-z)*(dt(T1) + w*del_T0 + (gamma-1)*T0*(dx(u) + w_z) - Cv_inv*chi*(dx(dx(T1)) + dz(T1_z)) - Cv_inv*chi*T1_z*del_ln_rho0 ) = "
+                                   "(z0-z)*(-u*dx(T1) - w*T1_z - (gamma-1)*T1*(dx(u) + w_z) + Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1)) )")) #+ " + vicous_heating
+        
+        logger.info("using non-differential, nonlinear EOS for entropy")
+        # non-linear EOS for s1, where we've subtracted off
+        # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
+        self.problem.add_equation(("(z0-z)*(Cv_inv*s1 - T1/T0 + (gamma-1)*ln_rho1) = "
+                                   "(z0-z)*(log(1+T1/T0_local) - T1/T0_local)"))
+
+        self.problem.add_left_bc( "s1 = 0")
+        self.problem.add_right_bc("s1 = 0")
+        self.problem.add_left_bc( "u = 0")
+        self.problem.add_right_bc("u = 0")
+        self.problem.add_left_bc( "w = 0")
+        self.problem.add_right_bc("w = 0")
+
+        # processor local values
+        x = self.domain.grid(0)
+        z = self.domain.grid(1)
+        self.T0_local = self.domain.new_field()
+        self.T0_local['g'] = self.z0 - z
+        self.rho0_local = domain.new_field()
+        self.rho0_local['g'] = (self.z0 - z)**self.poly_n
+
+
+        self.problem.parameters['nu']  = nu
+        self.problem.parameters['chi'] = chi
+        self.problem.parameters['del_ln_rho0']  = self.del_ln_rho0
+        self.problem.parameters['del_T0'] = self.del_T0
+        self.problem.parameters['T0']  = self.T0
+
+        self.problem.parameters['Cv_inv'] = self.gamma-1
+        self.problem.parameters['gamma'] = self.gamma
+        self.problem.parameters['z0']  = self.z0
+
+        # Local variables for RHS
+        self.problem.parameters['T0_local']  = self.T0_local
+
+        self.problem.expand(self.domain, order=3)
+
+        return self.problem
