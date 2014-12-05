@@ -33,27 +33,36 @@ class polytrope:
         
         self.g = self.poly_n + 1
 
+        self.x = self.domain.bases[0].grid
+        nx = self.x.shape[0]
+        self.Lx = np.max(self.x)-np.min(self.x) # global size of Lx
+
         logger.info("polytropic atmosphere parameters:")
-        logger.info("poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
-        logger.info("Lz = {:g}".format(self.Lz))
+        logger.info("   poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
+        logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
+        
+        logger.info("   density scale heights = {:g}".format(np.log(self.Lz**self.poly_n)))
+        logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format((self.z0-self.Lz)/self.poly_n, (self.z0)/self.poly_n))
+        logger.info("   H_rho/delta x = {:g} (top)  {:g} (bottom)".format(((self.z0-self.Lz)/self.poly_n)/(self.Lx/nx), ((self.z0)/self.poly_n)/(self.Lx/nx)))
 
         self.min_BV_time = np.min(np.sqrt(np.abs(self.g*self.del_s0)))
         self.freefall_time = np.sqrt(self.Lz/self.g)
         self.buoyancy_time = np.sqrt(self.Lz/self.g/np.abs(self.epsilon))
 
         logger.info("atmospheric timescales:")
-        logger.info("min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
+        logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
+        
     def _calc_diffusivity(self, Rayleigh, Prandtl):
         
         logger.info("problem parameters:")
-        logger.info("Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
+        logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         
         # take constant nu, chi
         nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
         chi = nu/Prandtl
 
-        logger.info("nu = {:g}, chi = {:g}".format(nu, chi))
+        logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
         
         return nu, chi
     
