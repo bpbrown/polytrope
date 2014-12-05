@@ -27,7 +27,7 @@ class polytrope:
 
         self.delta_s = self.del_s0_factor*np.log(self.z0)
         
-        self.T0 = z0 - self.z
+        self.T0 = self.z0 - self.z
         self.del_T0 = -1
 
         
@@ -44,7 +44,7 @@ class polytrope:
         logger.info("atmospheric timescales:")
         logger.info("min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
-    def _calc_diffusivity(self.Rayleigh, Prandtl):
+    def _calc_diffusivity(self, Rayleigh, Prandtl):
         
         logger.info("problem parameters:")
         logger.info("Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
@@ -100,7 +100,7 @@ class polytrope:
         nu, chi = self._calc_diffusivity(Rayleigh, Prandtl)
                 
         self.problem = ParsedProblem(axis_names=['x', 'z'],
-                                     field_names=['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 's1'], #'ln_rho1_z', 's1', 's1_z'],
+                                     field_names=['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 's'], #'ln_rho1_z', 's', 's_z'],
                                      param_names=['T0', 'del_T0', 'del_ln_rho0', 'nu', 'chi', 'gamma', 'Cv_inv', 'z0', 'T0_local'])
 
         # here, nu and chi are constants
@@ -119,8 +119,6 @@ class polytrope:
                                " - 2/3*nu*dz(ln_rho1)*(dx(u)+w_z) ")
 
         viscous_heating_term = ""
-
-        logger.info(viscous_term_u)
 
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
@@ -143,13 +141,13 @@ class polytrope:
                                    "(z0-z)*(-u*dx(T1) - w*T1_z - (gamma-1)*T1*(dx(u) + w_z) + Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1)) )")) #+ " + vicous_heating
         
         logger.info("using non-differential, nonlinear EOS for entropy")
-        # non-linear EOS for s1, where we've subtracted off
+        # non-linear EOS for s, where we've subtracted off
         # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
-        self.problem.add_equation(("(z0-z)*(Cv_inv*s1 - T1/T0 + (gamma-1)*ln_rho1) = "
+        self.problem.add_equation(("(z0-z)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
                                    "(z0-z)*(log(1+T1/T0_local) - T1/T0_local)"))
 
-        self.problem.add_left_bc( "s1 = 0")
-        self.problem.add_right_bc("s1 = 0")
+        self.problem.add_left_bc( "s = 0")
+        self.problem.add_right_bc("s = 0")
         self.problem.add_left_bc( "u = 0")
         self.problem.add_right_bc("u = 0")
         self.problem.add_left_bc( "w = 0")
@@ -160,7 +158,7 @@ class polytrope:
         z = self.domain.grid(1)
         self.T0_local = self.domain.new_field()
         self.T0_local['g'] = self.z0 - z
-        self.rho0_local = domain.new_field()
+        self.rho0_local = self.domain.new_field()
         self.rho0_local['g'] = (self.z0 - z)**self.poly_n
 
 
