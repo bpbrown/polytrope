@@ -71,23 +71,29 @@ class polytrope:
         nu, chi = self._calc_diffusivity(Rayleigh, Prandtl)
                 
         self.problem = ParsedProblem( axis_names=['x', 'z'],
-                                field_names=['u','u_z','w','w_z','s', 's_z', 'pomega'],
-                                param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'g', 'z0'])
+                                field_names=['u','u_z','w','w_z','s', 'Q_z', 'pomega'],
+                                param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'T0', 'g', 'z0'])
         
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("dz(s) - s_z = 0")
+        self.problem.add_equation("T0*dz(s) + Q_z = 0")
 
-        self.problem.add_equation("        dt(w)  - nu*(dx(dx(w)) + dz(w_z)) + dz(pomega) - s*g  =        -(u*dx(w) + w*w_z)")
-        self.problem.add_equation("        dt(u)  - nu*(dx(dx(u)) + dz(u_z)) + dx(pomega)        =        -(u*dx(u) + w*u_z)")
-        self.problem.add_equation("(z-z0)*(dt(s) - chi*(dx(dx(s)) + dz(s_z)) + w*del_s0)         = -(z-z0)*(u*dx(s) + w*s_z)")
+        # Lecoanet et al 2014, ApJ, eqns D23-D31
+        self.viscous_term_z = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_x = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
+        self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
+        
+        self.problem.add_equation("(z-z0)  * (dt(w)  - "+self.viscous_term_z+" + dz(pomega) - s*g) = -(z-z0)  * (u*dx(w) + w*w_z)")
+        self.problem.add_equation("(z-z0)  * (dt(u)  - "+self.viscous_term_x+" + dx(pomega)      ) = -(z-z0)  * (u*dx(u) + w*u_z)")
+        self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*dz(s))")
         self.problem.add_equation("(z-z0)*(dx(u) + w_z + w*del_ln_rho0) = 0")
             
         self.problem.parameters['nu']  = nu
         self.problem.parameters['chi'] = chi
         self.problem.parameters['del_ln_rho0']  = self.del_ln_rho0
         self.problem.parameters['del_s0']  = self.del_s0
-
+        self.problem.parameters['T0'] = self.T0
+        
         self.problem.parameters['g']  = self.g
         self.problem.parameters['z0']  = self.z0
 
@@ -99,7 +105,7 @@ class polytrope:
         self.problem.add_left_bc( "pomega = 0", condition="dx == 0")
         self.problem.add_right_bc("w = 0")
 
-        self.problem.expand(self.domain, order=2)
+        self.problem.expand(self.domain, order=3)
 
         return self.problem
 

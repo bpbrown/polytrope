@@ -27,7 +27,8 @@ Lz = 100
 Lx = 3*Lz
 
 nx = np.int(64*3/2)
-nz = np.int(32*3/2)
+nz = np.int(64*3/2)
+#nz = np.int(32*3/2)
 
 x_basis = Fourier(nx,   interval=[0., Lx], dealias=2/3)
 z_basis = Chebyshev(nz, interval=[0., Lz], dealias=2/3)
