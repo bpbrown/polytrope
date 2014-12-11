@@ -92,8 +92,9 @@ class polytrope:
         
         self.problem.add_equation("(z-z0)  * (dt(w)  - "+self.viscous_term_z+" + dz(pomega) - s*g) = -(z-z0)  * (u*dx(w) + w*w_z)")
         self.problem.add_equation("(z-z0)  * (dt(u)  - "+self.viscous_term_x+" + dx(pomega)      ) = -(z-z0)  * (u*dx(u) + w*u_z)")
-        #self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*dz(s))")
-        self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*(-Q_z/T0_local))")
+        self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*dz(s))")
+        # seems to not help speed --v
+        # self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*(-Q_z/T0_local))")
 
         self.problem.add_equation("(z-z0)*(dx(u) + w_z + w*del_ln_rho0) = 0")
             
@@ -129,22 +130,27 @@ class polytrope:
                                      param_names=['T0', 'del_T0', 'del_ln_rho0', 'nu', 'chi', 'gamma', 'Cv_inv', 'z0', 'T0_local'])
 
         # here, nu and chi are constants
-        viscous_term_u = (" - nu*(dx(dx(u)) + dz(u_z)) - nu/3.*(dx(dx(u)) + dx(w_z)) "
-                          " - nu*dx(w)*del_ln_rho0 - nu*del_ln_rho0*u_z ")
-
         viscous_term_w = (" - nu*(dx(dx(w)) + dz(w_z)) - nu/3.*(dx(u_z)   + dz(w_z)) " 
                           " - nu*w_z*del_ln_rho0   - nu*del_ln_rho0*w_z + 2/3*nu*del_ln_rho0*(dx(u) + w_z) ")
-
-        nonlinear_viscous_u = (" + nu*dx(u)*dx(ln_rho1) + nu*dx(w)*dz(ln_rho1) "
-                               " + nu*dx(ln_rho1)*dx(u) + nu*dz(ln_rho1)*u_z "
-                               " - 2/3*nu*dx(ln_rho1)*(dx(u)+w_z) ")
+        
+        viscous_term_u = (" - nu*(dx(dx(u)) + dz(u_z)) - nu/3.*(dx(dx(u)) + dx(w_z)) "
+                          " - nu*dx(w)*del_ln_rho0 - nu*del_ln_rho0*u_z ")
 
         nonlinear_viscous_w = (" + nu*u_z*dx(ln_rho1) + nu*w_z*dz(ln_rho1) "
                                " + nu*dx(ln_rho1)*dx(w) + nu*dz(ln_rho1)*w_z "
                                " - 2/3*nu*dz(ln_rho1)*(dx(u)+w_z) ")
+        
+        nonlinear_viscous_u = (" + nu*dx(u)*dx(ln_rho1) + nu*dx(w)*dz(ln_rho1) "
+                               " + nu*dx(ln_rho1)*dx(u) + nu*dz(ln_rho1)*u_z "
+                               " - 2/3*nu*dx(ln_rho1)*(dx(u)+w_z) ")
 
         viscous_heating_term = ""
 
+        self.viscous_term_z = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_x = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
+        self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
+
+        
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
