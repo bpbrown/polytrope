@@ -153,30 +153,30 @@ class polytrope:
         self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*(dx(u)+w_z))"
         self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*(dx(u)+w_z))"
         
-        self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
+        self.thermal_diff   = " CV_inv*chi*(dx(dx(T1)) - dz(Q_z) - Q_z*del_ln_rho0)"
+        self.nonlinear_thermal_diff = "Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
 
+        self.viscous_heating = " CV_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*(dx(u)+w_z)**2)"
         
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(T1) - T1_z = 0")
-        #self.problem.add_equation("dz(ln_rho1) - ln_rho1_z = 0")
-        #self.problem.add_equation("dz(s) - s_z = 0")
-
+        self.problem.add_equation("dz(T1) + Q_z = 0")
         
-        self.problem.add_equation(("(z0-z)*(dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - " + self.viscous_term_w + ") = "
+        self.problem.add_equation(("(z0-z)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - " + self.viscous_term_w + ") = "
                                    "(z0-z)*(-T1*dz(ln_rho1) - u*dx(w) - w*w_z + "+self.nonlinear_viscous_w+")"))
 
-        self.problem.add_equation(("(z0-z)*(dt(u) + dx(T1) + T0*dx(ln_rho1)                  - " + self.viscous_term_u + ") = "
+        self.problem.add_equation(("(z0-z)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - " + self.viscous_term_u + ") = "
                                    "(z0-z)*(-T1*dx(ln_rho1) - u*dx(u) - w*u_z + "+self.nonlinear_viscous_u+")"))
 
-        self.problem.add_equation(("(z0-z)*(dt(ln_rho1) + w*del_ln_rho0 + dx(u) + w_z ) = "
-                                   "(z0-z)*(-u*dx(ln_rho1) -w*dz(ln_rho1) )"))
+        self.problem.add_equation(("(z0-z)*( dt(ln_rho1)   + w*del_ln_rho0 + dx(u) + w_z ) = "
+                                   "(z0-z)*(-u*dx(ln_rho1) - w*dz(ln_rho1))"))
 
         # here we have assumed chi = constant in both rho and radius
-        self.problem.add_equation(("(z0-z)*(dt(T1) + w*del_T0 + (gamma-1)*T0*(dx(u) + w_z) - Cv_inv*chi*(dx(dx(T1)) + dz(T1_z)) - Cv_inv*chi*T1_z*del_ln_rho0 ) = "
-                                   "(z0-z)*(-u*dx(T1) - w*T1_z - (gamma-1)*T1*(dx(u) + w_z) + Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1)) )")) #+ " + vicous_heating
+        self.problem.add_equation(("(z0-z)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*(dx(u) + w_z) - " + self.thermal_diff+") = "
+                                   "(z0-z)*(-u*dx(T1) - w*T1_z   - (gamma-1)*T1*(dx(u) + w_z) + "
+                                   self.nonlinear_thermal_diff+" + "+self.viscous_heating+" )")) 
         
-        logger.info("using non-differential, nonlinear EOS for entropy")
+        logger.info("using nonlinear EOS for entropy")
         # non-linear EOS for s, where we've subtracted off
         # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
         self.problem.add_equation(("(z0-z)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
