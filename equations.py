@@ -52,7 +52,14 @@ class polytrope:
         logger.info("atmospheric timescales:")
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
-        
+        # processor local values
+        x = self.domain.grid(0)
+        z = self.domain.grid(1)
+        self.T0_local = self.domain.new_field()
+        self.T0_local['g'] = self.z0 - z
+        self.rho0_local = self.domain.new_field()
+        self.rho0_local['g'] = (self.z0 - z)**self.poly_n
+
     def _calc_diffusivity(self, Rayleigh, Prandtl):
         
         logger.info("problem parameters:")
@@ -72,7 +79,7 @@ class polytrope:
                 
         self.problem = ParsedProblem( axis_names=['x', 'z'],
                                 field_names=['u','u_z','w','w_z','s', 'Q_z', 'pomega'],
-                                param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'T0', 'g', 'z0'])
+                                param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'T0', 'T0_local', 'g', 'z0'])
         
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
@@ -85,7 +92,9 @@ class polytrope:
         
         self.problem.add_equation("(z-z0)  * (dt(w)  - "+self.viscous_term_z+" + dz(pomega) - s*g) = -(z-z0)  * (u*dx(w) + w*w_z)")
         self.problem.add_equation("(z-z0)  * (dt(u)  - "+self.viscous_term_x+" + dx(pomega)      ) = -(z-z0)  * (u*dx(u) + w*u_z)")
-        self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*dz(s))")
+        #self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*dz(s))")
+        self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*(-Q_z/T0_local))")
+
         self.problem.add_equation("(z-z0)*(dx(u) + w_z + w*del_ln_rho0) = 0")
             
         self.problem.parameters['nu']  = nu
@@ -93,7 +102,8 @@ class polytrope:
         self.problem.parameters['del_ln_rho0']  = self.del_ln_rho0
         self.problem.parameters['del_s0']  = self.del_s0
         self.problem.parameters['T0'] = self.T0
-        
+        self.problem.parameters['T0_local'] = self.T0_local
+
         self.problem.parameters['g']  = self.g
         self.problem.parameters['z0']  = self.z0
 
@@ -168,21 +178,12 @@ class polytrope:
         self.problem.add_left_bc( "w = 0")
         self.problem.add_right_bc("w = 0")
 
-        # processor local values
-        x = self.domain.grid(0)
-        z = self.domain.grid(1)
-        self.T0_local = self.domain.new_field()
-        self.T0_local['g'] = self.z0 - z
-        self.rho0_local = self.domain.new_field()
-        self.rho0_local['g'] = (self.z0 - z)**self.poly_n
-
-
         self.problem.parameters['nu']  = nu
         self.problem.parameters['chi'] = chi
         self.problem.parameters['del_ln_rho0']  = self.del_ln_rho0
         self.problem.parameters['del_T0'] = self.del_T0
         self.problem.parameters['T0']  = self.T0
-
+        
         self.problem.parameters['Cv_inv'] = self.gamma-1
         self.problem.parameters['gamma'] = self.gamma
         self.problem.parameters['z0']  = self.z0
