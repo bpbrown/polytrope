@@ -131,17 +131,17 @@ class polytrope:
 
         # here, nu and chi are constants
         viscous_term_w = (" - nu*(dx(dx(w)) + dz(w_z)) - nu/3.*(dx(u_z)   + dz(w_z)) " 
-                          " - nu*w_z*del_ln_rho0   - nu*del_ln_rho0*w_z + 2/3*nu*del_ln_rho0*(dx(u) + w_z) ")
+                          " - 2*nu*w_z*del_ln_rho0 + 2/3*nu*del_ln_rho0*(dx(u) + w_z) ")
         
         viscous_term_u = (" - nu*(dx(dx(u)) + dz(u_z)) - nu/3.*(dx(dx(u)) + dx(w_z)) "
                           " - nu*dx(w)*del_ln_rho0 - nu*del_ln_rho0*u_z ")
 
-        nonlinear_viscous_w = (" + nu*u_z*dx(ln_rho1) + nu*w_z*dz(ln_rho1) "
-                               " + nu*dx(ln_rho1)*dx(w) + nu*dz(ln_rho1)*w_z "
+        nonlinear_viscous_w = (" + nu*u_z*dx(ln_rho1) + 2*nu*w_z*dz(ln_rho1) "
+                               " + nu*dx(ln_rho1)*dx(w) "
                                " - 2/3*nu*dz(ln_rho1)*(dx(u)+w_z) ")
         
-        nonlinear_viscous_u = (" + nu*dx(u)*dx(ln_rho1) + nu*dx(w)*dz(ln_rho1) "
-                               " + nu*dx(ln_rho1)*dx(u) + nu*dz(ln_rho1)*u_z "
+        nonlinear_viscous_u = (" + 2*nu*dx(u)*dx(ln_rho1) + nu*dx(w)*dz(ln_rho1) "
+                               " + nu*dz(ln_rho1)*u_z "
                                " - 2/3*nu*dx(ln_rho1)*(dx(u)+w_z) ")
 
         viscous_heating_term = ""
