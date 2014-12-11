@@ -146,8 +146,8 @@ class polytrope:
 
         viscous_heating_term = ""
 
-        self.viscous_term_z = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
-        self.viscous_term_x = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
+        self.viscous_term_w = " - nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_u = " - nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
         self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
 
         
@@ -158,10 +158,10 @@ class polytrope:
         #self.problem.add_equation("dz(s) - s_z = 0")
 
         
-        self.problem.add_equation(("(z0-z)*(dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 " + viscous_term_w + ") = "
+        self.problem.add_equation(("(z0-z)*(dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 " + self.viscous_term_w + ") = "
                                    "(z0-z)*(-T1*dz(ln_rho1) - u*dx(w) - w*w_z " + nonlinear_viscous_w +")"))
 
-        self.problem.add_equation(("(z0-z)*(dt(u) + dx(T1) + T0*dx(ln_rho1)                    " + viscous_term_u + ") = "
+        self.problem.add_equation(("(z0-z)*(dt(u) + dx(T1) + T0*dx(ln_rho1)                    " + self.viscous_term_u + ") = "
                                    "(z0-z)*(-T1*dx(ln_rho1) - u*dx(u) - w*u_z " + nonlinear_viscous_u+")"))
 
         self.problem.add_equation(("(z0-z)*(dt(ln_rho1) + w*del_ln_rho0 + dx(u) + w_z ) = "
