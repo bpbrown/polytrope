@@ -27,7 +27,7 @@ Lz = 100
 Lx = 3*Lz
     
 atmosphere = equations.polytrope(nx=64, nz=64, Lx=Lx, Lz=Lz)
-pde = atmosphere.set_FC_problem(Rayleigh, Prandtl)
+atmosphere.set_FC_problem(Rayleigh, Prandtl)
 
 if atmosphere.domain.distributor.rank == 0:
     if not os.path.exists('{:s}/'.format(data_dir)):
@@ -37,10 +37,10 @@ ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
 
 # Build solver
-solver = solvers.IVP(pde, atmosphere.domain, ts)
+solver = solvers.IVP(atmosphere.problem, atmosphere.domain, ts)
 
-x = domain.grid(0)
-z = domain.grid(1)
+x = atmosphere.domain.grid(0)
+z = atmosphere.domain.grid(1)
 
 # initial conditions
 u = solver.state['u']
@@ -54,29 +54,20 @@ solver.evaluator.vars['Lz'] = Lz
 
 A0 = 1e-6
 
-#T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*T['g'].shape) #/atmosphere.T0_local['g']
-ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0_local['g']
+#T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*T['g'].shape) #/atmosphere.T0['g']
+ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0['g']
 
 logger.info("A0 = {:g}".format(A0))
 logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
 
-
-# determine characteristic timescales
-chi = solver.evaluator.vars['chi']
-thermal_time = Lz**2/chi
-top_thermal_time = 1/chi
-
-g = atmosphere.g
-freefall_time = np.sqrt(Lz/g)
-
-logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(thermal_time, top_thermal_time))
+logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
 
 max_dt = atmosphere.buoyancy_time
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
-solver.stop_sim_time = 0.25*thermal_time
+solver.stop_sim_time = 0.25*atmosphere.thermal_time
 solver.stop_iteration= np.inf
 solver.stop_wall_time = 0.25*3600
 
@@ -85,7 +76,7 @@ logger.info("output cadence = {:g}".format(output_time_cadence))
 analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", sim_dt=output_time_cadence, max_writes=20, parallel=False)
 
 analysis_slice.add_task("s", name="s")
-analysis_slice.add_task("s - Integrate(s, dx)/Lx", name="s'")
+analysis_slice.add_task("s - integ(s, 'x')/Lx", name="s'")
 analysis_slice.add_task("u", name="u")
 analysis_slice.add_task("w", name="w")
 analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")

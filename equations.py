@@ -90,7 +90,14 @@ class polytrope:
         chi = nu/Prandtl
 
         logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
-        
+
+        # determine characteristic timescales
+        self.thermal_time = self.Lz**2/chi
+        self.top_thermal_time = 1/chi
+
+        self.viscous_time = self.Lz**2/nu
+        self.top_viscous_time = 1/nu
+
         return nu, chi
     
     def set_anelastic_problem(self, Rayleigh, Prandtl):
