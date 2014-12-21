@@ -26,7 +26,7 @@ Prandtl = 1
 Lz = 100
 Lx = 3*Lz
     
-atmosphere = equations.polytrope(domain, nx=64, nz=64, Lx=Lx, Lz=Lz)
+atmosphere = equations.polytrope(nx=64, nz=64, Lx=Lx, Lz=Lz)
 pde = atmosphere.set_FC_problem(Rayleigh, Prandtl)
 
 if atmosphere.domain.distributor.rank == 0:
@@ -37,7 +37,7 @@ ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
 
 # Build solver
-solver = solvers.IVP(pde, domain, ts)
+solver = solvers.IVP(pde, atmosphere.domain, ts)
 
 x = domain.grid(0)
 z = domain.grid(1)
