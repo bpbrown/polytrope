@@ -25,20 +25,13 @@ Prandtl = 1
 # Set domain
 Lz = 100
 Lx = 3*Lz
-
-nx = np.int(64*3/2)
-nz = np.int(64*3/2)
-
-x_basis = Fourier(nx,   interval=[0., Lx], dealias=2/3)
-z_basis = Chebyshev(nz, interval=[0., Lz], dealias=2/3)
-domain = Domain([x_basis, z_basis], grid_dtype=np.float64)
-
-if domain.distributor.rank == 0:
-  if not os.path.exists('{:s}/'.format(data_dir)):
-    os.mkdir('{:s}/'.format(data_dir))
     
-atmosphere = equations.polytrope(domain)
+atmosphere = equations.polytrope(domain, nx=64, nz=64, Lx=Lx, Lz=Lz)
 pde = atmosphere.set_FC_problem(Rayleigh, Prandtl)
+
+if atmosphere.domain.distributor.rank == 0:
+    if not os.path.exists('{:s}/'.format(data_dir)):
+        os.mkdir('{:s}/'.format(data_dir))
 
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
