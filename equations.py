@@ -80,7 +80,7 @@ class polytrope:
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
 
-    def _calc_diffusivity(self, Rayleigh, Prandtl):
+    def _set_diffusivity(self, Rayleigh, Prandtl):
         
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
@@ -98,65 +98,17 @@ class polytrope:
         self.viscous_time = self.Lz**2/nu
         self.top_viscous_time = 1/nu
 
+        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time, self.top_thermal_time))
+
+        self.nu = nu
+        self.chi = chi
+
+        
         return nu, chi
-    
-    def set_anelastic_problem(self, Rayleigh, Prandtl):
 
-        nu, chi = self._calc_diffusivity(Rayleigh, Prandtl)
-                
-        self.problem = ParsedProblem( axis_names=['x', 'z'],
-                                field_names=['u','u_z','w','w_z','s', 'Q_z', 'pomega'],
-                                param_names=['nu', 'chi', 'del_ln_rho0', 'del_s0', 'T0', 'T0_local', 'g', 'z0'])
-        
-        self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("T0*dz(s) + Q_z = 0")
-
-        # Lecoanet et al 2014, ApJ, eqns D23-D31
-        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
-        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
-        self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
-        
-        self.problem.add_equation("(z-z0)  * (dt(w)  - "+self.viscous_term_w+" + dz(pomega) - s*g) = -(z-z0)  * (u*dx(w) + w*w_z)")
-        self.problem.add_equation("(z-z0)  * (dt(u)  - "+self.viscous_term_u+" + dx(pomega)      ) = -(z-z0)  * (u*dx(u) + w*u_z)")
-        self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*dz(s))")
-        # seems to not help speed --v
-        # self.problem.add_equation("(z-z0)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(z-z0)**2*(u*dx(s) + w*(-Q_z/T0_local))")
-
-        self.problem.add_equation("(z-z0)*(dx(u) + w_z + w*del_ln_rho0) = 0")
-            
-        self.problem.parameters['nu']  = nu
-        self.problem.parameters['chi'] = chi
-        self.problem.parameters['del_ln_rho0']  = self.del_ln_rho0
-        self.problem.parameters['del_s0']  = self.del_s0
-        self.problem.parameters['T0'] = self.T0
-        self.problem.parameters['T0_local'] = self.T0_local
-
-        self.problem.parameters['g']  = self.g
-        self.problem.parameters['z0']  = self.z0
-
-        self.problem.add_left_bc( "s = 0")
-        self.problem.add_right_bc("s = 0")
-        self.problem.add_left_bc( "u = 0")
-        self.problem.add_right_bc("u = 0")
-        self.problem.add_left_bc( "w = 0", condition="dx != 0")
-        self.problem.add_left_bc( "pomega = 0", condition="dx == 0")
-        self.problem.add_right_bc("w = 0")
-
-        self.problem.expand(self.domain, order=3)
-
-        return self.problem
-
-
-    def set_FC_problem(self, Rayleigh, Prandtl):
-
-        nu, chi = self._calc_diffusivity(Rayleigh, Prandtl)
-
-        self.problem = IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'], cutoff=1e-12)
-
-
-        self.problem.parameters['nu'] = nu
-        self.problem.parameters['chi'] = chi
+    def _set_parameters(self):
+        self.problem.parameters['nu'] = self.nu
+        self.problem.parameters['chi'] = self.chi
         
         self.problem.parameters['T0'] = self.T0
         self.problem.parameters['del_T0'] = self.del_T0
@@ -166,7 +118,57 @@ class polytrope:
         
         self.problem.parameters['Cv_inv'] = self.gamma-1
         self.problem.parameters['gamma'] = self.gamma
+
+        self.problem.parameters['del_s0'] = self.del_s0
+
+        self.problem.parameters['g']  = self.g
+        
         self.problem.parameters['scale'] = self.scale
+        
+    def set_anelastic_problem(self, Rayleigh, Prandtl):
+                
+        self.problem = IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-6)
+
+        self._set_diffusivity(Rayleigh, Prandtl)
+        self._set_parameters()
+
+        self.problem.parameters['one_third'] = 1/3
+        
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("T0*dz(s) + Q_z = 0")
+
+        # Lecoanet et al 2014, ApJ, eqns D23-D31
+        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + one_third*(dx(u_z) + dz(w_z)) - 2*one_third*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + one_third*(dx(dx(u)) + dx(w_z)))"
+        self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
+        
+        self.problem.add_equation("(scale)  * (dt(w)  - "+self.viscous_term_w+" + dz(pomega) - s*g) = -(scale)  * (u*dx(w) + w*w_z)")
+        self.problem.add_equation("(scale)  * (dt(u)  - "+self.viscous_term_u+" + dx(pomega)      ) = -(scale)  * (u*dx(u) + w*u_z)")
+        self.problem.add_equation("(scale)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(scale)**2*(u*dx(s) + w*dz(s))")
+        # seems to not help speed --v
+        # self.problem.add_equation("(scale)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(scale)**2*(u*dx(s) + w*(-Q_z/T0_local))")
+
+        self.problem.add_equation("(scale)*(dx(u) + w_z + w*del_ln_rho0) = 0")
+            
+
+        self.problem.add_bc( "left(s) = 0")
+        self.problem.add_bc("right(s) = 0")
+        self.problem.add_bc( "left(u) = 0")
+        self.problem.add_bc("right(u) = 0")
+        self.problem.add_bc( "left(w) = 0", condition="nx != 0")
+        self.problem.add_bc( "left(pomega) = 0", condition="nx == 0")
+        self.problem.add_bc("right(w) = 0")
+        
+        return self.problem
+
+
+    def set_FC_problem(self, Rayleigh, Prandtl):
+
+        self.problem = IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'], cutoff=1e-12)
+        
+        self._set_diffusivity(Rayleigh, Prandtl)
+        self._set_parameters()
 
         self.problem.parameters['one_third'] = 1/3
 

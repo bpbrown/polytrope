@@ -26,7 +26,7 @@ Prandtl = 1
 Lz = 100
 Lx = 3*Lz
     
-atmosphere = equations.polytrope(nx=64, nz=64, Lx=Lx, Lz=Lz)
+atmosphere = equations.polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
 atmosphere.set_FC_problem(Rayleigh, Prandtl)
 
 if atmosphere.domain.distributor.rank == 0:

@@ -117,8 +117,8 @@ def load(var, iteration=None):
 
   f = h5py.File("{:s}/".format(root_dir)+filename, flag='r')
 
-  x = np.array(f['scales']['x'][:])
-  y = np.array(f['scales']['z'][:])
+  x = np.array(f['scales']['x']['1.0'][:])
+  y = np.array(f['scales']['z']['1.0'][:])
   t = np.array(f['scales']['sim_time'][:])
   writes = np.array(f['scales']['write_number'][:])
   variable = np.array(f['tasks'][var])
