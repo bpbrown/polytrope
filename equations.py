@@ -2,7 +2,7 @@ import numpy as np
 import os
 from mpi4py import MPI
 
-from dedalus2.public import *
+from dedalus2 import public as de
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__.split('.')[-1])
 class polytrope:
     def __init__(self, nx=256, nz=128, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3):
         
-        x_basis = Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
-        z_basis = Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        self.domain = Domain([x_basis, z_basis], grid_dtype=np.float64)
+        x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
+        z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
                 
         self._set_atmosphere(epsilon, gamma)
         
@@ -127,7 +127,7 @@ class polytrope:
         
     def set_anelastic_problem(self, Rayleigh, Prandtl):
                 
-        self.problem = IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-6)
+        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-6)
 
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
@@ -165,7 +165,7 @@ class polytrope:
 
     def set_FC_problem(self, Rayleigh, Prandtl):
 
-        self.problem = IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'], cutoff=1e-12)
+        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'], cutoff=1e-12)
         
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
