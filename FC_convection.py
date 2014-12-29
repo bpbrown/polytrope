@@ -4,6 +4,8 @@ import os
 import sys
 import equations
 
+import matplotlib.pyplot as plt
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ Lz = 100
 Lx = 3*Lz
     
 atmosphere = equations.polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
-atmosphere.set_FC_problem(Rayleigh, Prandtl)
+problem = atmosphere.set_FC_problem(Rayleigh, Prandtl)
 
 if atmosphere.domain.distributor.rank == 0:
     if not os.path.exists('{:s}/'.format(data_dir)):
@@ -37,10 +39,16 @@ ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
 
 # Build solver
-solver = solvers.IVP(atmosphere.problem, atmosphere.domain, ts)
+solver = problem.build_solver(ts)
 
 x = atmosphere.domain.grid(0)
 z = atmosphere.domain.grid(1)
+
+fig = plt.figure()
+ax = fig.add_subplot(1,1,1)
+ax.plot(z[0,:], solver.evaluator.vars['rho0']['g'][0,:])
+fig.savefig("rho0_build_{:d}.png".format(atmosphere.domain.distributor.rank))
+
 
 # initial conditions
 u = solver.state['u']
@@ -51,6 +59,8 @@ ln_rho = solver.state['ln_rho1']
 
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
+
+
 
 A0 = 1e-6
 
@@ -131,7 +141,7 @@ if do_checkpointing:
 logger.info(analysis_slice.base_path)
 post.merge_analysis(analysis_slice.base_path)
 
-if (domain.distributor.rank==0):
+if (atmosphere.domain.distributor.rank==0):
 
     N_TOTAL_CPU = domain.distributor.comm_world.size
     
