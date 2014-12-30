@@ -61,7 +61,8 @@ ln_rho = solver.state['ln_rho1']
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
 
-
+for key in solver.problem.ncc_manager.ncc_strings:
+    logger.info("{}: {}".format(key, solver.problem.ncc_manager.ncc_matrices[key]))
 
 A0 = 1e-6
 np.random.seed(1+atmosphere.domain.distributor.rank)
