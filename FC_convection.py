@@ -38,8 +38,27 @@ if atmosphere.domain.distributor.rank == 0:
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
 
+logger.info("domain {}".format(atmosphere.domain.dealias))
+logger.info("T0    {}".format(atmosphere.T0['g'].shape))
+logger.info("T0    {}".format(atmosphere.T0.meta[:]['scale']))
+logger.info("rho0  {}".format(atmosphere.rho0['g'].shape))
+logger.info("rho0    {}".format(atmosphere.rho0.meta[:]['scale']))
+logger.info("scale {}".format(atmosphere.scale['g'].shape))
+logger.info("del_ln_rho0 {}".format(atmosphere.del_ln_rho0['g'].shape))
+logger.info("del_s0 {}".format(atmosphere.del_s0['g'].shape))
+
+logger.info("building the solver now")
 # Build solver
 solver = problem.build_solver(ts)
+
+logger.info("domain {}".format(atmosphere.domain.dealias))
+logger.info("T0    {}".format(atmosphere.T0['g'].shape))
+logger.info("T0    {}".format(atmosphere.T0.meta[:]['scale']))
+logger.info("rho0  {}".format(atmosphere.rho0['g'].shape))
+logger.info("rho0    {}".format(atmosphere.rho0.meta[:]['scale']))
+logger.info("scale {}".format(atmosphere.scale['g'].shape))
+logger.info("del_ln_rho0 {}".format(atmosphere.del_ln_rho0['g'].shape))
+logger.info("del_s0 {}".format(atmosphere.del_s0['g'].shape))
 
 x = atmosphere.domain.grid(0)
 z = atmosphere.domain.grid(1)
@@ -66,14 +85,7 @@ for key in solver.problem.ncc_manager.ncc_strings:
 
 A0 = 1e-6
 np.random.seed(1+atmosphere.domain.distributor.rank)
-logger.info("domain {}".format(atmosphere.domain.dealias))
-logger.info("T0    {}".format(atmosphere.T0['g'].shape))
-logger.info("T0    {}".format(atmosphere.T0.meta[:]['scale']))
-logger.info("rho0  {}".format(atmosphere.rho0['g'].shape))
-logger.info("rho0    {}".format(atmosphere.rho0.meta[:]['scale']))
-logger.info("scale {}".format(atmosphere.scale['g'].shape))
-logger.info("del_s0 {}".format(atmosphere.del_s0['g'].shape))
-logger.info("del_ln_rho0 {}".format(atmosphere.del_ln_rho0['g'].shape))
+
 
 T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape) #*atmosphere.T0['g']
 #ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0['g']

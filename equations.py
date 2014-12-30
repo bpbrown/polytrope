@@ -17,6 +17,11 @@ class polytrope:
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
                 
         self._set_atmosphere(epsilon, gamma)
+
+    def _new_ncc(self):
+        field = self.domain.new_field()
+        field.meta['x']['constant'] = True
+        return field
         
     def _set_atmosphere(self, epsilon, gamma):
         # polytropic atmosphere characteristics
@@ -31,37 +36,39 @@ class polytrope:
         self.z = self.domain.grid(-1) # need to access globally-sized z-basis
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
         self.nz = self.domain.bases[-1].coeff_size
+
+        print("Z shape: {}".format(self.z.shape))
+
         
         self.z0 = 1. + self.Lz
 
         self.del_ln_rho_factor = -self.poly_n
         
-        self.del_ln_rho0 = self.domain.new_field()
-        self.del_ln_rho0.meta['x']['constant'] = True
+        self.del_ln_rho0 = self._new_ncc()
         self.del_ln_rho0['g'] = self.del_ln_rho_factor/(self.z0 - self.z)
+        print("del_ln_rho0 {}".format(self.del_ln_rho0['g'].shape))
+        
+        self.rho0 = self._new_ncc()
+        self.rho0['g'] = (self.z0 - self.z)**self.poly_n
+        print("rho0 {}".format(self.rho0['g'].shape))
 
         self.del_s0_factor = - self.epsilon/self.gamma
 
-        self.del_s0 = self.domain.new_field()
-        self.del_s0.meta['x']['constant'] = True
+        self.del_s0 = self._new_ncc()
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
+        print("del_s0 {}".format(self.del_s0['g'].shape))
 
         self.delta_s = self.del_s0_factor*np.log(self.z0)
 
-        self.T0 = self.domain.new_field()
-        self.T0.meta['x']['constant'] = True
-        self.T0['g'] = self.z0 - self.z
-        
         self.del_T0 = -1
 
-        self.rho0 = self.domain.new_field()
-        self.rho0.meta['x']['constant'] = True
-        self.rho0['g'] = (self.z0 - self.z)**self.poly_n
+        self.T0 = self._new_ncc()
+        self.T0['g'] = self.z0 - self.z       
+        print("T0 {}".format(self.T0['g'].shape))
 
-        
-        self.scale = self.domain.new_field()
-        self.scale.meta['x']['constant'] = True
+        self.scale = self._new_ncc()
         self.scale['g'] = self.z0 - self.z
+        print("scale {}".format(self.scale['g'].shape))
 
         self.g = self.poly_n + 1
 
