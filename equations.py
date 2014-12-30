@@ -81,10 +81,10 @@ class polytrope:
         logger.info("atmospheric timescales:")
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-        ax.plot(self.z[0,:], self.rho0['g'][0,:])
-        fig.savefig("rho0_{:d}.png".format(self.domain.distributor.rank))
+        #fig = plt.figure()
+        #ax = fig.add_subplot(1,1,1)
+        #ax.plot(self.z[0,:], self.rho0['g'][0,:])
+        #fig.savefig("rho0_{:d}.png".format(self.domain.distributor.rank))
         
     def _set_diffusivity(self, Rayleigh, Prandtl):
         

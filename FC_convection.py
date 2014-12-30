@@ -44,10 +44,11 @@ solver = problem.build_solver(ts)
 x = atmosphere.domain.grid(0)
 z = atmosphere.domain.grid(1)
 
-fig = plt.figure()
-ax = fig.add_subplot(1,1,1)
-ax.plot(z[0,:], solver.evaluator.vars['rho0']['g'][0,:])
-fig.savefig("rho0_build_{:d}.png".format(atmosphere.domain.distributor.rank))
+#print(solver.problem.ncc_manager('scale*T0'))
+#fig = plt.figure()
+#ax = fig.add_subplot(1,1,1)
+#ax.plot(z[0,:], solver.evaluator.vars['rho0']['g'][0,:])
+#fig.savefig("rho0_build_{:d}.png".format(atmosphere.domain.distributor.rank))
 
 
 # initial conditions
@@ -63,9 +64,18 @@ solver.evaluator.vars['Lz'] = Lz
 
 
 A0 = 1e-6
+np.random.seed(1+atmosphere.domain.distributor.rank)
+logger.info("domain {}".format(atmosphere.domain.dealias))
+logger.info("T0    {}".format(atmosphere.T0['g'].shape))
+logger.info("T0    {}".format(atmosphere.T0.meta[:]['scale']))
+logger.info("rho0  {}".format(atmosphere.rho0['g'].shape))
+logger.info("rho0    {}".format(atmosphere.rho0.meta[:]['scale']))
+logger.info("scale {}".format(atmosphere.scale['g'].shape))
+logger.info("del_s0 {}".format(atmosphere.del_s0['g'].shape))
+logger.info("del_ln_rho0 {}".format(atmosphere.del_ln_rho0['g'].shape))
 
-#T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*T['g'].shape) #/atmosphere.T0['g']
-ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0['g']
+T['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape) #*atmosphere.T0['g']
+#ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0['g']
 
 logger.info("A0 = {:g}".format(A0))
 logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
