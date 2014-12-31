@@ -88,10 +88,11 @@ class polytrope:
         logger.info("atmospheric timescales:")
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
-        #fig = plt.figure()
-        #ax = fig.add_subplot(1,1,1)
-        #ax.plot(self.z[0,:], self.rho0['g'][0,:])
-        #fig.savefig("rho0_{:d}.png".format(self.domain.distributor.rank))
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        #ax.plot(self.z[0,:], self.del_ln_rho0['g'][0,:])
+        ax.plot(self.del_ln_rho0['g'][0,:])
+        fig.savefig("del_ln_rho0_{:d}.png".format(self.domain.distributor.rank))
         
     def _set_diffusivity(self, Rayleigh, Prandtl):
         
@@ -218,7 +219,7 @@ class polytrope:
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) + Q_z = 0")
         
-        self.problem.add_equation(("(scale)*( dt(w) + Q_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - " + self.viscous_term_w + ") = "
+        self.problem.add_equation(("(scale)*( dt(w) - Q_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - " + self.viscous_term_w + ") = "
                                    "(scale)*(-T1*dz(ln_rho1) - u*dx(w) - w*w_z + "+self.nonlinear_viscous_w+")"))
 
         self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - " + self.viscous_term_u + ") = "
@@ -229,7 +230,7 @@ class polytrope:
 
         # here we have assumed chi = constant in both rho and radius
         self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*(dx(u) + w_z) - " + self.thermal_diff+") = "
-                                   "(scale)*(-u*dx(T1) - w*Q_z   - (gamma-1)*T1*(dx(u) + w_z) + "
+                                   "(scale)*(-u*dx(T1) + w*Q_z   - (gamma-1)*T1*(dx(u) + w_z) + "
                                    +self.nonlinear_thermal_diff+" + "+self.viscous_heating+" )")) 
         
         logger.info("using nonlinear EOS for entropy")

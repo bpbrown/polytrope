@@ -84,7 +84,7 @@ print()
 
 #plt.ion()
 # Options
-fnames = ["s'","enstrophy"]
+fnames = ["s","enstrophy"]
 xstr = 'x/H'
 ystr = 'z/H'
 cmapname = 'Spectral_r'
