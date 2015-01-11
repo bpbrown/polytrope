@@ -28,8 +28,8 @@ Prandtl = 1
 Lz = 100
 Lx = 3*Lz
     
-atmosphere = equations.polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
-problem = atmosphere.set_FC_problem(Rayleigh, Prandtl)
+atmosphere = equations.FC_polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
+problem = atmosphere.set_IVP_problem(Rayleigh, Prandtl)
 
 if atmosphere.domain.distributor.rank == 0:
     if not os.path.exists('{:s}/'.format(data_dir)):

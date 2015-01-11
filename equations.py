@@ -37,26 +37,20 @@ class polytrope:
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
         self.nz = self.domain.bases[-1].coeff_size
 
-        print("Z shape: {}".format(self.z.shape))
-
-        
         self.z0 = 1. + self.Lz
 
         self.del_ln_rho_factor = -self.poly_n
         
         self.del_ln_rho0 = self._new_ncc()
         self.del_ln_rho0['g'] = self.del_ln_rho_factor/(self.z0 - self.z)
-        print("del_ln_rho0 {}".format(self.del_ln_rho0['g'].shape))
         
         self.rho0 = self._new_ncc()
         self.rho0['g'] = (self.z0 - self.z)**self.poly_n
-        print("rho0 {}".format(self.rho0['g'].shape))
 
         self.del_s0_factor = - self.epsilon/self.gamma
 
         self.del_s0 = self._new_ncc()
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
-        print("del_s0 {}".format(self.del_s0['g'].shape))
 
         self.delta_s = self.del_s0_factor*np.log(self.z0)
 
@@ -64,11 +58,9 @@ class polytrope:
 
         self.T0 = self._new_ncc()
         self.T0['g'] = self.z0 - self.z       
-        print("T0 {}".format(self.T0['g'].shape))
 
         self.scale = self._new_ncc()
         self.scale['g'] = self.z0 - self.z
-        print("scale {}".format(self.scale['g'].shape))
 
         self.g = self.poly_n + 1
 
@@ -177,7 +169,11 @@ class polytrope:
         return self.problem
 
 
-    def set_FC_problem(self, Rayleigh, Prandtl):
+class FC_polytrope(polytrope):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+    def set_IVP_problem(self, Rayleigh, Prandtl):
 
         self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'], cutoff=1e-12)
         
