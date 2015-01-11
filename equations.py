@@ -130,9 +130,30 @@ class polytrope:
         self.problem.parameters['g']  = self.g
         
         self.problem.parameters['scale'] = self.scale
+
         
-    def set_anelastic_problem(self, Rayleigh, Prandtl):
-                
+    def set_BC(self, fixed_flux=False):
+        if fixed_flux:
+            self.problem.add_bc( "left(Q_z) = 0")
+            self.problem.add_bc("right(Q_z) = 0")
+        else:
+            self.problem.add_bc( "left(s) = 0")
+            self.problem.add_bc("right(s) = 0")
+            
+        self.problem.add_bc( "left(u) = 0")
+        self.problem.add_bc("right(u) = 0")
+        self.problem.add_bc( "left(w) = 0")
+        self.problem.add_bc("right(w) = 0")
+
+    def get_problem(self):
+        return self.problem
+
+class AN_polytrope(polytrope):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+    def set_IVP_problem(self, Rayleigh, Prandtl):
+
         self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-6)
 
         self._set_diffusivity(Rayleigh, Prandtl)
@@ -156,18 +177,7 @@ class polytrope:
         # self.problem.add_equation("(scale)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(scale)**2*(u*dx(s) + w*(-Q_z/T0_local))")
 
         self.problem.add_equation("(scale)*(dx(u) + w_z + w*del_ln_rho0) = 0")
-            
-
-        self.problem.add_bc( "left(s) = 0")
-        self.problem.add_bc("right(s) = 0")
-        self.problem.add_bc( "left(u) = 0")
-        self.problem.add_bc("right(u) = 0")
-        self.problem.add_bc( "left(w) = 0", condition="nx != 0")
-        self.problem.add_bc( "left(pomega) = 0", condition="nx == 0")
-        self.problem.add_bc("right(w) = 0")
         
-        return self.problem
-
 
 class FC_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
@@ -182,24 +192,7 @@ class FC_polytrope(polytrope):
 
         self.problem.parameters['one_third'] = 1/3
 
-        # here, nu and chi are constants
-        viscous_term_w = (" - nu*(dx(dx(w)) + dz(w_z)) - nu*one_third.*(dx(u_z)   + dz(w_z)) " 
-                          " - 2*nu*w_z*del_ln_rho0 + 2*one_third*nu*del_ln_rho0*(dx(u) + w_z) ")
-        
-        viscous_term_u = (" - nu*(dx(dx(u)) + dz(u_z)) - nu*one_third.*(dx(dx(u)) + dx(w_z)) "
-                          " - nu*dx(w)*del_ln_rho0 - nu*del_ln_rho0*u_z ")
-
-        nonlinear_viscous_w = (" + nu*u_z*dx(ln_rho1) + 2*nu*w_z*dz(ln_rho1) "
-                               " + nu*dx(ln_rho1)*dx(w) "
-                               " - 2*one_third*nu*dz(ln_rho1)*(dx(u)+w_z) ")
-        
-        nonlinear_viscous_u = (" + 2*nu*dx(u)*dx(ln_rho1) + nu*dx(w)*dz(ln_rho1) "
-                               " + nu*dz(ln_rho1)*u_z "
-                               " - 2*one_third*nu*dx(ln_rho1)*(dx(u)+w_z) ")
-
-        viscous_heating_term = ""
-
-        
+        # here, nu and chi are constants        
         self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + one_third*(dx(u_z) + dz(w_z)) - 2*one_third*del_ln_rho0*(dx(u) + w_z))"
         self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + one_third*(dx(dx(u)) + dx(w_z)))"
 
@@ -235,11 +228,3 @@ class FC_polytrope(polytrope):
         self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
                                    "(scale)*(log(1+T1/T0) - T1/T0)"))
 
-        self.problem.add_bc( "left(s) = 0")
-        self.problem.add_bc("right(s) = 0")
-        self.problem.add_bc( "left(u) = 0")
-        self.problem.add_bc("right(u) = 0")
-        self.problem.add_bc( "left(w) = 0")
-        self.problem.add_bc("right(w) = 0")
-
-        return self.problem
