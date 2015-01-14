@@ -27,7 +27,7 @@ Prandtl = 1
 Lz = 10
 Lx = 3*Lz
 
-atmosphere = equations.AN_polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
+atmosphere = equations.AN_polytrope(nx=128, nz=64, Lx=Lx, Lz=Lz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
 atmosphere.set_BC()
 problem = atmosphere.get_problem()
