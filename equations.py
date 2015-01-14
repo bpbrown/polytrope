@@ -184,15 +184,13 @@ class AN_polytrope(polytrope):
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
 
-        self.problem.parameters['one_third'] = 1/3
-        
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("T0*dz(s) + Q_z = 0")
 
         # Lecoanet et al 2014, ApJ, eqns D23-D31
-        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + one_third*(dx(u_z) + dz(w_z)) - 2*one_third*del_ln_rho0*(dx(u) + w_z))"
-        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + one_third*(dx(dx(u)) + dx(w_z)))"
+        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
         self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
         
         self.problem.add_equation("(scale)  * (dt(w)  - "+self.viscous_term_w+" + dz(pomega) - s*g) = -(scale)  * (u*dx(w) + w*w_z)")
@@ -210,15 +208,13 @@ class AN_polytrope(polytrope):
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
 
-        self.problem.parameters['one_third'] = 1/3
-        
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("T0*dz(s) + Q_z = 0")
 
         # Lecoanet et al 2014, ApJ, eqns D23-D31
-        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + one_third*(dx(u_z) + dz(w_z)) - 2*one_third*del_ln_rho0*(dx(u) + w_z))"
-        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + one_third*(dx(dx(u)) + dx(w_z)))"
+        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
         self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
         
         self.problem.add_equation("(scale)  * (dt(w)  - "+self.viscous_term_w+" + dz(pomega) - s*g) = -(scale)  * (u*dx(w) + w*w_z)")
@@ -255,19 +251,17 @@ class FC_polytrope(polytrope):
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
 
-        self.problem.parameters['one_third'] = 1/3
-
         # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + one_third*(dx(u_z) + dz(w_z)) - 2*one_third*del_ln_rho0*(dx(u) + w_z))"
-        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + one_third*(dx(dx(u)) + dx(w_z)))"
+        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
 
-        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2*one_third*dz(ln_rho1)*(dx(u)+w_z))"
-        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2*one_third*dx(ln_rho1)*(dx(u)+w_z))"
+        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*(dx(u)+w_z))"
+        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*(dx(u)+w_z))"
         
         self.thermal_diff   = " Cv_inv*chi*(dx(dx(T1)) - dz(Q_z) - Q_z*del_ln_rho0)"
         self.nonlinear_thermal_diff = "Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
 
-        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2*one_third*(dx(u)+w_z)**2)"
+        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*(dx(u)+w_z)**2)"
         
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")

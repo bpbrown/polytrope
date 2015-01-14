@@ -66,7 +66,7 @@ report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
 solver.stop_sim_time = 0.25*atmosphere.thermal_time
 solver.stop_iteration= np.inf
-solver.stop_wall_time = 0.25*3600
+solver.stop_wall_time = 1.0*3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -128,7 +128,7 @@ if do_checkpointing:
 logger.info(analysis_slice.base_path)
 post.merge_analysis(analysis_slice.base_path)
 
-if (domain.distributor.rank==0):
+if (atmosphere.domain.distributor.rank==0):
 
     N_TOTAL_CPU = domain.distributor.comm_world.size
     
