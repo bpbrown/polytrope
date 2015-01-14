@@ -179,7 +179,7 @@ class AN_polytrope(polytrope):
         
     def set_IVP_problem(self, Rayleigh, Prandtl):
 
-        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-6)
+        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-10)
 
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
