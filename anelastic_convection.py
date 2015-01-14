@@ -23,11 +23,14 @@ Rayleigh = 4e4
 Prandtl = 1
 
 # Set domain
-Lz = 100
+#Lz = 100
+Lz = 10
 Lx = 3*Lz
-    
-atmosphere = equations.polytrope(nx=64, nz=64, Lx=Lx, Lz=Lz)
-atmosphere.set_anelastic_problem(Rayleigh, Prandtl)
+
+atmosphere = equations.AN_polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
+atmosphere.set_IVP_problem(Rayleigh, Prandtl)
+atmosphere.set_BC()
+problem = atmosphere.get_problem()
 
 if atmosphere.domain.distributor.rank == 0:
     if not os.path.exists('{:s}/'.format(data_dir)):
@@ -38,7 +41,7 @@ ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
 
 # Build solver
-solver = solvers.IVP(atmosphere.problem, atmosphere.domain, ts)
+solver = problem.build_solver(ts)
 
 z = atmosphere.domain.grid(1)
 

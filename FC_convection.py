@@ -4,7 +4,7 @@ import os
 import sys
 import equations
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 import logging
 logger = logging.getLogger(__name__)
@@ -79,10 +79,10 @@ logger.info("post: scale    {}".format(atmosphere.scale['c'][0,:]))
 x = atmosphere.domain.grid(0)
 z = atmosphere.domain.grid(1)
 
-fig = plt.figure()
-ax = fig.add_subplot(1,1,1)
-ax.plot(solver.evaluator.vars['del_ln_rho0']['g'][0,:])
-fig.savefig("del_ln_rho0_build_{:d}.png".format(atmosphere.domain.distributor.rank))
+#fig = plt.figure()
+#ax = fig.add_subplot(1,1,1)
+#ax.plot(solver.evaluator.vars['del_ln_rho0']['g'][0,:])
+#fig.savefig("del_ln_rho0_build_{:d}.png".format(atmosphere.domain.distributor.rank))
 
 
 # initial conditions

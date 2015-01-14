@@ -4,7 +4,7 @@ from mpi4py import MPI
 
 from dedalus2 import public as de
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
@@ -80,11 +80,11 @@ class polytrope:
         logger.info("atmospheric timescales:")
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,self.freefall_time,self.buoyancy_time))
 
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
+        #fig = plt.figure()
+        #ax = fig.add_subplot(1,1,1)
         #ax.plot(self.z[0,:], self.del_ln_rho0['g'][0,:])
-        ax.plot(self.del_ln_rho0['g'][0,:])
-        fig.savefig("del_ln_rho0_{:d}.png".format(self.domain.distributor.rank))
+        #ax.plot(self.del_ln_rho0['g'][0,:])
+        #fig.savefig("del_ln_rho0_{:d}.png".format(self.domain.distributor.rank))
         
     def _set_diffusivity(self, Rayleigh, Prandtl):
         
@@ -131,23 +131,48 @@ class polytrope:
         
         self.problem.parameters['scale'] = self.scale
 
+    def get_problem(self):
+        return self.problem
+
+class polytrope_flux(polytrope):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _set_diffusivity(self, Rayleigh, Prandtl):
         
-    def set_BC(self, fixed_flux=False):
-        if fixed_flux:
-            self.problem.add_bc( "left(Q_z) = 0")
-            self.problem.add_bc("right(Q_z) = 0")
-        else:
-            self.problem.add_bc( "left(s) = 0")
-            self.problem.add_bc("right(s) = 0")
+        logger.info("problem parameters:")
+        logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
+        
+        # take constant nu, chi
+        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
+        chi = nu/Prandtl
+
+        logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
+
+        # determine characteristic timescales
+        self.thermal_time = self.Lz**2/chi
+        self.top_thermal_time = 1/chi
+
+        self.viscous_time = self.Lz**2/nu
+        self.top_viscous_time = 1/nu
+
+        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time, self.top_thermal_time))
+
+        self.nu = nu
+        self.chi = chi
+
+        
+        return nu, chi        
+
+    def set_BC(self):
+        self.problem.add_bc( "left(Q_z) = 1")
+        self.problem.add_bc("right(Q_z) = 1")
             
         self.problem.add_bc( "left(u) = 0")
         self.problem.add_bc("right(u) = 0")
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
-
-    def get_problem(self):
-        return self.problem
-
+        
 class AN_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -177,7 +202,47 @@ class AN_polytrope(polytrope):
         # self.problem.add_equation("(scale)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(scale)**2*(u*dx(s) + w*(-Q_z/T0_local))")
 
         self.problem.add_equation("(scale)*(dx(u) + w_z + w*del_ln_rho0) = 0")
+
+    def set_eigenvalue_problem(self, Rayleigh, Prandtl):
+
+        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-6)
+
+        self._set_diffusivity(Rayleigh, Prandtl)
+        self._set_parameters()
+
+        self.problem.parameters['one_third'] = 1/3
         
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("T0*dz(s) + Q_z = 0")
+
+        # Lecoanet et al 2014, ApJ, eqns D23-D31
+        self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + one_third*(dx(u_z) + dz(w_z)) - 2*one_third*del_ln_rho0*(dx(u) + w_z))"
+        self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + one_third*(dx(dx(u)) + dx(w_z)))"
+        self.thermal_diff   = " chi*(dx(dx(s)) - 1/T0*dz(Q_z) - 1/T0*Q_z*del_ln_rho0)"
+        
+        self.problem.add_equation("(scale)  * (dt(w)  - "+self.viscous_term_w+" + dz(pomega) - s*g) = -(scale)  * (u*dx(w) + w*w_z)")
+        self.problem.add_equation("(scale)  * (dt(u)  - "+self.viscous_term_u+" + dx(pomega)      ) = -(scale)  * (u*dx(u) + w*u_z)")
+        self.problem.add_equation("(scale)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(scale)**2*(u*dx(s) + w*dz(s))")
+        # seems to not help speed --v
+        # self.problem.add_equation("(scale)**2*(dt(s)  - "+self.thermal_diff  +" + w*del_s0        ) = -(scale)**2*(u*dx(s) + w*(-Q_z/T0_local))")
+
+        self.problem.add_equation("(scale)*(dx(u) + w_z + w*del_ln_rho0) = 0")
+
+    def set_BC(self, fixed_flux=False):
+        if fixed_flux:
+            self.problem.add_bc( "left(Q_z) = 0")
+            self.problem.add_bc("right(Q_z) = 0")
+        else:
+            self.problem.add_bc( "left(s) = 0")
+            self.problem.add_bc("right(s) = 0")
+            
+        self.problem.add_bc( "left(u) = 0")
+        self.problem.add_bc("right(u) = 0")
+        self.problem.add_bc( "left(w) = 0", condition="nx != 0")
+        self.problem.add_bc( "left(pomega) = 0", condition="nx == 0")
+        self.problem.add_bc("right(w) = 0")
+
 
 class FC_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
@@ -228,3 +293,15 @@ class FC_polytrope(polytrope):
         self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
                                    "(scale)*(log(1+T1/T0) - T1/T0)"))
 
+    def set_BC(self, fixed_flux=False):
+        if fixed_flux:
+            self.problem.add_bc( "left(Q_z) = 0")
+            self.problem.add_bc("right(Q_z) = 0")
+        else:
+            self.problem.add_bc( "left(s) = 0")
+            self.problem.add_bc("right(s) = 0")
+            
+        self.problem.add_bc( "left(u) = 0")
+        self.problem.add_bc("right(u) = 0")
+        self.problem.add_bc( "left(w) = 0")
+        self.problem.add_bc("right(w) = 0")
