@@ -58,9 +58,6 @@ ln_rho = solver.state['ln_rho1']
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
 
-for key in solver.problem.ncc_manager.ncc_strings:
-    logger.info("NCC: {}".format(key))
-
 A0 = 1e-6
 np.random.seed(1+atmosphere.domain.distributor.rank)
 
@@ -74,7 +71,7 @@ logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
 logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
 
-max_dt = atmosphere.buoyancy_time
+max_dt = 0.5*atmosphere.buoyancy_time
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
@@ -134,13 +131,6 @@ logger.info('main loop time: {:e}'.format(elapsed_time))
 logger.info('Iterations: {:d}'.format(N_iterations))
 logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
 logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
-
-logger.info('beginning join operation')
-if do_checkpointing:
-    logger.info(data_dir+'/checkpoint/')
-    post.merge_analysis(data_dir+'/checkpoint/')
-logger.info(analysis_slice.base_path)
-post.merge_analysis(analysis_slice.base_path)
 
 if (atmosphere.domain.distributor.rank==0):
 

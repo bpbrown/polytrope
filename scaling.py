@@ -33,6 +33,7 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     print('testing {}, from {:d} to {:d} cores'.format(scaling_script, np.min(CPU_set),np.max(CPU_set)))
     start_time = time.time()
     
+    scaling_test_set = CPU_set
     sim_nx = resolution[0] 
     sim_nz = resolution[1]
     
@@ -61,6 +62,12 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout, stderr = proc.communicate()
 
+        for line in stdout.splitlines():
+            print("out: {}".format(line))
+            
+        for line in stderr.splitlines():
+            print("err: {}".format(line))
+        
         for line in stdout.splitlines():
             if line.startswith('scaling:'):
                 split_line = line.split()

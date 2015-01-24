@@ -40,49 +40,11 @@ if atmosphere.domain.distributor.rank == 0:
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
 
-logger.info("--------------------------------------")
-logger.info("pre:  domain {}".format(atmosphere.domain.dealias))
-logger.info("pre:  T0    {}".format(atmosphere.T0['g'].shape))
-logger.info("pre:  rho0  {}".format(atmosphere.rho0['g'].shape))
-logger.info("pre:  scale {}".format(atmosphere.scale['g'].shape))
-logger.info("pre:  del_ln_rho0 {}".format(atmosphere.del_ln_rho0['g'].shape))
-logger.info("pre:  del_s0 {}".format(atmosphere.del_s0['g'].shape))
-logger.info("      ---------------------")
-logger.info("pre:  T0 scales   {}".format(atmosphere.T0.meta[:]['scale']))
-logger.info("pre:  rho0 scales   {}".format(atmosphere.rho0.meta[:]['scale']))
-logger.info("pre:  scale scales {}".format(atmosphere.scale.meta[:]['scale']))
-logger.info("pre:  del_ln_rho0 scales {}".format(atmosphere.del_ln_rho0.meta[:]['scale']))
-logger.info("pre:  del_s0 scales{}".format(atmosphere.del_s0.meta[:]['scale']))
-logger.info("--------------------------------------")
-logger.info("pre:  scale    {}".format(atmosphere.scale['c'][0,:]))
-
-logger.info("building the solver now")
 # Build solver
 solver = problem.build_solver(ts)
 
-logger.info("--------------------------------------")
-logger.info("post: domain {}".format(atmosphere.domain.dealias))
-logger.info("post: T0    {}".format(atmosphere.T0['g'].shape))
-logger.info("post: rho0  {}".format(atmosphere.rho0['g'].shape))
-logger.info("post: scale {}".format(atmosphere.scale['g'].shape))
-logger.info("post: del_ln_rho0 {}".format(atmosphere.del_ln_rho0['g'].shape))
-logger.info("post: del_s0 {}".format(atmosphere.del_s0['g'].shape))
-logger.info("      ---------------------")
-logger.info("post: T0 scales   {}".format(atmosphere.T0.meta[:]['scale']))
-logger.info("post: rho0 scales   {}".format(atmosphere.rho0.meta[:]['scale']))
-logger.info("post: scale scales {}".format(atmosphere.scale.meta[:]['scale']))
-logger.info("post: del_ln_rho0 scales {}".format(atmosphere.del_ln_rho0.meta[:]['scale']))
-logger.info("post: del_s0 scales{}".format(atmosphere.del_s0.meta[:]['scale']))
-logger.info("--------------------------------------")
-logger.info("post: scale    {}".format(atmosphere.scale['c'][0,:]))
-
 x = atmosphere.domain.grid(0)
 z = atmosphere.domain.grid(1)
-
-#fig = plt.figure()
-#ax = fig.add_subplot(1,1,1)
-#ax.plot(solver.evaluator.vars['del_ln_rho0']['g'][0,:])
-#fig.savefig("del_ln_rho0_build_{:d}.png".format(atmosphere.domain.distributor.rank))
 
 
 # initial conditions
@@ -95,17 +57,12 @@ ln_rho = solver.state['ln_rho1']
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
 
-for key in solver.problem.ncc_manager.ncc_strings:
-    logger.info("NCC: {}".format(key)) #, solver.problem.ncc_manager.ncc_matrices[key]))
-
 A0 = 1e-6
 np.random.seed(1+atmosphere.domain.distributor.rank)
 
-#atmosphere.T0.set_scales(domain.dealias, keep_data=True)
 T.set_scales(atmosphere.domain.dealias, keep_data=True)
 z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
 T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*np.random.randn(*T['g'].shape)*atmosphere.T0['g']
-#ln_rho['g'] = A0*np.sin(np.pi*z/Lz)*np.random.randn(*s['g'].shape)/atmosphere.rho0['g']
 
 logger.info("A0 = {:g}".format(A0))
 logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
@@ -183,7 +140,7 @@ post.merge_analysis(analysis_slice.base_path)
 
 if (atmosphere.domain.distributor.rank==0):
 
-    N_TOTAL_CPU = domain.distributor.comm_world.size
+    N_TOTAL_CPU = atmosphere.domain.distributor.comm_world.size
     
     # Print statistics
     print('-' * 40)
