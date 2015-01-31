@@ -246,7 +246,7 @@ class FC_polytrope(polytrope):
         
     def set_IVP_problem(self, Rayleigh, Prandtl):
 
-        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'], cutoff=1e-12)
+        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'])
         
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()

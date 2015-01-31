@@ -134,7 +134,7 @@ logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
 
 if (atmosphere.domain.distributor.rank==0):
 
-    N_TOTAL_CPU = domain.distributor.comm_world.size
+    N_TOTAL_CPU = atmosphere.domain.distributor.comm_world.size
     
     # Print statistics
     print('-' * 40)
