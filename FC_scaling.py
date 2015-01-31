@@ -108,7 +108,6 @@ flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
 flow.add_property("sqrt(u*u + w*w)*Lz/ nu", name='Re')
 
 
-start_time = time.time()
 while solver.ok:
 
     dt = CFL.compute_dt()
@@ -120,6 +119,11 @@ while solver.ok:
         log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, Re: {:8.3e}/{:8.3e}'.format(solver.iteration, solver.sim_time, dt,
                                                                                                 flow.grid_average('Re'), flow.max('Re'))
         logger.info(log_string)
+
+    if solver.iteration == 1:
+        # pull out transpose init costs from startup time.
+        start_time = time.time()        
+
         
 end_time = time.time()
 
