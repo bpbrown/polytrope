@@ -81,21 +81,6 @@ solver.stop_wall_time = 0.25*3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
 
-analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", sim_dt=output_time_cadence, max_writes=20, parallel=False)
-
-analysis_slice.add_task("s", name="s")
-analysis_slice.add_task("s - integ(s, 'x')/Lx", name="s'")
-analysis_slice.add_task("u", name="u")
-analysis_slice.add_task("w", name="w")
-analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
-
-
-do_checkpointing=False
-if do_checkpointing:
-    checkpoint = Checkpoint(data_dir)
-    checkpoint.set_checkpoint(solver, wall_dt=1800)
-
-
     
 cfl_cadence = 1
 CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
