@@ -10,12 +10,13 @@ import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
 class polytrope:
-    def __init__(self, nx=256, nz=128, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3):
+    def __init__(self, nx=256, nz=128, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3, constant_diffusivities=True):
         
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
-                
+        
+        self.constant_diffusivities = constant_diffusivities
         self._set_atmosphere(epsilon, gamma)
 
     def _new_ncc(self):
@@ -60,7 +61,13 @@ class polytrope:
         self.T0['g'] = self.z0 - self.z       
 
         self.scale = self._new_ncc()
-        self.scale['g'] = self.z0 - self.z
+        if self.constant_diffusivities:
+            self.scale['g'] = self.z0 - self.z
+        else:
+            # this may be a better scale factor for the diffusion terms.  Wow.  None of these work particularly well.
+            self.scale['g'] = (self.z0 - self.z)**(3)
+            self.scale['g'] = (self.z0 - self.z)**(self.poly_n)
+            self.scale['g'] = (self.z0 - self.z)**(self.poly_n+1)
 
         self.g = self.poly_n + 1
 
@@ -86,7 +93,7 @@ class polytrope:
         #ax.plot(self.del_ln_rho0['g'][0,:])
         #fig.savefig("del_ln_rho0_{:d}.png".format(self.domain.distributor.rank))
         
-    def _set_diffusivity(self, Rayleigh, Prandtl, constant_diffusivities=True):
+    def _set_diffusivity(self, Rayleigh, Prandtl):
         
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
@@ -94,7 +101,7 @@ class polytrope:
         self.nu = self._new_ncc()
         self.chi = self._new_ncc()
 
-        if constant_diffusivities:
+        if self.constant_diffusivities:
             # take constant nu, chi
             nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
             chi = nu/Prandtl
@@ -116,8 +123,12 @@ class polytrope:
             nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
             chi_top = nu_top/Prandtl
 
-            nu  =  nu_top/(self.rho0['g']/self.rho0['g'][...,-1][0])
-            chi = chi_top/(self.rho0['g']/self.rho0['g'][...,-1][0])
+            # we're using internal chebyshev grid points... right.
+            nu  =  nu_top/(self.rho0['g'])
+            chi = chi_top/(self.rho0['g'])
+
+            #nu  =  nu_top/(self.rho0['g']/self.rho0['g'][...,-1][0])
+            #chi = chi_top/(self.rho0['g']/self.rho0['g'][...,-1][0])
             logger.info("   using constant mu, kappa")
             logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu[...,-1][0], chi[...,-1][0]))
             logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu[...,self.nz/2][0], chi[...,self.nz/2][0]))
