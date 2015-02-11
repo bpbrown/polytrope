@@ -86,28 +86,32 @@ class polytrope:
         #ax.plot(self.del_ln_rho0['g'][0,:])
         #fig.savefig("del_ln_rho0_{:d}.png".format(self.domain.distributor.rank))
         
-    def _set_diffusivity(self, Rayleigh, Prandtl):
+    def _set_diffusivity(self, Rayleigh, Prandtl, constant_diffusivities=True):
         
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
+
+        self.nu = self._new_ncc()
+        self.chi = self._new_ncc()
+
+        if constant_diffusivities:
+            # take constant nu, chi
+            nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
+            chi = nu/Prandtl
+
+            logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
+
+            # determine characteristic timescales
+            self.thermal_time = self.Lz**2/chi
+            self.top_thermal_time = 1/chi
+
+            self.viscous_time = self.Lz**2/nu
+            self.top_viscous_time = 1/nu
         
-        # take constant nu, chi
-        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
-        chi = nu/Prandtl
+            logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time, self.top_thermal_time))
 
-        logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
-
-        # determine characteristic timescales
-        self.thermal_time = self.Lz**2/chi
-        self.top_thermal_time = 1/chi
-
-        self.viscous_time = self.Lz**2/nu
-        self.top_viscous_time = 1/nu
-
-        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time, self.top_thermal_time))
-
-        self.nu = nu
-        self.chi = chi
+        self.nu['g'] = nu
+        self.chi['g'] = chi
 
         
         return nu, chi
