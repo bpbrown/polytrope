@@ -99,6 +99,7 @@ class polytrope:
             nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
             chi = nu/Prandtl
 
+            logger.info("   using constant nu, chi")
             logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
 
             # determine characteristic timescales
@@ -108,6 +109,27 @@ class polytrope:
             self.viscous_time = self.Lz**2/nu
             self.top_viscous_time = 1/nu
         
+            logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time, self.top_thermal_time))
+        else:
+        #elif constant_diffusion:
+            # take constant mu, kappa based on setting a top-of-domain Rayleigh number
+            nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
+            chi_top = nu_top/Prandtl
+
+            nu  =  nu_top/(self.rho0['g']/self.rho0['g'][...,-1][0])
+            chi = chi_top/(self.rho0['g']/self.rho0['g'][...,-1][0])
+            logger.info("   using constant mu, kappa")
+            logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu[...,-1][0], chi[...,-1][0]))
+            logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu[...,self.nz/2][0], chi[...,self.nz/2][0]))
+            logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu[...,0][0], chi[...,0][0]))
+
+            # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
+            self.thermal_time = self.Lz**2/chi[...,self.nz/2][0]
+            self.top_thermal_time = 1/chi_top
+
+            self.viscous_time = self.Lz**2/nu[...,self.nz/2][0]
+            self.top_viscous_time = 1/nu_top
+
             logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time, self.top_thermal_time))
 
         self.nu['g'] = nu
