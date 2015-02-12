@@ -19,7 +19,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 import shelve
-import scaling_plot
 import pathlib
 
 from dedalus2.tools.parallel import Sync
@@ -104,6 +103,7 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
         print(N_total_cpu[i], N_z[i], startup_time[i], wall_time[i], wall_time_per_iter[i])
 
     data_set = dict()
+    data_set['script'] = scaling_script
     data_set['sim_nx'] = sim_nx
     data_set['sim_nz'] = sim_nz
     data_set['N_total_cpu'] = N_total_cpu
@@ -114,7 +114,11 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     data_set['wall_time_per_iter'] = wall_time_per_iter
     data_set['work'] = work
     data_set['work_per_core'] = work_per_core
-    data_set['label'] = '{:d}x{:d}'.format(sim_nx, sim_nz)
+    data_set['file_label'] = '{:d}x{:d}'.format(sim_nx, sim_nz)
+    
+    data_set['plot_label'] = r'${:d}\times{:d}$'.format(sim_nx, sim_nz)        
+    data_set['plot_label_short'] = r'${:d}^2$'.format(sim_nz)
+        
     write_scaling_run(data_set)
 
     end_time = time.time()
@@ -126,7 +130,7 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
 
 def write_scaling_run(data_set):
         
-    scaling_file = shelve.open('scaling_data_'+data_set['label']+'.db', flag='n')
+    scaling_file = shelve.open('scaling_data_'+data_set['file_label']+'.db', flag='n')
     scaling_file['data'] = data_set
     scaling_file.close()
 
@@ -136,19 +140,154 @@ def read_scaling_run(file):
     data_set = scaling_file['data']
     scaling_file.close()
     return data_set
+
+# Plotting routines
+def plot_scaling_run(data_set, ax_set, 
+                     ideal_curves = True, scale_to = False, scale_to_resolution=None, 
+                     linestyle='solid', marker='o', color='None', explicit_label = True, dim=2):
     
+    sim_nx = data_set['sim_nx']
+    sim_nz = data_set['sim_nz']
+    N_total_cpu = data_set['N_total_cpu']
+    N_x = data_set['N_x'] 
+    N_z = data_set['N_z']
+    if dim==3:
+        sim_ny = data_set['sim_ny']
+        N_y = data_set['N_y'] 
+        N_x_cpu = data_set['N_x_cpu']
+        N_y_cpu = data_set['N_y_cpu']
+        
+    startup_time = data_set['startup_time'] 
+    wall_time = data_set['wall_time']
+    wall_time_per_iter = data_set['wall_time_per_iter']
+    work = data_set['work']
+    work_per_core = data_set['work_per_core']
+        
+    if dim == 2:
+        resolution = [sim_nx, sim_nz]
+        if scale_to_resolution is None:
+            scale_to_resolution = [128,128]
+    elif dim == 3 :
+        resolution = [sim_nx, sim_ny, sim_nz]
+        if scale_to_resolution is None:
+            scale_to_resolution = [128,128,128]
+    
+    if color is 'None':
+        color=next(ax_set[0]._get_lines.color_cycle)
+
+    scale_to_factor = np.prod(np.array(scale_to_resolution))/np.prod(np.array(resolution))
+    scale_factor_inverse = np.int(np.rint((1./scale_to_factor)**(1/dim)))
+
+    if explicit_label:
+        label_string = data['plot_label']
+        scaled_label_string = data['plot_label'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
+    else:
+        label_string = data['plot_label_short']
+        scaled_label_string = data['plot_label_short'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
+    
+    ax_set[0].loglog(N_total_cpu, wall_time, label=label_string, 
+                     marker=marker, linestyle=linestyle, color=color)
+
+    ax_set[1].loglog(N_total_cpu, wall_time_per_iter, label=label_string,
+                     marker=marker, linestyle=linestyle, color=color)
+
+    ax_set[2].loglog(N_total_cpu, work_per_core/1e-6, label=label_string,
+                     marker=marker, linestyle=linestyle, color=color)
+
+    ax_set[3].loglog(N_total_cpu, startup_time, label=label_string,
+                     marker=marker,  linestyle=linestyle, color=color)
+
+
+    if scale_to:
+        print("scaling by {:f} or (1/{:d})^{:d}".format(scale_to_factor, scale_factor_inverse, dim))
+        ax_set[0].loglog(N_total_cpu, wall_time*scale_to_factor, marker=marker,
+                         label=scaled_label_string, linestyle='--', color=color)
+        
+        ax_set[1].loglog(N_total_cpu, wall_time_per_iter*scale_to_factor, marker=marker,
+                         label=scaled_label_string, linestyle='--',color=color)
+
+    if ideal_curves:
+        ideal_cores = N_total_cpu
+        ideal_time = wall_time[0]*(N_total_cpu[0]/N_total_cpu)
+        ideal_time_per_iter = wall_time_per_iter[0]*(N_total_cpu[0]/N_total_cpu)
+
+        ax_set[0].loglog(ideal_cores, ideal_time, linestyle='--', color='black')
+        
+        ax_set[1].loglog(ideal_cores, ideal_time_per_iter, linestyle='--', color='black')
+
+def initialize_plots(num_figs):
+    fig_set = []
+    ax_set = []
+
+    for i in range(num_figs):
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        fig_set.append(fig)
+        ax_set.append(ax)
+    
+    return fig_set, ax_set
+
+
+def legend_with_ideal(ax, loc='lower left'):
+    handles, labels = ax.get_legend_handles_labels()
+    idealArtist = plt.Line2D((0,1),(0,0), color='black', linestyle='--')
+    ax.legend([handle for i,handle in enumerate(handles)]+[idealArtist],
+              [label for i,label in enumerate(labels)]+['ideal'],
+              loc=loc, fontsize='small')    
+
+def finalize_plots(fig_set, ax_set, script):
+    
+    ax_set[0].set_title('Wall time {}'.format(script))
+    ax_set[0].set_xlabel('N-core')
+    ax_set[0].set_ylabel('total time [s]')
+    legend_with_ideal(ax_set[0], loc='lower left')
+    fig_set[0].savefig('scaling_time.png')
+
+    
+    ax_set[1].set_title('Wall time per iteration {}'.format(script))
+    ax_set[1].set_xlabel('N-core')
+    ax_set[1].set_ylabel('time/iter [s]')
+    legend_with_ideal(ax_set[1], loc='lower left')
+    fig_set[1].savefig('scaling_time_per_iter.png')
+
+    
+    ax_set[2].set_title('Normalized work {}'.format(script))
+    ax_set[2].set_xlabel('N-core')
+    ax_set[2].set_ylabel('N-cores * (time/iter/grid) [$\mu$s]')
+    ax_set[2].legend(loc='upper left')
+    fig_set[2].savefig('scaling_work.png')
+
+    ax_set[3].set_title('startup time {}'.format(script))
+    ax_set[3].set_xlabel('N-core')
+    ax_set[3].set_ylabel('startup time [s]')
+    ax_set[3].legend(loc='upper left')
+    fig_set[3].savefig('scaling_startup.png')
+
+
+
+
 if __name__ == "__main__":
     
     from docopt import docopt
-
-    start_time = time.time()
-
+    
+    fig_set, ax_set = initialize_plots(4)
     args = docopt(__doc__)
     if args['run']:
         #CPU_set = [1, 2, 4, 8, 16, 32, 64, 128]
         CPU_set = [512, 256, 128, 64]
         resolution = [2048, 1024]
+        
+        start_time = time.time()
         data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun', verbose=args['--verbose'])
+        end_time = time.time()
+        
+        plot_scaling_run(data_set, ax_set)
+        script = args['<scaling_script>']
+
+        print(40*'=')
+        print('time to do all tests: {:f}'.format(end_time-start_time))
+        print(40*'=')
+
     elif args['plot']:
         output_path = pathlib.Path(args['--output']).absolute()
         # Create output directory if needed
@@ -156,15 +295,11 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
-        data_set = read_scaling_run(args['<files>'][0])
+        for file in args['<files>']:
+            data_set = read_scaling_run(file)
+            plot_scaling_run(data_set, ax_set)
+        script = data_set['script']
+        
+    finalize_plots(fig_set, ax_set, script)
 
-    fig_set, ax_set = scaling_plot.initialize_plots(4)
-    scaling_plot.plot_scaling_run(data_set, ax_set)
-    
-    scaling_plot.finalize_plots(fig_set, ax_set)
-
-    end_time = time.time()
-    print(40*'=')
-    print('time to do all tests: {:f}'.format(end_time-start_time))
-    print(40*'=')
 
