@@ -3,7 +3,7 @@
 Perform scaling runs on special scaling scripts.
 
 Usage:
-    scaling.py run <scaling_script> [--verbose]
+    scaling.py run <scaling_script> [<z_resolution> --verbose]
     scaling.py plot <files>... [--output=<dir>]
 
 Options:
@@ -179,11 +179,11 @@ def plot_scaling_run(data_set, ax_set,
     scale_factor_inverse = np.int(np.rint((1./scale_to_factor)**(1/dim)))
 
     if explicit_label:
-        label_string = data['plot_label']
-        scaled_label_string = data['plot_label'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
+        label_string = data_set['plot_label']
+        scaled_label_string = data_set['plot_label'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
     else:
-        label_string = data['plot_label_short']
-        scaled_label_string = data['plot_label_short'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
+        label_string = data_set['plot_label_short']
+        scaled_label_string = data_set['plot_label_short'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
     
     ax_set[0].loglog(N_total_cpu, wall_time, label=label_string, 
                      marker=marker, linestyle=linestyle, color=color)
@@ -273,9 +273,18 @@ if __name__ == "__main__":
     fig_set, ax_set = initialize_plots(4)
     args = docopt(__doc__)
     if args['run']:
-        #CPU_set = [1, 2, 4, 8, 16, 32, 64, 128]
-        CPU_set = [512, 256, 128, 64]
-        resolution = [2048, 1024]
+        if not args['<z_resolution>'] is None:
+            n_z = num(args['<z_resolution>'])
+            
+            resolution = [2*n_z, n_z]
+            n_z_2 = np.log(n_z)/np.log(2) # 2 pencils per core min (arange goes to -1 of top)
+            n_z_2_min = n_z_2-4
+            
+            CPU_set = (2**np.arange(n_z_2_min, n_z_2)).astype(int)[::-1] # flip order so large numbers of cores are done first
+            print("scaling run with {} on {} cores".format(resolution, CPU_set))
+        else:
+            CPU_set = [512, 256, 128, 64]
+            resolution = [2048, 1024]
         
         start_time = time.time()
         data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun', verbose=args['--verbose'])
