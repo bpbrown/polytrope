@@ -3,7 +3,7 @@
 Perform scaling runs on special scaling scripts.
 
 Usage:
-    scaling.py run <scaling_script>
+    scaling.py run <scaling_script> [--verbose]
     scaling.py plot <files>... [--output=<dir>]
 
 Options:
@@ -20,6 +20,9 @@ import matplotlib.pyplot as plt
 import time
 import shelve
 import scaling_plot
+import pathlib
+
+from dedalus2.tools.parallel import Sync
 
 def num(s):
     try:
@@ -28,7 +31,7 @@ def num(s):
         return float(s)
 
 
-def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpirun='mpirun'):
+def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpirun='mpirun', verbose=None):
 
     print('testing {}, from {:d} to {:d} cores'.format(scaling_script, np.min(CPU_set),np.max(CPU_set)))
     start_time = time.time()
@@ -62,11 +65,12 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout, stderr = proc.communicate()
 
-        for line in stdout.splitlines():
-            print("out: {}".format(line))
+        if verbose:
+            for line in stdout.splitlines():
+                print("out: {}".format(line))
             
-        for line in stderr.splitlines():
-            print("err: {}".format(line))
+            for line in stderr.splitlines():
+                print("err: {}".format(line))
         
         for line in stdout.splitlines():
             if line.startswith('scaling:'):
@@ -99,12 +103,18 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     for i, temp in enumerate(N_total_cpu):
         print(N_total_cpu[i], N_z[i], startup_time[i], wall_time[i], wall_time_per_iter[i])
 
-    data_set = [sim_nx, 0, sim_nz, 
-                N_total_cpu, 0, N_total_cpu,
-                N_x, N_x, N_z, 
-                startup_time, wall_time, wall_time_per_iter,
-                work, work_per_core] # hacked
-
+    data_set = dict()
+    data_set['sim_nx'] = sim_nx
+    data_set['sim_nz'] = sim_nz
+    data_set['N_total_cpu'] = N_total_cpu
+    data_set['N_x'] = N_x
+    data_set['N_z'] = N_z
+    data_set['startup_time'] = startup_time
+    data_set['wall_time'] = wall_time
+    data_set['wall_time_per_iter'] = wall_time_per_iter
+    data_set['work'] = work
+    data_set['work_per_core'] = work_per_core
+    data_set['label'] = '{:d}x{:d}'.format(sim_nx, sim_nz)
     write_scaling_run(data_set)
 
     end_time = time.time()
@@ -115,40 +125,17 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     return data_set
 
 def write_scaling_run(data_set):
-    sim_nx = data_set[0]
-    sim_ny = data_set[1]
-    sim_nz = data_set[2]
-    N_x_cpu = data_set[3]
-    N_y_cpu = data_set[4]
-    N_total_cpu = data_set[5]
-    N_x = data_set[6]
-    N_y = data_set[7]
-    N_z = data_set[8]
-    startup_time = data_set[9]
-    wall_time = data_set[10]
-    wall_time_per_iter = data_set[11]
-    work = data_set[12]
-    work_per_core = data_set[13]
         
-    resolution_string = '{:d}x{:d}x{:d}'.format(sim_nx, sim_ny, sim_nz)
-    scaling_file = shelve.open('scaling_data_'+resolution_string+'.db', flag='n')
-    scaling_file['nx'] = sim_nx
-    scaling_file['ny'] = sim_ny
-    scaling_file['nz'] = sim_nz
-    scaling_file['N_x_cpu'] = N_x_cpu
-    scaling_file['N_y_cpu'] = N_y_cpu
-    scaling_file['N_total_cpu'] = N_total_cpu
-    scaling_file['N_x'] = N_x
-    scaling_file['N_y'] = N_y
-    scaling_file['N_z'] = N_z
-    scaling_file['startup_time'] = startup_time
-    scaling_file['wall_time'] = wall_time
-    scaling_file['wall_time_per_iter'] = wall_time_per_iter
-    scaling_file['work'] = work
-    scaling_file['work_per_core'] = work_per_core
+    scaling_file = shelve.open('scaling_data_'+data_set['label']+'.db', flag='n')
+    scaling_file['data'] = data_set
     scaling_file.close()
-    
 
+def read_scaling_run(file):
+    print("opening file {}".format(file))
+    scaling_file = shelve.open(file, flag='r')
+    data_set = scaling_file['data']
+    scaling_file.close()
+    return data_set
     
 if __name__ == "__main__":
     
@@ -158,9 +145,10 @@ if __name__ == "__main__":
 
     args = docopt(__doc__)
     if args['run']:
-        CPU_set = [1, 2] #4, 8, 16, 32, 64]
-        resolution = [192, 96]
-        data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun')
+        #CPU_set = [1, 2, 4, 8, 16, 32, 64, 128]
+        CPU_set = [512, 256, 128, 64]
+        resolution = [2048, 1024]
+        data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun', verbose=args['--verbose'])
     elif args['plot']:
         output_path = pathlib.Path(args['--output']).absolute()
         # Create output directory if needed
@@ -168,7 +156,7 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
-        #data_set = use shelve to read in (args['<files>'])
+        data_set = read_scaling_run(args['<files>'][0])
 
     fig_set, ax_set = scaling_plot.initialize_plots(4)
     scaling_plot.plot_scaling_run(data_set, ax_set)
