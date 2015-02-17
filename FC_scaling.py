@@ -130,18 +130,20 @@ if (atmosphere.domain.distributor.rank==0):
     total_time = end_time-initial_time
     main_loop_time = end_time - start_time
     startup_time = start_time-initial_time
+    n_steps = solver.iteration-1
     print('  startup time:', startup_time)
     print('main loop time:', main_loop_time)
     print('    total time:', total_time)
     print('Iterations:', solver.iteration)
-    print('Average timestep:', solver.sim_time / solver.iteration)
+    print('Average timestep:', solver.sim_time / n_steps)
+    print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
     print('scaling:',
           ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
           ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
                                                             main_loop_time, 
-                                                            main_loop_time/solver.iteration, 
-                                                            main_loop_time/solver.iteration/(nx*nz), 
-                                                            N_TOTAL_CPU*main_loop_time/solver.iteration/(nx*nz)))
+                                                            main_loop_time/n_steps, 
+                                                            main_loop_time/n_steps/(nx*nz), 
+                                                            N_TOTAL_CPU*main_loop_time/n_steps/(nx*nz)))
     print('-' * 40)
 
 

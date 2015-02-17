@@ -3,12 +3,15 @@
 Perform scaling runs on special scaling scripts.
 
 Usage:
-    scaling.py run <scaling_script> [<z_resolution> --verbose]
-    scaling.py plot <files>... [--output=<dir>]
+    scaling.py run <scaling_script> [<z_resolution> --label=<label> --verbose]
+    scaling.py plot <files>... [--output=<dir> --rescale=<rescale>]
 
 Options:
-    --output=<dir>  Output directory [default: ./frames]
-
+     <z_resolution>  set Z resolution in chebyshev direction; X resolution is 2x larger.
+    --output=<dir>   Output directory [default: ./scaling]
+    --label=<label>  Label for output file
+    --verbose        Print verbose output at end of each run (stdout and stderr)
+    --rescale=<rescale>  rescale plots to particular Z resolution comparison case     
 """
 import os
 import numpy as np
@@ -30,7 +33,7 @@ def num(s):
         return float(s)
 
 
-def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpirun='mpirun', verbose=None):
+def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpirun='mpirun', verbose=None, label=None):
 
     print('testing {}, from {:d} to {:d} cores'.format(scaling_script, np.min(CPU_set),np.max(CPU_set)))
     start_time = time.time()
@@ -118,8 +121,10 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     
     data_set['plot_label'] = r'${:d}\times{:d}$'.format(sim_nx, sim_nz)        
     data_set['plot_label_short'] = r'${:d}^2$'.format(sim_nz)
-        
-    write_scaling_run(data_set)
+
+    if not label is None:
+        data_set['plot_label'] = data_set['plot_label'] + "-" + label
+    write_scaling_run(data_set, label=label)
 
     end_time = time.time()
     print(40*'*')
@@ -128,9 +133,15 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
 
     return data_set
 
-def write_scaling_run(data_set):
-        
-    scaling_file = shelve.open('scaling_data_'+data_set['file_label']+'.db', flag='n')
+def write_scaling_run(data_set, label=None):
+    file_name = 'scaling_data_'+data_set['file_label']
+    if not label is None:
+        file_name = file_name+'_'+label
+    file_name = file_name+'.db'
+    
+    print("writing file {}".format(file_name))
+    scaling_file = shelve.open(file_name, flag='n')
+    data_set['file_name'] = file_name
     scaling_file['data'] = data_set
     scaling_file.close()
 
@@ -180,10 +191,10 @@ def plot_scaling_run(data_set, ax_set,
 
     if explicit_label:
         label_string = data_set['plot_label']
-        scaled_label_string = data_set['plot_label'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
+        scaled_label_string = data_set['plot_label'] + r'$/{:d}^{:d}$'.format(scale_factor_inverse, dim)
     else:
         label_string = data_set['plot_label_short']
-        scaled_label_string = data_set['plot_label_short'] + r'/{:d}^{:d}$'.format(scale_factor_inverse, dim)
+        scaled_label_string = data_set['plot_label_short'] + r'$/{:d}^{:d}$'.format(scale_factor_inverse, dim)
     
     ax_set[0].loglog(N_total_cpu, wall_time, label=label_string, 
                      marker=marker, linestyle=linestyle, color=color)
@@ -198,7 +209,7 @@ def plot_scaling_run(data_set, ax_set,
                      marker=marker,  linestyle=linestyle, color=color)
 
 
-    if scale_to:
+    if scale_to and scale_to_factor != 1:
         print("scaling by {:f} or (1/{:d})^{:d}".format(scale_to_factor, scale_factor_inverse, dim))
         ax_set[0].loglog(N_total_cpu, wall_time*scale_to_factor, marker=marker,
                          label=scaled_label_string, linestyle='--', color=color)
@@ -208,8 +219,9 @@ def plot_scaling_run(data_set, ax_set,
 
     if ideal_curves:
         ideal_cores = N_total_cpu
-        ideal_time = wall_time[0]*(N_total_cpu[0]/N_total_cpu)
-        ideal_time_per_iter = wall_time_per_iter[0]*(N_total_cpu[0]/N_total_cpu)
+        i_min = np.argmin(N_total_cpu)
+        ideal_time = wall_time[i_min]*(N_total_cpu[i_min]/N_total_cpu)
+        ideal_time_per_iter = wall_time_per_iter[i_min]*(N_total_cpu[i_min]/N_total_cpu)
 
         ax_set[0].loglog(ideal_cores, ideal_time, linestyle='--', color='black')
         
@@ -247,7 +259,7 @@ def finalize_plots(fig_set, ax_set, script):
     ax_set[1].set_title('Wall time per iteration {}'.format(script))
     ax_set[1].set_xlabel('N-core')
     ax_set[1].set_ylabel('time/iter [s]')
-    legend_with_ideal(ax_set[1], loc='lower left')
+    legend_with_ideal(ax_set[1], loc='upper right')
     fig_set[1].savefig('scaling_time_per_iter.png')
 
     
@@ -260,7 +272,7 @@ def finalize_plots(fig_set, ax_set, script):
     ax_set[3].set_title('startup time {}'.format(script))
     ax_set[3].set_xlabel('N-core')
     ax_set[3].set_ylabel('startup time [s]')
-    ax_set[3].legend(loc='upper left')
+    ax_set[3].legend(loc='lower right')
     fig_set[3].savefig('scaling_startup.png')
 
 
@@ -287,7 +299,7 @@ if __name__ == "__main__":
             resolution = [2048, 1024]
         
         start_time = time.time()
-        data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun', verbose=args['--verbose'])
+        data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun', verbose=args['--verbose'], label=args['--label'])
         end_time = time.time()
         
         plot_scaling_run(data_set, ax_set)
@@ -304,9 +316,18 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
+        if not args['--rescale'] is None:
+            n_z_rescale = num(args['--rescale'])
+            
+            scale_to_resolution = [2*n_z_rescale, n_z_rescale]
+            scale_to = True
+        else:
+            scale_to_resolution = [1, 1]
+            scale_to = False
+            
         for file in args['<files>']:
             data_set = read_scaling_run(file)
-            plot_scaling_run(data_set, ax_set)
+            plot_scaling_run(data_set, ax_set, scale_to=scale_to, scale_to_resolution=scale_to_resolution)
         script = data_set['script']
         
     finalize_plots(fig_set, ax_set, script)
