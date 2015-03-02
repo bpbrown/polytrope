@@ -2,7 +2,7 @@ import numpy as np
 import os
 from mpi4py import MPI
 
-from dedalus2 import public as de
+from dedalus import public as de
 
 #import matplotlib.pyplot as plt
 

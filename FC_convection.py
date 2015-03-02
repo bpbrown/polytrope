@@ -9,10 +9,10 @@ import equations
 import logging
 logger = logging.getLogger(__name__)
 
-from dedalus2.public import *
-from dedalus2.tools  import post
-from dedalus2.extras import flow_tools
-#from dedalus2.extras.checkpointing import Checkpoint
+from dedalus.public import *
+from dedalus.tools  import post
+from dedalus.extras import flow_tools
+from dedalus.extras.checkpointing import Checkpoint
 
 initial_time = time.time()
 
@@ -89,7 +89,7 @@ analysis_slice.add_task("w", name="w")
 analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
 
 
-do_checkpointing=False
+do_checkpointing=True
 if do_checkpointing:
     checkpoint = Checkpoint(data_dir)
     checkpoint.set_checkpoint(solver, wall_dt=1800)
