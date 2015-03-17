@@ -91,6 +91,17 @@ analysis_slice.add_task("u", name="u")
 analysis_slice.add_task("w", name="w")
 analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
 
+analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", sim_dt=output_time_cadence, max_writes=20, parallel=False)
+
+analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", sim_dt=output_time_cadence, max_writes=20, parallel=False)
+analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2))/Lx/Lz", name="KE")
+analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*phi)/Lx/Lz", name="PE")
+analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*Cv*T)/Lx/Lz", name="IE")
+analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2)+rho0*exp(ln_rho1)*phi+rho0*exp(ln_rho1)*Cv*T)/Lx/Lz", name="TE")
+analysis_scalar.add_task("integ(sqrt(u**2))/Lx/Lz", name="u_rms")
+analysis_scalar.add_task("integ(sqrt(w**2))/Lx/Lz", name="w_rms")
+analysis_scalar.add_task("integ(sqrt(u**2+w**2)*Lz/nu)/Lx/Lz", name="Re_rms")
+analysis_scalar.add_task("integ(sqrt(u**2+w**2)*Lz/chi)/Lx/Lz", name="Pe_rms")
 
 do_checkpointing=True
 if do_checkpointing:
