@@ -73,13 +73,13 @@ logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
 logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
 
-max_dt = atmosphere.buoyancy_time*0.1
+max_dt = atmosphere.buoyancy_time*0.25
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
 solver.stop_sim_time = 0.25*atmosphere.thermal_time
-solver.stop_iteration= 100 #np.inf
-solver.stop_wall_time = 0.25*3600
+solver.stop_iteration= np.inf
+solver.stop_wall_time = 3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -119,7 +119,7 @@ analysis_tasks.append(analysis_scalar)
 do_checkpointing=True
 if do_checkpointing:
     checkpoint = Checkpoint(data_dir)
-    checkpoint.set_checkpoint(solver, iter=20)
+    checkpoint.set_checkpoint(solver, wall_dt=600)
 
 
     
