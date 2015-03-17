@@ -27,8 +27,11 @@ Prandtl = 1
 # Set domain
 Lz = 100
 Lx = 3*Lz
-    
-atmosphere = equations.FC_polytrope(nx=96, nz=96, Lx=Lx, Lz=Lz)
+
+nx = 96
+nz = 96
+
+atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
 atmosphere.set_BC()
 problem = atmosphere.get_problem()
@@ -75,7 +78,7 @@ max_dt = atmosphere.buoyancy_time
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
 solver.stop_sim_time = 0.25*atmosphere.thermal_time
-solver.stop_iteration= np.inf
+solver.stop_iteration= 100 #np.inf
 solver.stop_wall_time = 0.25*3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
@@ -92,7 +95,7 @@ analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
 do_checkpointing=True
 if do_checkpointing:
     checkpoint = Checkpoint(data_dir)
-    checkpoint.set_checkpoint(solver, wall_dt=1800)
+    checkpoint.set_checkpoint(solver, iter=20)
 
 
     
@@ -147,18 +150,19 @@ if (atmosphere.domain.distributor.rank==0):
     total_time = end_time-initial_time
     main_loop_time = end_time - start_time
     startup_time = start_time-initial_time
+    n_steps = solver.iteration-1
     print('  startup time:', startup_time)
     print('main loop time:', main_loop_time)
     print('    total time:', total_time)
     print('Iterations:', solver.iteration)
-    print('Average timestep:', solver.sim_time / solver.iteration)
+    print('Average timestep:', solver.sim_time / n_steps)
+    print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
     print('scaling:',
-          ' {:d} {:d} {:d} {:d} {:d} {:d}'.format(N_TOTAL_CPU, 0, N_TOTAL_CPU,nx, 0, nz),
+          ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
           ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
                                                             main_loop_time, 
-                                                            main_loop_time/solver.iteration, 
-                                                            main_loop_time/solver.iteration/(nx*nz), 
-                                                            N_TOTAL_CPU*main_loop_time/solver.iteration/(nx*nz)))
+                                                            main_loop_time/n_steps, 
+                                                            main_loop_time/n_steps/(nx*nz), 
+                                                            N_TOTAL_CPU*main_loop_time/n_steps/(nx*nz)))
     print('-' * 40)
-
 

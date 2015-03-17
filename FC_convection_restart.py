@@ -57,15 +57,28 @@ ln_rho = solver.state['ln_rho1']
 solver.evaluator.vars['Lx'] = Lx
 solver.evaluator.vars['Lz'] = Lz
 
-A0 = 1e-6
-np.random.seed(1+atmosphere.domain.distributor.rank)
+do_checkpointing=True
+if do_checkpointing:
+    checkpoint = Checkpoint(data_dir)
+    checkpoint.set_checkpoint(solver, wall_dt=1800)
 
-T.set_scales(atmosphere.domain.dealias, keep_data=True)
-z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*np.random.randn(*T['g'].shape)*atmosphere.T0['g']
+restart = True
+if restart:
+    checkpoint_file = data_dir+'checkpoint/checkpoint_s5.h5'
+    checkpoint.restart(checkpoint_file, solver)
+    
+else:
+    A0 = 1e-6
+    np.random.seed(1+atmosphere.domain.distributor.rank)
 
-logger.info("A0 = {:g}".format(A0))
-logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
+    T.set_scales(atmosphere.domain.dealias, keep_data=True)
+    z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
+    T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*np.random.randn(*T['g'].shape)*atmosphere.T0['g']
+
+    logger.info("A0 = {:g}".format(A0))
+
+for var in solver.state.field_names:
+    logger.info("{:} = {:g} -- {:g}".format(var, np.min(solver.state[var]['g']), np.max(solver.state[var]['g'])))
 
 logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
@@ -89,10 +102,7 @@ analysis_slice.add_task("w", name="w")
 analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
 
 
-do_checkpointing=True
-if do_checkpointing:
-    checkpoint = Checkpoint(data_dir)
-    checkpoint.set_checkpoint(solver, wall_dt=1800)
+
 
 
     
@@ -106,6 +116,7 @@ CFL.add_velocities(('u', 'w'))
 flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
 flow.add_property("sqrt(u*u + w*w)*Lz/ nu", name='Re')
 
+solver.evaluator.evaluate_handlers([CFL.frequencies], 0, 0, 0)
 
 start_time = time.time()
 while solver.ok:
