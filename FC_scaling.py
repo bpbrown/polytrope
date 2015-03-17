@@ -11,9 +11,9 @@ nz = np.int(os.environ['N_Z'])
 import logging
 logger = logging.getLogger(__name__)
 
-from dedalus2.public import *
-from dedalus2.tools  import post
-from dedalus2.extras import flow_tools
+from dedalus.public import *
+from dedalus.tools  import post
+from dedalus.extras import flow_tools
 
 initial_time = time.time()
 
