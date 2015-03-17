@@ -71,7 +71,8 @@ class polytrope:
 
         self.g = self.poly_n + 1
         # choose a particular gauge for phi; and -grad(phi)=g
-        self.phi = self.g*(self.z0 - self.z)
+        self.phi = self._new_ncc()
+        self.phi['g'] = self.g*(self.z0 - self.z)
         
         logger.info("polytropic atmosphere parameters:")
         logger.info("   poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
