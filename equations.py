@@ -173,6 +173,10 @@ class polytrope:
         
         self.problem.parameters['scale'] = self.scale
 
+        self.problem.parameters['Lz'] = self.Lz
+        self.problem.parameters['Lx'] = self.Lx
+
+        
     def get_problem(self):
         return self.problem
     
@@ -292,7 +296,8 @@ class FC_polytrope(polytrope):
         
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
-
+        self._set_subs()
+        
         # here, nu and chi are constants        
         self.viscous_term_w = " nu*(dx(dx(w)) + dz(w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*(dx(u) + w_z))"
         self.viscous_term_u = " nu*(dx(dx(u)) + dz(u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*(dx(dx(u)) + dx(w_z)))"
@@ -342,6 +347,23 @@ class FC_polytrope(polytrope):
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
 
-
+    def _set_subs(self):
+        #atmosphere.problem.substitutions['rho'] = 'rho0*exp(ln_rho1)'
+        self.problem.substitutions['KE'] = '1/2*rho0*exp(ln_rho1)*(u**2+w**2)'
+        self.problem.substitutions['PE'] = 'rho0*exp(ln_rho1)*phi'
+        self.problem.substitutions['IE'] = 'rho0*exp(ln_rho1)*Cv*(T1+T0)'
+        self.problem.substitutions['PE_fluc'] = 'rho0*(exp(ln_rho1)-1)*phi'
+        self.problem.substitutions['IE_fluc'] = 'rho0*exp(ln_rho1)*Cv*T1'
+        self.problem.substitutions['P'] = 'rho0*exp(ln_rho1)*(T1+T0)'
+        self.problem.substitutions['P_fluc'] = 'rho0*exp(ln_rho1)*T1+rho0*(exp(ln_rho1)-1)*T0'
+        self.problem.substitutions['h'] = 'IE + P'
+        self.problem.substitutions['h_fluc'] = 'IE_fluc + P_fluc'
+        self.problem.substitutions['u_rms'] = 'sqrt(u*u)'
+        self.problem.substitutions['w_rms'] = 'sqrt(w*w)'
+        self.problem.substitutions['Re_rms'] = 'sqrt(u**2+w**2)*Lz/nu'
+        self.problem.substitutions['Pe_rms'] = 'sqrt(u**2+w**2)*Lz/chi'
+        # analysis operators
+        self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
+        self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
 
     

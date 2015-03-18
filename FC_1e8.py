@@ -28,8 +28,8 @@ Prandtl = 1
 Lz = 10
 Lx = 4*Lz
 
-nx = 512
-nz = 256
+nx = 64 #512
+nz = 32 #256
 
 atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
@@ -57,8 +57,8 @@ T = solver.state['T1']
 s = solver.state['s']
 ln_rho = solver.state['ln_rho1']
 
-solver.evaluator.vars['Lx'] = Lx
-solver.evaluator.vars['Lz'] = Lz
+#solver.evaluator.vars['Lx'] = Lx
+#solver.evaluator.vars['Lz'] = Lz
 
 A0 = 1e-6
 np.random.seed(1+atmosphere.domain.distributor.rank)
@@ -87,36 +87,43 @@ analysis_tasks = []
 
 analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", sim_dt=output_time_cadence, max_writes=20, parallel=False)
 analysis_slice.add_task("s", name="s")
-analysis_slice.add_task("s - integ(s, 'x')/Lx", name="s'")
+analysis_slice.add_task("s - plane_avg(s)", name="s'")
 analysis_slice.add_task("u", name="u")
 analysis_slice.add_task("w", name="w")
 analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
 analysis_tasks.append(analysis_slice)
 
 analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", sim_dt=output_time_cadence, max_writes=20, parallel=False)
-analysis_profile.add_task("integ(w*(1/2*rho0*exp(ln_rho1)*(u**2+w**2)), 'x')/Lx", name="KE_flux_z")
-analysis_profile.add_task("integ(w*(rho0*exp(ln_rho1)*phi), 'x')/Lx",             name="PE_flux_z")
-analysis_profile.add_task("integ(w*(rho0*exp(ln_rho1)*Cv*(T1+T0)), 'x')/Lx",      name="IE_flux_z")
-analysis_profile.add_task("integ(w*(rho0*exp(ln_rho1)*(T1+T0)), 'x')/Lx",         name="P_flux_z")
-analysis_profile.add_task("integ(w*(rho0*exp(ln_rho1)*(Cv+1)*(T1+T0)), 'x')/Lx",  name="enthalpy_flux_z")
-analysis_profile.add_task("integ(sqrt(u**2), 'x')/Lx", name="u_rms")
-analysis_profile.add_task("integ(sqrt(w**2), 'x')/Lx", name="w_rms")
-analysis_profile.add_task("integ(sqrt(u**2+w**2)*Lz/nu, 'x')/Lx", name="Re_rms")
-analysis_profile.add_task("integ(sqrt(u**2+w**2)*Lz/chi, 'x')/Lx", name="Pe_rms")
+analysis_profile.add_task("plane_avg(KE)", name="KE")
+analysis_profile.add_task("plane_avg(PE)", name="PE")
+analysis_profile.add_task("plane_avg(IE)", name="IE")
+analysis_profile.add_task("plane_avg(PE_fluc)", name="PE_fluc")
+analysis_profile.add_task("plane_avg(IE_fluc)", name="IE_fluc")
+analysis_profile.add_task("plane_avg(KE + PE + IE)", name="TE")
+analysis_profile.add_task("plane_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
+analysis_profile.add_task("plane_avg(w*(KE))", name="KE_flux_z")
+analysis_profile.add_task("plane_avg(w*(PE))", name="PE_flux_z")
+analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
+analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
+analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
+analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
+analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
+analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
+analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
 analysis_tasks.append(analysis_profile)
 
 analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", sim_dt=output_time_cadence, max_writes=20, parallel=False)
-analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2))/Lx/Lz", name="KE")
-analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*phi)/Lx/Lz",        name="PE")
-analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*Cv*(T1+T0))/Lx/Lz", name="IE")
-analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2)+rho0*exp(ln_rho1)*phi+rho0*exp(ln_rho1)*Cv*(T1+T0))/Lx/Lz", name="TE")
-analysis_scalar.add_task("integ(rho0*(exp(ln_rho1)-1)*phi)/Lx/Lz",  name="PE_fluc")
-analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*Cv*T1)/Lx/Lz",    name="IE_fluc")
-analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2)+rho0*(exp(ln_rho1)-1)*phi+rho0*exp(ln_rho1)*Cv*T1)/Lx/Lz", name="TE_fluc")
-analysis_scalar.add_task("integ(sqrt(u**2))/Lx/Lz", name="u_rms")
-analysis_scalar.add_task("integ(sqrt(w**2))/Lx/Lz", name="w_rms")
-analysis_scalar.add_task("integ(sqrt(u**2+w**2)*Lz/nu)/Lx/Lz", name="Re_rms")
-analysis_scalar.add_task("integ(sqrt(u**2+w**2)*Lz/chi)/Lx/Lz", name="Pe_rms")
+analysis_scalar.add_task("vol_avg(KE)", name="KE")
+analysis_scalar.add_task("vol_avg(PE)", name="PE")
+analysis_scalar.add_task("vol_avg(IE)", name="IE")
+analysis_scalar.add_task("vol_avg(PE_fluc)", name="PE_fluc")
+analysis_scalar.add_task("vol_avg(IE_fluc)", name="IE_fluc")
+analysis_scalar.add_task("vol_avg(KE + PE + IE)", name="TE")
+analysis_scalar.add_task("vol_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
+analysis_scalar.add_task("vol_avg(u_rms)", name="u_rms")
+analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
+analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
+analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
 analysis_tasks.append(analysis_scalar)
 
 do_checkpointing=True
