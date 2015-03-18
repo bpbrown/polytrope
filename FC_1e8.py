@@ -112,8 +112,8 @@ while solver.ok:
         
     # update lists
     if solver.iteration % report_cadence == 0:
-        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, Re: {:8.3e}/{:8.3e}'.format(solver.iteration, solver.sim_time, dt,
-                                                                                                flow.grid_average('Re'), flow.max('Re'))
+        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, dt)
+        log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
         logger.info(log_string)
         
 end_time = time.time()
