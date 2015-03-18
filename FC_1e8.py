@@ -28,8 +28,8 @@ Prandtl = 1
 Lz = 10
 Lx = 4*Lz
 
-nx = 64 #512
-nz = 32 #256
+nx = 512
+nz = 256
 
 atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
@@ -100,7 +100,7 @@ CFL.add_velocities(('u', 'w'))
 
 # Flow properties
 flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
-flow.add_property("sqrt(u*u + w*w)*Lz/ nu", name='Re')
+flow.add_property("Re_rms", name='Re')
 
 
 start_time = time.time()
