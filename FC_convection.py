@@ -104,9 +104,12 @@ analysis_profile.add_task("integ(sqrt(u**2+w**2)*Lz/chi, 'x')/Lx", name="Pe_rms"
 
 analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", sim_dt=output_time_cadence, max_writes=20, parallel=False)
 analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2))/Lx/Lz", name="KE")
-analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*phi)/Lx/Lz",  name="PE")
+analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*phi)/Lx/Lz",        name="PE")
 analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*Cv*(T1+T0))/Lx/Lz", name="IE")
 analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2)+rho0*exp(ln_rho1)*phi+rho0*exp(ln_rho1)*Cv*(T1+T0))/Lx/Lz", name="TE")
+analysis_scalar.add_task("integ(rho0*(exp(ln_rho1)-1)*phi)/Lx/Lz",  name="PE_fluc")
+analysis_scalar.add_task("integ(rho0*exp(ln_rho1)*Cv*T1)/Lx/Lz",    name="IE_fluc")
+analysis_scalar.add_task("integ(1/2*rho0*exp(ln_rho1)*(u**2+w**2)+rho0*(exp(ln_rho1)-1)*phi+rho0*exp(ln_rho1)*Cv*T1)/Lx/Lz", name="TE_fluc")
 analysis_scalar.add_task("integ(sqrt(u**2))/Lx/Lz", name="u_rms")
 analysis_scalar.add_task("integ(sqrt(w**2))/Lx/Lz", name="w_rms")
 analysis_scalar.add_task("integ(sqrt(u**2+w**2)*Lz/nu)/Lx/Lz", name="Re_rms")
