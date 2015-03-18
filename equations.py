@@ -348,14 +348,16 @@ class FC_polytrope(polytrope):
         self.problem.add_bc("right(w) = 0")
 
     def _set_subs(self):
-        #atmosphere.problem.substitutions['rho'] = 'rho0*exp(ln_rho1)'
-        self.problem.substitutions['KE'] = '1/2*rho0*exp(ln_rho1)*(u**2+w**2)'
-        self.problem.substitutions['PE'] = 'rho0*exp(ln_rho1)*phi'
-        self.problem.substitutions['IE'] = 'rho0*exp(ln_rho1)*Cv*(T1+T0)'
-        self.problem.substitutions['PE_fluc'] = 'rho0*(exp(ln_rho1)-1)*phi'
-        self.problem.substitutions['IE_fluc'] = 'rho0*exp(ln_rho1)*Cv*T1'
-        self.problem.substitutions['P'] = 'rho0*exp(ln_rho1)*(T1+T0)'
-        self.problem.substitutions['P_fluc'] = 'rho0*exp(ln_rho1)*T1+rho0*(exp(ln_rho1)-1)*T0'
+        self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
+        self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
+
+        self.problem.substitutions['KE'] = 'rho_full*(u**2+w**2)/2'
+        self.problem.substitutions['PE'] = 'rho_full*phi'
+        self.problem.substitutions['PE_fluc'] = 'rho_fluc*phi'
+        self.problem.substitutions['IE'] = 'rho_full*Cv*(T1+T0)'
+        self.problem.substitutions['IE_fluc'] = 'rho_full*Cv*T1+rho_fluc*T0'
+        self.problem.substitutions['P'] = 'rho_full*(T1+T0)'
+        self.problem.substitutions['P_fluc'] = 'rho_full*T1+rho_fluc*T0'
         self.problem.substitutions['h'] = 'IE + P'
         self.problem.substitutions['h_fluc'] = 'IE_fluc + P_fluc'
         self.problem.substitutions['u_rms'] = 'sqrt(u*u)'
