@@ -355,7 +355,7 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['PE'] = 'rho_full*phi'
         self.problem.substitutions['PE_fluc'] = 'rho_fluc*phi'
         self.problem.substitutions['IE'] = 'rho_full*Cv*(T1+T0)'
-        self.problem.substitutions['IE_fluc'] = 'rho_full*Cv*T1+rho_fluc*T0'
+        self.problem.substitutions['IE_fluc'] = 'rho_full*Cv*T1+rho_fluc*Cv*T0'
         self.problem.substitutions['P'] = 'rho_full*(T1+T0)'
         self.problem.substitutions['P_fluc'] = 'rho_full*T1+rho_fluc*T0'
         self.problem.substitutions['h'] = 'IE + P'

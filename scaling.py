@@ -208,6 +208,9 @@ def plot_scaling_run(data_set, ax_set,
     ax_set[3].loglog(N_total_cpu, startup_time, label=label_string,
                      marker=marker,  linestyle=linestyle, color=color)
 
+    i_max = N_total_cpu.argmax()
+    ax_set[4].plot(N_total_cpu[i_max], work_per_core[i_max]/1e-6, label=label_string,
+                     marker=marker,  linestyle=linestyle, color=color)
 
     if scale_to and scale_to_factor != 1:
         print("scaling by {:f} or (1/{:d})^{:d}".format(scale_to_factor, scale_factor_inverse, dim))
@@ -275,6 +278,11 @@ def finalize_plots(fig_set, ax_set, script):
     ax_set[3].legend(loc='lower right')
     fig_set[3].savefig('scaling_startup.png')
 
+    ax_set[4].set_title('Normalized work {}'.format(script))
+    ax_set[4].set_xlabel('N-core')
+    ax_set[4].set_ylabel('N-cores * (time/iter/grid) [$\mu$s]')
+    ax_set[4].legend(loc='upper left')
+    fig_set[4].savefig('scaling_work_strong.png')
 
 
 
@@ -282,7 +290,7 @@ if __name__ == "__main__":
     
     from docopt import docopt
     
-    fig_set, ax_set = initialize_plots(4)
+    fig_set, ax_set = initialize_plots(5)
     args = docopt(__doc__)
     if args['run']:
         if not args['<z_resolution>'] is None:
