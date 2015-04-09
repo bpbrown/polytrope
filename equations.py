@@ -70,9 +70,10 @@ class polytrope:
             self.scale['g'] = (self.z0 - self.z)**(self.poly_n+1)
 
         self.g = self.poly_n + 1
-        # choose a particular gauge for phi; and -grad(phi)=g
+        # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
+        # double negative is correct.
         self.phi = self._new_ncc()
-        self.phi['g'] = self.g*(self.z0 - self.z)
+        self.phi['g'] = -self.g*(self.z0 - self.z)
         
         logger.info("polytropic atmosphere parameters:")
         logger.info("   poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
