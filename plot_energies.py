@@ -1,0 +1,136 @@
+"""
+Plot energies from joint analysis files.
+
+Usage:
+    plot_energies.py join <base_path>
+    plot_energies.py plot <files>... [--output=<dir>]
+
+Options:
+    --output=<dir>  Output directory [default: ./scalar]
+
+"""
+
+# coding: utf-8
+
+# In[1]:
+
+import numpy as np
+import matplotlib.pyplot as plt
+import h5py
+import os
+
+def main(files, output='./'):
+    read_data(files)
+    
+
+def read_data(files):
+    data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
+    print(data_files)
+    f = h5py.File(data_files[0], flag='r')
+    print(10*'-'+' tasks '+10*'-')
+    for task in f['tasks']:
+        print(task)
+    print(10*'-'+' scales '+10*'-')
+    for key in f['scales']:
+        print(key)
+
+
+## # In[4]:
+
+## KE = np.array([])
+## PE = np.array([])
+## IE = np.array([])
+## TE = np.array([])
+## t = np.array([])
+
+## for filename in data_files:
+##     f = h5py.File(case+'/'+data_name+'/'+filename, flag='r')
+##     #print(filename)
+##     KE = np.append(KE, f['tasks']['KE'][:])
+##     PE = np.append(PE, f['tasks']['PE'][:])
+##     IE = np.append(IE, f['tasks']['IE'][:])
+##     TE = np.append(TE, f['tasks']['TE'][:])
+
+##     t = np.append(t,f['scales']['sim_time'][:])
+##     f.close()
+
+
+## # In[19]:
+
+## fig = plt.figure(figsize=(16,8))
+## ax1 = fig.add_subplot(2,1,1)
+## ax1.semilogy(t, KE, label="KE")
+## ax1.semilogy(t, PE, label="PE")
+## ax1.semilogy(t, IE, label="IE")
+## ax1.semilogy(t, TE, label="TE")
+## ax1.legend()
+
+## ax2 = fig.add_subplot(2,1,2)
+## ax2.plot(t, KE, label="KE")
+## ax2.plot(t, PE, label="PE")
+## ax2.plot(t, IE, label="IE")
+## ax2.plot(t, TE, label="TE")
+## ax2.legend()
+
+## fig = plt.figure(figsize=(16,8))
+## ax1 = fig.add_subplot(1,1,1)
+## ax1.plot(t, TE/TE[0]-1)
+## ax1.plot(t, IE/IE[0]-1)
+## ax1.plot(t, PE/PE[0]-1)
+
+## fig = plt.figure(figsize=(16,8))
+## ax1 = fig.add_subplot(1,1,1)
+## ax1.plot(t, KE, label="KE")
+## ax1.plot(t, PE-PE[0], label="PE")
+## ax1.plot(t, IE-IE[0], label="IE")
+## ax1.plot(t, TE-TE[0], label="TE", linestyle='--')
+## ax1.plot(t, IE+KE-IE[0], label="TE-PE", linestyle='--')
+## ax1.plot(t, (TE-TE[0])-2*(PE-PE[0]), label="TE", linestyle='--')
+## ax1.legend()
+
+## fig = plt.figure(figsize=(16,8))
+## ax1 = fig.add_subplot(1,1,1)
+## ax1.semilogy(t, np.abs(IE+KE-PE-(IE[0]-PE[0])), label="Real TE", linestyle='--')
+## ax1.semilogy(t, KE, label="KE")
+## ax1.legend()
+
+
+## # In[6]:
+
+## fig = plt.figure(figsize=(16,8))
+## ax1 = fig.add_subplot(2,1,1)
+## t_window = t > t[len(t)*5/10]
+## ax1.semilogy(t, KE)
+## ax2 = fig.add_subplot(2,1,2)
+## ax2.plot(t[t_window], KE[t_window])
+
+
+## # In[ ]:
+
+
+
+if __name__ == "__main__":
+
+    import pathlib
+    from docopt import docopt
+    from dedalus.tools import logging
+    from dedalus.tools import post
+    from dedalus.tools.parallel import Sync
+
+    args = docopt(__doc__)
+
+    if args['join']:
+        post.merge_analysis(args['<base_path>'])
+    elif args['plot']:
+        output_path = pathlib.Path(args['--output']).absolute()
+        # Create output directory if needed
+        with Sync() as sync:
+            if sync.comm.rank == 0:
+                if not output_path.exists():
+                    output_path.mkdir()
+        print(output_path)
+        print(args['<files>'])
+        main(args['<files>'], output=output_path)
+        #post.visit_writes(args['<files>'], main)
+
+
