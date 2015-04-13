@@ -9,104 +9,95 @@ Options:
     --output=<dir>  Output directory [default: ./scalar]
 
 """
-
-# coding: utf-8
-
-# In[1]:
-
 import numpy as np
-import matplotlib.pyplot as plt
 import h5py
 import os
 
-def main(files, output='./'):
-    read_data(files)
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+def main(files, output_path='./'):
+    [KE, PE, IE, TE], t = read_data(files)
+    plot_energies([KE, PE, IE, TE], t, output_path=output_path)
     
-
-def read_data(files):
+def read_data(files, verbose=False):
     data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
-    print(data_files)
-    f = h5py.File(data_files[0], flag='r')
-    print(10*'-'+' tasks '+10*'-')
-    for task in f['tasks']:
-        print(task)
-    print(10*'-'+' scales '+10*'-')
-    for key in f['scales']:
-        print(key)
+    if verbose:
+        f = h5py.File(data_files[0], flag='r')
+        print(10*'-'+' tasks '+10*'-')
+        for task in f['tasks']:
+            print(task)
+        print(10*'-'+' scales '+10*'-')
+        for key in f['scales']:
+            print(key)
 
+    KE = np.array([])
+    PE = np.array([])
+    IE = np.array([])
+    TE = np.array([])
+    t = np.array([])
 
-## # In[4]:
+    for filename in data_files:
+        f = h5py.File(filename, flag='r')
+        KE = np.append(KE, f['tasks']['KE'][:])
+        PE = np.append(PE, f['tasks']['PE'][:])
+        IE = np.append(IE, f['tasks']['IE'][:])
+        TE = np.append(TE, f['tasks']['TE'][:])
 
-## KE = np.array([])
-## PE = np.array([])
-## IE = np.array([])
-## TE = np.array([])
-## t = np.array([])
+        t = np.append(t,f['scales']['sim_time'][:])
+        f.close()
 
-## for filename in data_files:
-##     f = h5py.File(case+'/'+data_name+'/'+filename, flag='r')
-##     #print(filename)
-##     KE = np.append(KE, f['tasks']['KE'][:])
-##     PE = np.append(PE, f['tasks']['PE'][:])
-##     IE = np.append(IE, f['tasks']['IE'][:])
-##     TE = np.append(TE, f['tasks']['TE'][:])
+    return [KE, PE, IE, TE], t
 
-##     t = np.append(t,f['scales']['sim_time'][:])
-##     f.close()
+def plot_energies(energies, t, output_path='./'):
+    [KE, PE, IE, TE] = energies
 
+    figs = []
+    
+    fig_energies = plt.figure(figsize=(16,8))
+    ax1 = fig_energies.add_subplot(2,1,1)
+    ax1.semilogy(t, KE, label="KE")
+    ax1.semilogy(t, PE, label="PE")
+    ax1.semilogy(t, IE, label="IE")
+    ax1.semilogy(t, TE, label="TE")
+    ax1.legend()
+    
+    ax2 = fig_energies.add_subplot(2,1,2)
+    ax2.plot(t, KE, label="KE")
+    ax2.plot(t, PE, label="PE")
+    ax2.plot(t, IE, label="IE")
+    ax2.plot(t, TE, label="TE")
+    ax2.legend()
+    figs.append(fig_energies)
 
-## # In[19]:
+    fig_relative = plt.figure(figsize=(16,8))
+    ax1 = fig_relative.add_subplot(1,1,1)
+    ax1.plot(t, TE/TE[0]-1)
+    ax1.plot(t, IE/IE[0]-1)
+    ax1.plot(t, PE/PE[0]-1)
+    figs.append(fig_relative)
 
-## fig = plt.figure(figsize=(16,8))
-## ax1 = fig.add_subplot(2,1,1)
-## ax1.semilogy(t, KE, label="KE")
-## ax1.semilogy(t, PE, label="PE")
-## ax1.semilogy(t, IE, label="IE")
-## ax1.semilogy(t, TE, label="TE")
-## ax1.legend()
+    fig_KE = plt.figure(figsize=(16,8))
+    ax1 = fig_KE.add_subplot(1,1,1)
+    ax1.plot(t, KE, label="KE")
+    ax1.plot(t, PE-PE[0], label="PE")
+    ax1.plot(t, IE-IE[0], label="IE")
+    ax1.plot(t, TE-TE[0], label="TE", linestyle='--')
+    ax1.legend()
+    figs.append(fig_KE)
 
-## ax2 = fig.add_subplot(2,1,2)
-## ax2.plot(t, KE, label="KE")
-## ax2.plot(t, PE, label="PE")
-## ax2.plot(t, IE, label="IE")
-## ax2.plot(t, TE, label="TE")
-## ax2.legend()
+    fig_log = plt.figure(figsize=(16,8))
+    ax1 = fig_log.add_subplot(1,1,1)
+    ax1.semilogy(t, np.abs(IE+KE-PE-(IE[0]-PE[0])), label="Real TE", linestyle='--')
+    ax1.semilogy(t, KE, label="KE")
+    ax1.legend()
+    figs.append(fig_log)
 
-## fig = plt.figure(figsize=(16,8))
-## ax1 = fig.add_subplot(1,1,1)
-## ax1.plot(t, TE/TE[0]-1)
-## ax1.plot(t, IE/IE[0]-1)
-## ax1.plot(t, PE/PE[0]-1)
-
-## fig = plt.figure(figsize=(16,8))
-## ax1 = fig.add_subplot(1,1,1)
-## ax1.plot(t, KE, label="KE")
-## ax1.plot(t, PE-PE[0], label="PE")
-## ax1.plot(t, IE-IE[0], label="IE")
-## ax1.plot(t, TE-TE[0], label="TE", linestyle='--')
-## ax1.plot(t, IE+KE-IE[0], label="TE-PE", linestyle='--')
-## ax1.plot(t, (TE-TE[0])-2*(PE-PE[0]), label="TE", linestyle='--')
-## ax1.legend()
-
-## fig = plt.figure(figsize=(16,8))
-## ax1 = fig.add_subplot(1,1,1)
-## ax1.semilogy(t, np.abs(IE+KE-PE-(IE[0]-PE[0])), label="Real TE", linestyle='--')
-## ax1.semilogy(t, KE, label="KE")
-## ax1.legend()
-
-
-## # In[6]:
-
-## fig = plt.figure(figsize=(16,8))
-## ax1 = fig.add_subplot(2,1,1)
-## t_window = t > t[len(t)*5/10]
-## ax1.semilogy(t, KE)
-## ax2 = fig.add_subplot(2,1,2)
-## ax2.plot(t[t_window], KE[t_window])
-
-
-## # In[ ]:
-
+    print(figs)
+    for i, fig in enumerate(figs):
+        fig.savefig('./'+'scalar_{:d}.png'.format(i))
+    
 
 
 if __name__ == "__main__":
@@ -129,8 +120,6 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         print(output_path)
-        print(args['<files>'])
-        main(args['<files>'], output=output_path)
-        #post.visit_writes(args['<files>'], main)
+        main(args['<files>'], output_path=output_path)
 
 
