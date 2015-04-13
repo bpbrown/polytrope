@@ -53,7 +53,7 @@ def read_data(files, verbose=False):
 def plot_energies(energies, t, output_path='./'):
     [KE, PE, IE, TE] = energies
 
-    figs = []
+    figs = {}
     
     fig_energies = plt.figure(figsize=(16,8))
     ax1 = fig_energies.add_subplot(2,1,1)
@@ -69,34 +69,39 @@ def plot_energies(energies, t, output_path='./'):
     ax2.plot(t, IE, label="IE")
     ax2.plot(t, TE, label="TE")
     ax2.legend()
-    figs.append(fig_energies)
+    figs["energies"]=fig_energies
 
     fig_relative = plt.figure(figsize=(16,8))
     ax1 = fig_relative.add_subplot(1,1,1)
     ax1.plot(t, TE/TE[0]-1)
     ax1.plot(t, IE/IE[0]-1)
     ax1.plot(t, PE/PE[0]-1)
-    figs.append(fig_relative)
+    figs["relative_energies"] = fig_relative
 
     fig_KE = plt.figure(figsize=(16,8))
     ax1 = fig_KE.add_subplot(1,1,1)
     ax1.plot(t, KE, label="KE")
-    ax1.plot(t, PE-PE[0], label="PE")
-    ax1.plot(t, IE-IE[0], label="IE")
-    ax1.plot(t, TE-TE[0], label="TE", linestyle='--')
+    ax1.plot(t, PE-PE[0], label="PE-PE$_0$")
+    ax1.plot(t, IE-IE[0], label="IE-IE$_0$")
+    ax1.plot(t, TE-TE[0], label="TE-TE$_0$", color='black')
     ax1.legend()
-    figs.append(fig_KE)
-
+    ax1.set_xlabel("time")
+    ax1.set_ylabel("energy")
+    figs["fluctating_energies"] = fig_KE
+ 
     fig_log = plt.figure(figsize=(16,8))
     ax1 = fig_log.add_subplot(1,1,1)
-    ax1.semilogy(t, np.abs(IE+KE-PE-(IE[0]-PE[0])), label="Real TE", linestyle='--')
     ax1.semilogy(t, KE, label="KE")
+    ax1.semilogy(t, np.abs(PE-PE[0]), label="|PE-PE$_0$|")
+    ax1.semilogy(t, np.abs(IE-IE[0]), label="|IE-IE$_0$|")
+    ax1.semilogy(t, np.abs(TE-TE[0]), label="|TE-TE$_0$|", color='black')
+    ax1.set_xlabel("time")
+    ax1.set_ylabel("energy")
     ax1.legend()
-    figs.append(fig_log)
+    figs["log_fluctuating_energies"] = fig_log
 
-    print(figs)
-    for i, fig in enumerate(figs):
-        fig.savefig('./'+'scalar_{:d}.png'.format(i))
+    for key in figs.keys():
+        figs[key].savefig('./'+'scalar_{}.png'.format(key))
     
 
 
