@@ -24,7 +24,7 @@ import time
 import shelve
 import pathlib
 
-from dedalus2.tools.parallel import Sync
+from dedalus.tools.parallel import Sync
 
 def num(s):
     try:
