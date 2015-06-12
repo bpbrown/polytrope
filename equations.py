@@ -230,7 +230,7 @@ class FC_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.variables = ['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's']
+        self.variables = ['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1']
         
     def set_equations(self, Rayleigh, Prandtl):
         self._set_diffusivity(Rayleigh, Prandtl)
@@ -283,9 +283,10 @@ class FC_polytrope(polytrope):
         # non-linear EOS for s, where we've subtracted off
         # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
         # move entropy to a substitution; no need to solve for it.
-        self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
-                                   "(scale)*(log(1+T1/T0) - T1/T0)"))
-        
+        #self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
+        #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
+
+                
     def set_IVP_problem(self, Rayleigh, Prandtl):
 
         self.problem = de.IVP(self.domain, variables=self.variables)
@@ -312,7 +313,9 @@ class FC_polytrope(polytrope):
     def _set_subs(self):
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
-
+        
+        self.problem.substitutions['s_fluc'] = "(1/Cv_inv*log(1+T1/T0) - 1/Cv_inv*(gamma-1)*ln_rho1)"
+        
         self.problem.substitutions['KE'] = 'rho_full*(u**2+w**2)/2'
         self.problem.substitutions['PE'] = 'rho_full*phi'
         self.problem.substitutions['PE_fluc'] = 'rho_fluc*phi'
@@ -335,8 +338,8 @@ class FC_polytrope(polytrope):
         analysis_tasks = []
         self.analysis_tasks = analysis_tasks
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False, **kwargs)
-        analysis_slice.add_task("s", name="s")
-        analysis_slice.add_task("s - plane_avg(s)", name="s'")
+        analysis_slice.add_task("s_fluc", name="s")
+        analysis_slice.add_task("s_fluc - plane_avg(s_fluc)", name="s'")
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")

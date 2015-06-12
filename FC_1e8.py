@@ -54,7 +54,7 @@ z = atmosphere.domain.grid(1)
 u = solver.state['u']
 w = solver.state['w']
 T = solver.state['T1']
-s = solver.state['s']
+#s = solver.state['s1']
 ln_rho = solver.state['ln_rho1']
 
 #solver.evaluator.vars['Lx'] = Lx
