@@ -61,6 +61,7 @@ class polytrope:
         self.delta_s = self.del_s0_factor*np.log(self.z0)
 
         self.del_T0 = -1
+        self.T0_zz = 0
 
         self.T0 = self._new_ncc()
         self.T0['g'] = self.z0 - self.z       
@@ -142,14 +143,14 @@ class polytrope:
             self.constant_kappa = True
             nu  = nu_top
             chi = chi_top/(self.rho0['g'])
-
+            
             if self.constant_kappa:
                 print(self.nz)
                 print(self.nz/2)
                 print(chi.shape)
                 # this doesn't work in parallel.
                 logger.info("   using constant nu, kappa")
-                logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top) #chi[...,-1][0]))
+                logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top)) #chi[...,-1][0]))
                 #logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu, chi[...,self.nz/2][0]))
                 #logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu, chi[...,0][0]))
 
@@ -167,20 +168,27 @@ class polytrope:
 
             self.viscous_time = self.Lz**2/nu_top #nu[...,self.nz/2][0]
             self.top_viscous_time = 1/nu_top
-
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
         self.nu['g'] = nu
         self.chi['g'] = chi
-        
+        if not self.constant_diffusivities:
+            self.del_chi = self._new_ncc()
+            self.chi.differentiate('z', out=self.del_chi)
+            self.chi.set_scales(1, keep_data=True)
+            
         return nu, chi
 
     def _set_parameters(self):
         self.problem.parameters['nu'] = self.nu
         self.problem.parameters['chi'] = self.chi
-        
+
+        if not self.constant_diffusivities:
+            self.problem.parameters['del_chi'] = self.del_chi
+            
         self.problem.parameters['T0'] = self.T0
         self.problem.parameters['del_T0'] = self.del_T0
+        self.problem.parameters['T0_zz'] = self.T0_zz
         
         self.problem.parameters['rho0'] = self.rho0
         self.problem.parameters['del_ln_rho0'] = self.del_ln_rho0
@@ -278,12 +286,12 @@ class FC_polytrope(polytrope):
         self.thermal_diff           = " Cv_inv*chi*(Lap(T1, -Q_z)      - Q_z*del_ln_rho0)"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
         if include_background_flux:
-            self.thermal_diff +=    " + Cv_inv*chi*(dz(del_T0) + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
+            self.nonlinear_thermal_diff +=    " + Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
         if not self.constant_diffusivities:
-            self.thermal_diff +=    " + Cv_inv*dz(chi)*dz(T1) "
+            self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
             self.nonlinear_thermal_diff += ""
             if include_background_flux:
-                self.thermal_diff += " + Cv_inv*dz(chi)*(del_T0)"
+                self.nonlinear_thermal_diff += " + Cv_inv*del_chi*del_T0"
                 
         self.problem.substitutions['L_thermal'] = self.thermal_diff 
         self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
