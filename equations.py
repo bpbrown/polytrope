@@ -60,11 +60,12 @@ class polytrope:
 
         self.delta_s = self.del_s0_factor*np.log(self.z0)
 
-        self.del_T0 = -1
-        self.T0_zz = 0
-
         self.T0 = self._new_ncc()
         self.T0['g'] = self.z0 - self.z       
+        self.del_T0 = self._new_ncc()
+        self.del_T0['g'] = -1
+        self.T0_zz = self._new_ncc()
+        self.T0_zz['g'] = 0
 
         self.scale = self._new_ncc()
         if self.constant_diffusivities:
