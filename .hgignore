@@ -8,6 +8,7 @@ syntax: glob
 *.c
 *.so
 *.o
+*~
 
 # Dedalus data output
 *.h5
