@@ -10,13 +10,17 @@ import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
 class polytrope:
-    def __init__(self, nx=256, nz=128, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3, constant_diffusivities=True):
+    def __init__(self, nx=256, nz=128, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
+                 constant_diffusivities=True, constant_kappa=False):
         
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
-        
+
         self.constant_diffusivities = constant_diffusivities
+        if constant_kappa:
+            self.constant_diffusivities = False
+            
         self._set_atmosphere(epsilon, gamma)
 
     def _new_ncc(self):
@@ -69,6 +73,7 @@ class polytrope:
             self.scale['g'] = (self.z0 - self.z)**(3)
             self.scale['g'] = (self.z0 - self.z)**(self.poly_n)
             self.scale['g'] = (self.z0 - self.z)**(self.poly_n+1)
+            self.scale['g'] = self.z0 - self.z
 
         self.g = self.poly_n + 1
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
@@ -132,19 +137,35 @@ class polytrope:
             chi_top = nu_top/Prandtl
 
             # we're using internal chebyshev grid points... right.
-            nu  =  nu_top/(self.rho0['g'])
+            # take constant nu, constant kappa (non-constant chi); Prandtl changes.
+            # nu  =  nu_top/(self.rho0['g'])
+            self.constant_kappa = True
+            nu  = nu_top
             chi = chi_top/(self.rho0['g'])
 
-            logger.info("   using constant mu, kappa")
-            logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu[...,-1][0], chi[...,-1][0]))
-            logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu[...,self.nz/2][0], chi[...,self.nz/2][0]))
-            logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu[...,0][0], chi[...,0][0]))
+            if self.constant_kappa:
+                print(self.nz)
+                print(self.nz/2)
+                print(chi.shape)
+                # this doesn't work in parallel.
+                logger.info("   using constant nu, kappa")
+                logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top) #chi[...,-1][0]))
+                #logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu, chi[...,self.nz/2][0]))
+                #logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu, chi[...,0][0]))
+
+            else:
+                # this doesn't work in parallel.
+                logger.info("   using constant mu, kappa")
+                logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu[...,-1][0], chi[...,-1][0]))
+                #logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu[...,self.nz/2][0], chi[...,self.nz/2][0]))
+                #logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu[...,0][0], chi[...,0][0]))
 
             # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
-            self.thermal_time = self.Lz**2/chi[...,self.nz/2][0]
+            # also broken in parallel runs.
+            self.thermal_time = self.Lz**2/chi_top #chi[...,self.nz/2][0]
             self.top_thermal_time = 1/chi_top
 
-            self.viscous_time = self.Lz**2/nu[...,self.nz/2][0]
+            self.viscous_time = self.Lz**2/nu_top #nu[...,self.nz/2][0]
             self.top_viscous_time = 1/nu_top
 
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
@@ -232,7 +253,7 @@ class FC_polytrope(polytrope):
 
         self.variables = ['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1']
         
-    def set_equations(self, Rayleigh, Prandtl):
+    def set_equations(self, Rayleigh, Prandtl, include_background_flux=False):
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
         self._set_subs()
@@ -256,6 +277,14 @@ class FC_polytrope(polytrope):
         # sign error between these two?  No.  Handled by - sign in eqn construction
         self.thermal_diff           = " Cv_inv*chi*(Lap(T1, -Q_z)      - Q_z*del_ln_rho0)"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
+        if include_background_flux:
+            self.thermal_diff +=    " + Cv_inv*chi*(dz(del_T0) + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
+        if not self.constant_diffusivities:
+            self.thermal_diff +=    " + Cv_inv*dz(chi)*dz(T1) "
+            self.nonlinear_thermal_diff += ""
+            if include_background_flux:
+                self.thermal_diff += " + Cv_inv*dz(chi)*(del_T0)"
+                
         self.problem.substitutions['L_thermal'] = self.thermal_diff 
         self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
         
@@ -279,7 +308,7 @@ class FC_polytrope(polytrope):
         self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u - L_thermal) = "
                                    "(scale)*(-u*dx(T1) + w*Q_z    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat )")) 
         
-        logger.info("using nonlinear EOS for entropy")
+        logger.info("using nonlinear EOS for entropy, via substitution")
         # non-linear EOS for s, where we've subtracted off
         # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
         # move entropy to a substitution; no need to solve for it.
@@ -287,15 +316,15 @@ class FC_polytrope(polytrope):
         #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
 
                 
-    def set_IVP_problem(self, Rayleigh, Prandtl):
+    def set_IVP_problem(self, *args, **kwargs):
 
         self.problem = de.IVP(self.domain, variables=self.variables)
-        self.set_equations(Rayleigh, Prandtl)
+        self.set_equations(*args, **kwargs)
 
-    def set_eigenvalue_problem(self, Rayleigh, Prandtl):
+    def set_eigenvalue_problem(self, *args, **kwargs):
         self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
-        self.set_equations(Rayleigh, Prandtl)
+        self.set_equations(*args, **kwarg)
 
     def set_BC(self, fixed_flux=False):
         if fixed_flux:
