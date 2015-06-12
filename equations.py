@@ -229,11 +229,10 @@ class polytrope_flux(polytrope):
 class FC_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-    def set_IVP_problem(self, Rayleigh, Prandtl):
 
-        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's'])
+        self.variables = ['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1', 's']
         
+    def set_equations(self, Rayleigh, Prandtl):
         self._set_diffusivity(Rayleigh, Prandtl)
         self._set_parameters()
         self._set_subs()
@@ -248,14 +247,13 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u
 
-        
         self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
         self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
 
         # generalize to non-constant chi by including del_chi terms.  Also include background thermal flux: chi*del_T0, etc.
-        # sign error between these two?
+        # sign error between these two?  No.  Handled by - sign in eqn construction
         self.thermal_diff           = " Cv_inv*chi*(Lap(T1, -Q_z)      - Q_z*del_ln_rho0)"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
         self.problem.substitutions['L_thermal'] = self.thermal_diff 
@@ -287,17 +285,24 @@ class FC_polytrope(polytrope):
         # move entropy to a substitution; no need to solve for it.
         self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
                                    "(scale)*(log(1+T1/T0) - T1/T0)"))
+        
+    def set_IVP_problem(self, Rayleigh, Prandtl):
+
+        self.problem = de.IVP(self.domain, variables=self.variables)
+        self.set_equations(Rayleigh, Prandtl)
 
     def set_eigenvalue_problem(self, Rayleigh, Prandtl):
-        pass
+        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
+        self.problem.substitutions['dt(f)'] = "omega*f"
+        self.set_equations(Rayleigh, Prandtl)
 
     def set_BC(self, fixed_flux=False):
         if fixed_flux:
             self.problem.add_bc( "left(Q_z) = 0")
             self.problem.add_bc("right(Q_z) = 0")
         else:
-            self.problem.add_bc( "left(s) = 0")
-            self.problem.add_bc("right(s) = 0")
+            self.problem.add_bc( "left(T1) = 0")
+            self.problem.add_bc("right(T1) = 0")
             
         self.problem.add_bc( "left(u) = 0")
         self.problem.add_bc("right(u) = 0")
