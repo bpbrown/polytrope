@@ -146,9 +146,6 @@ class polytrope:
             chi = chi_top/(self.rho0['g'])
             
             if self.constant_kappa:
-                print(self.nz)
-                print(self.nz/2)
-                print(chi.shape)
                 # this doesn't work in parallel.
                 logger.info("   using constant nu, kappa")
                 logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top)) #chi[...,-1][0]))
@@ -288,7 +285,7 @@ class FC_polytrope(polytrope):
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
         self.source = ""
         if include_background_flux:
-            self.source +=    " + Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
+            self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
         if not self.constant_diffusivities:
             self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
             if include_background_flux:
