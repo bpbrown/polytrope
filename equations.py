@@ -286,16 +286,17 @@ class FC_polytrope(polytrope):
         # sign error between these two?  No.  Handled by - sign in eqn construction
         self.thermal_diff           = " Cv_inv*chi*(Lap(T1, -Q_z)      - Q_z*del_ln_rho0)"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
+        self.source = ""
         if include_background_flux:
-            self.nonlinear_thermal_diff +=    " + Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
+            self.source +=    " + Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
         if not self.constant_diffusivities:
             self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
-            self.nonlinear_thermal_diff += ""
             if include_background_flux:
-                self.nonlinear_thermal_diff += " + Cv_inv*del_chi*del_T0"
+                self.source += " + Cv_inv*del_chi*del_T0"
                 
         self.problem.substitutions['L_thermal'] = self.thermal_diff 
         self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
+        self.problem.substitutions['source_terms'] = self.source
         
         self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
         self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
@@ -315,7 +316,7 @@ class FC_polytrope(polytrope):
 
         # here we have assumed chi = constant in both rho and radius
         self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u - L_thermal) = "
-                                   "(scale)*(-u*dx(T1) + w*Q_z    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat )")) 
+                                   "(scale)*(-u*dx(T1) + w*Q_z    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
         
         logger.info("using nonlinear EOS for entropy, via substitution")
         # non-linear EOS for s, where we've subtracted off
@@ -367,6 +368,10 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['w_rms'] = 'sqrt(w*w)'
         self.problem.substitutions['Re_rms'] = 'sqrt(u**2+w**2)*Lz/nu'
         self.problem.substitutions['Pe_rms'] = 'sqrt(u**2+w**2)*Lz/chi'
+
+        self.problem.substitutions['h_flux'] = 'w*h'
+        self.problem.substitutions['kappa_flux'] = '-rho_full*chi*dz(T1+T0)'
+        self.problem.substitutions['KE_flux'] = 'w*KE'
         
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
@@ -396,6 +401,7 @@ class FC_polytrope(polytrope):
         analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
         analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
         analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux)", name="kappa_flux_z")
         analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
         analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
         analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
