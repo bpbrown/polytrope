@@ -113,7 +113,7 @@ single = False
 def load(var, iteration=None):
 
   root_dir = '{:s}/{:s}'.format(data_dir,data_prefix)
-  filename = '{:s}_f{:d}.h5'.format(data_prefix,iteration)
+  filename = '{:s}_s{:d}.h5'.format(data_prefix,iteration)
 
   f = h5py.File("{:s}/".format(root_dir)+filename, flag='r')
 

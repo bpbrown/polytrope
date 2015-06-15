@@ -21,7 +21,7 @@ logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 # save data in directory named after script
 data_dir = sys.argv[0].split('.py')[0]+'/'
 
-Rayleigh = 1e6
+Rayleigh = 1e7
 Prandtl = 1
 
 # Set domain
@@ -79,7 +79,7 @@ report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
 solver.stop_sim_time = 0.25*atmosphere.thermal_time
 solver.stop_iteration= np.inf
-solver.stop_wall_time = 11.5*3600
+solver.stop_wall_time = 23.5*3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
 
