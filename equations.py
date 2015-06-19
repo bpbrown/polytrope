@@ -287,6 +287,8 @@ class FC_polytrope(polytrope):
         self.source = ""
         if include_background_flux:
             self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
+        else:
+            self.source += " +0 "
         if not self.constant_diffusivities:
             self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
             if include_background_flux:
