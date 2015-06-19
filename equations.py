@@ -338,7 +338,7 @@ class FC_polytrope(polytrope):
             self.problem.add_bc( "left(Q_z) = 0")
             self.problem.add_bc("right(Q_z) = 0")
         else:
-            self.problem.add_bc( "left(T1) = 0")
+            self.problem.add_bc("left(Q_z) = 0")
             self.problem.add_bc("right(T1) = 0")
             
         self.problem.add_bc( "left(u) = 0")
