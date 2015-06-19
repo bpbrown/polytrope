@@ -257,7 +257,7 @@ class FC_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.variables = ['u','u_z','w','w_z','T1', 'Q_z', 'ln_rho1']
+        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
         
     def set_equations(self, Rayleigh, Prandtl, include_background_flux=False):
         self._set_diffusivity(Rayleigh, Prandtl)
@@ -267,6 +267,7 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
         self.problem.substitutions['Div(f, f_z)'] = "(dx(f) + f_z)"
         self.problem.substitutions['Div_u'] = "Div(u, w_z)"
+        self.problem.substitutions['u.Grad(f, f_z)'] = "(u*dx(f) + w*(f_z))"
         
         # here, nu and chi are constants        
         self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
@@ -279,10 +280,10 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
 
-        # generalize to non-constant chi by including del_chi terms.  Also include background thermal flux: chi*del_T0, etc.
-        # sign error between these two?  No.  Handled by - sign in eqn construction
-        self.thermal_diff           = " Cv_inv*chi*(Lap(T1, -Q_z)      - Q_z*del_ln_rho0)"
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) - Q_z*dz(ln_rho1))"
+        # double check implementation of variabile chi and background coupling term.
+        self.problem.substitutions['Q_z'] = "(-T1_z)"
+        self.thermal_diff           = " Cv_inv*chi*(Lap(T1, T1_z)      + T1_z*del_ln_rho0)"
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         self.source = ""
         if include_background_flux:
             self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
@@ -300,20 +301,20 @@ class FC_polytrope(polytrope):
         
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(T1) + Q_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
         
-        self.problem.add_equation(("(scale)*( dt(w) - Q_z    + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale)*(-T1*dz(ln_rho1) - u*dx(w) - w*w_z + NL_visc_w)"))
+        self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale)*(-T1*dz(ln_rho1) - u.Grad(w, w_z) + NL_visc_w)"))
 
         self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - u*dx(u) - w*u_z + NL_visc_u)"))
+                                   "(scale)*(-T1*dx(ln_rho1) - u.Grad(u, u_z) + NL_visc_u)"))
 
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale)*(-u*dx(ln_rho1) - w*dz(ln_rho1))"))
+                                   "(scale)*(-u.Grad(ln_rho1, dz(ln_rho1))"))
 
         # here we have assumed chi = constant in both rho and radius
-        self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u - L_thermal) = "
-                                   "(scale)*(-u*dx(T1) + w*Q_z    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+        self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale)*(-u.Grad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
         
         logger.info("using nonlinear EOS for entropy, via substitution")
         # non-linear EOS for s, where we've subtracted off
