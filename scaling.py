@@ -62,7 +62,9 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
                         N_Z='{:d}'.format(sim_nz),
                         N_TOTAL_CPU='{:d}'.format(ENV_N_TOTAL_CPU))
 
-        proc = subprocess.Popen([mpirun, "-np","{:d}".format(ENV_N_TOTAL_CPU), "python3", scaling_script], 
+        proc = subprocess.Popen([mpirun, "-np","{:d}".format(ENV_N_TOTAL_CPU), 
+                                 "--bind-to", "core", "--map-by", "core", 
+                                 "python3", scaling_script], 
                                 env=test_env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout, stderr = proc.communicate()
