@@ -26,8 +26,8 @@ Rayleigh = 4e4
 Prandtl = 1
 
 # Set domain
-Lz = 100
-Lx = 3*Lz
+Lz = 10
+Lx = 4*Lz
     
 atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
@@ -52,7 +52,7 @@ z = atmosphere.domain.grid(1)
 u = solver.state['u']
 w = solver.state['w']
 T = solver.state['T1']
-s = solver.state['s']
+#s = solver.state['s']
 ln_rho = solver.state['ln_rho1']
 
 solver.evaluator.vars['Lx'] = Lx
