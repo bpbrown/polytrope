@@ -334,7 +334,7 @@ class FC_polytrope(polytrope):
     def set_eigenvalue_problem(self, *args, **kwargs):
         self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
-        self.set_equations(*args, **kwarg)
+        self.set_equations(*args, **kwargs)
 
     def set_BC(self, fixed_flux=False):
         if fixed_flux:
