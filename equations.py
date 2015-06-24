@@ -352,8 +352,11 @@ class FC_polytrope(polytrope):
     def _set_subs(self):
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
-        
-        self.problem.substitutions['s_fluc'] = "(1/Cv_inv*log(1+T1/T0) - 1/Cv_inv*(gamma-1)*ln_rho1)"
+        self.problem.substitutions['ln_rho0']  = 'log(rho0)'
+
+        self.problem.parameters['delta_s_atm'] = self.delta_s
+        self.problem.substitutions['s_fluc'] = '(1/Cv_inv*log(1+T1/T0) - 1/Cv_inv*(gamma-1)*ln_rho1)'
+        self.problem.substitutions['s_mean'] = '(1/Cv_inv*log(T0) - 1/Cv_inv*(gamma-1)*ln_rho0)'
         
         self.problem.substitutions['KE'] = 'rho_full*(u**2+w**2)/2'
         self.problem.substitutions['PE'] = 'rho_full*phi'
@@ -370,8 +373,15 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['Pe_rms'] = 'sqrt(u**2+w**2)*Lz/chi'
 
         self.problem.substitutions['h_flux'] = 'w*h'
-        self.problem.substitutions['kappa_flux'] = '-rho_full*chi*dz(T1+T0)'
+        self.problem.substitutions['kappa_flux_mean'] = '-rho_full*chi*dz(T0)'
+        self.problem.substitutions['kappa_flux_fluc'] = '-rho_full*chi*dz(T1)'
+        self.problem.substitutions['kappa_flux'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
         self.problem.substitutions['KE_flux'] = 'w*KE'
+
+        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm/(nu*chi)'
+        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
+        
+        self.problem.substitutions['enstrophy'] = '(dx(w) - dz(u))**2'
         
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
@@ -385,7 +395,7 @@ class FC_polytrope(polytrope):
         analysis_slice.add_task("s_fluc - plane_avg(s_fluc)", name="s'")
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
-        analysis_slice.add_task("(dx(w) - dz(u))**2", name="enstrophy")
+        analysis_slice.add_task("enstrophy", name="enstrophy")
         analysis_tasks.append(analysis_slice)
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
@@ -402,10 +412,15 @@ class FC_polytrope(polytrope):
         analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
         analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux)", name="kappa_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
         analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
         analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
         analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
         analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
+        analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
+        analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
+        analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
+        
         analysis_tasks.append(analysis_profile)
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
@@ -420,6 +435,8 @@ class FC_polytrope(polytrope):
         analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
         analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
         analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
+        analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
+
         analysis_tasks.append(analysis_scalar)
 
         return self.analysis_tasks
