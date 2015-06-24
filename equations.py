@@ -381,7 +381,7 @@ class FC_polytrope(polytrope):
         self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm/(nu*chi)'
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
         
-        self.problem.substitutions['enstrophy'] = '(dx(w) - dz(u))**2'
+        self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
         
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
