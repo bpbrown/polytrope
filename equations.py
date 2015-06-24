@@ -435,7 +435,7 @@ class FC_polytrope(polytrope):
         analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
         analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
         analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
-        analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
+        #analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
 
         analysis_tasks.append(analysis_scalar)
 
