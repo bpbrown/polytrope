@@ -1,0 +1,301 @@
+\documentclass[letterpaper,12pt]{paper}
+
+
+%% Graphics and math
+\usepackage{graphics,graphicx,subfigure}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[makeroom]{cancel}
+
+\newcommand{\lnrho}{\ensuremath{\ln \rho}}
+\newcommand{\fast}{\ensuremath{\epsilon_{ijk}}}
+\def\dbar{{\mathchar'26\mkern-12mu d}}
+
+\title{Notes on fully compressible, stratified convection}
+\author{Jeff Oishi}
+\begin{document}
+\maketitle
+\section{Basic Equations}
+\label{sec:equations}
+
+
+We want the fully compressible in a form suitable for describing
+low-Mach number convection in a stratified, static background
+atmosphere. This atmosphere could be a polytrope, but it could also be
+specified by a 1D stellar or planetary model.
+
+We begin with the basic equations of hydrodynamics: continuity,
+Navier-Stokes, energy conservation, and an equation of state. For now,
+we will limit ourselves to an ideal gas equation of state. These basic
+equations can be written in tensor notation, using the Einstein
+summation convetion as
+
+\begin{subequations}
+  \label{eq:basic_eqns}
+  \begin{equation}
+    \partial_t \rho + \partial_i (\rho u_i) = 0\\
+  \end{equation}
+  \begin{equation}
+    \partial_t u_i + u_k \partial_k u_i = -\frac{\partial_i p}{\rho} +
+    g_i + \frac{\partial_k \sigma_{ik}}{\rho}\\
+  \end{equation}
+  \begin{equation}
+    \partial_t T = (\gamma - 1) T \partial_i u_i +
+    \frac{\sigma_{ik}}{c_v} \partial_k u_i + \frac{\partial_i
+      (K \partial_i T)}{c_v}
+  \end{equation}
+  \begin{equation}
+    P = R \rho T,
+  \end{equation}
+\end{subequations}
+where $R = c_p - c_v$, $\gamma = c_p/c_v$, $g_i = -g \delta_{i3}$ is the acceleration
+due to gravity, $K$ is the heat conductivity, and $\sigma_{ik}$ is the
+stress tensor, defined below.
+
+The vast majority of these derivations follows Landau \& Lifschitz.
+
+\subsection{Stress Tensor}
+\label{sec:stress}
+
+The stress tensor can be constructed from a few simple
+arguments. Viscosity can only act between parcels of fluid in
+\emph{relative} motion; thus the stress tensor must be first order in
+$\partial_k u_i$ with no $u_i$ terms. It must be symmetric
+(e.g. proportional to $\partial_i u_k + \partial_k u_i$) to avoid
+containing motions corresponding to solid body rotations,
+$u_i = \fast \Omega_j r_k$. The most general tensor that satisfies
+these constraints is
+\begin{equation}
+  \label{eq:general_tensor}
+  \sigma_{ik} = a (\partial_i u_k + \partial_k u_i) + b \delta_{ik} \partial_l u_l, 
+\end{equation}
+but we write it as 
+\begin{equation}
+  \label{eq:stress}
+  \sigma_{ik} = \mu \left(\partial_i u_k + \partial_k u_i - \frac{2}{3} \partial_l u_l \delta_{ik}\right) + \xi \delta_l u_l \delta_{ik},
+\end{equation}
+where $\mu$ is the dynamic shear viscosity, and $\xi$ is the bulk
+viscosity. This form is the sum of a traceless term proportional to
+$\mu$\footnote{remember that $\delta_{ii} = 3$, not 1!} and a purely
+diagonal term proportional to $\xi$. We will assume here that $\xi$.
+vanishes. We will sometimes use $\sigma^{'}_{ik}$, defined by
+$\sigma_{ik} = \mu \sigma^{'}_{ik}$.
+
+\subsection{Variables \& Parameters}
+\label{sec:variables}
+
+Our dynamical variables are $u_i = (u,v,w)$, $\lnrho$, $P$, and $T$,
+though we eliminate $P$ via the equation of state in the developed
+version. We parameterize dissipation by $\nu = \mu /\rho$ and $K$. $K$
+is the \emph{heat} diffusion coefficient, where
+$F_T = K \nabla T$ is the total heat flux in the
+absence of bulk motions.
+
+
+\subsection{Continuity}
+\label{sec:continuity}
+
+For the continuity equation expressing the conservation of mass, our
+only modification is to change the variable from $\rho$ to $\lnrho$.
+
+Using the fact that $\partial_t \lnrho = \partial_t \rho/\rho$, we can
+substitute the standard continuity equation for $\partial_t \rho =
+-\rho \partial_k u_k - u_k \partial_k \rho$ to arrive at 
+\begin{equation}
+  \label{eq:lnrho_continuity}
+  \partial_t \lnrho + u_k \partial_k \lnrho + \partial_k u_k = 0.
+\end{equation}
+
+\subsection{Navier-Stokes}
+\label{sec:ns}
+We modify the Navier-Stokes equation by explicitly substituting the
+$P$ term using the equation of state and converting $\rho$ to
+$\lnrho$. This has implications for the diffusion term, and we will
+see when we decompose the variables into their mean and fluctuating
+parts that this will introduce non-linear diffusion terms. There are
+two places where $\rho$ appears in the Navier-Stokes equation.
+
+First, we tackle the pressure term, $\partial_i P/\rho$. We note that
+$\partial_i P/\rho = \partial_i (P/\rho) + P \partial_i
+\rho/\rho^2$.
+Substituting in the ideal gas equation of state, $P = R \rho T$, we
+see that the first term is $R \partial_i T$ if we assume the
+composition of the gas (and thus $R$) is fixed. The second term can be
+rewritten as $P \partial_i \lnrho/\rho$, into which we can again
+substitute the equation of state, leaving $R T \partial_i
+\lnrho$. Thus, 
+\begin{equation}
+  \label{eq:press_term}
+  -\frac{\partial_i P}{\rho} = -R \partial_i T - R T \partial_i \lnrho.
+\end{equation}
+
+The other $\rho$ term is in the viscous term, $\partial_k
+\sigma_{ik}/\rho$. First, again we apply the chain rule, $\partial_k
+(\sigma_{ik}/\rho) = \partial_k \sigma_{ik}/\rho -
+\sigma_{ik} \partial_k \lnrho/\rho$. Next, we expand $\sigma_{ik} = \mu
+\sigma^{'}_{ik}$, and write $\sigma_{ik} \partial_k \lnrho/\rho = \nu
+\sigma^{'}_{ik} \partial_k \lnrho$. This leaves us with 
+\begin{equation}
+  \label{eq:visc_term}
+  \frac{\partial_k \sigma_{ik}}{\rho} = \partial_k (\nu
+  \sigma^{'}_{ik}) + \nu \sigma^{'}_{ik} \partial_k \lnrho
+\end{equation}
+\subsection{Temperature}
+\label{sec:temp}
+The temperature equation is really nothing other than equation of
+internal energy, which in turn comes from the total conservation of
+energy. We must account for the viscous heating and the diffusion of
+temperature, and this in turn requires us to understand the entropy
+gains from these processes. We also will arrive at a form in which we
+may want to specify the temperature diffusivity $\chi$, although the
+background state may be defined in terms of the \emph{heat flux} $F_{T,i} =
+K \partial_i T$. There are a number of curious points along this route
+which I will remark on. Again, this follows mostly from Landau \&
+Lifschitz, with a bit from Choudhuri thrown in.
+
+Let us begin at the beginning: the first law of thermodynamics, which
+tells us 
+\begin{equation}
+  \label{eq:1LOT}
+  \dbar q = d\epsilon + P d \left(\frac{1}{\rho}\right),
+\end{equation}
+where $q$ is the amount of heat entering per unit mass, $\epsilon$ is
+the internal energy per unit mass, $P$ is pressure, and $\rho$ is
+density. $1/\rho$ is sometimes referred to as the specific volume of
+the gas. We can put this in terms of state variables by
+$ds \equiv \dbar q/T$. 
+
+For an ideal gas, $\epsilon = c_v T$ and $P  = R \rho T$. Using
+equation~(\ref{eq:1LOT}), we can divide by $dt$ to form the Lagrangian
+derivative, $dX/dt = \partial_t X + u_k \partial_k X$. This gives
+\begin{equation}
+  \label{eq:heat}
+  \frac{dq}{dt} = \frac{d\epsilon}{dt} - \frac{P}{\rho^2} \frac{d\rho}{dt},
+\end{equation}
+which we can combine with the continuity
+equation. Equation~(\ref{eq:basic_eqns}a) can be written in terms of
+the Lagrangian derivative of $\rho$, giving $d\rho/dt =
+-\rho \partial_i u_i$. Substituting this, and rearranging we arrive at
+\begin{equation}
+  \label{eq:int_en}
+  \frac{d\epsilon}{dt} = - \frac{P}{\rho} \partial_i u_i + \frac{dq}{dt}.
+\end{equation}
+In this form it is easy to see that the internal energy $\epsilon$ of
+a given parcel of fluid only changes due to compression (that is,
+negative divergence) or from heat flowing into the fluid. 
+
+Each of these terms must come at the expense of some other part of the
+overall energy budget if the fluid is thermally isolated. This is, of
+course, a terrible approximation for much of astrophysical fluid
+dynamics: often the cooling rate $\mathcal{L} = - dq/dt$ is a dominant
+driver of dynamics, especially in the ISM. However, here we will
+assume that it is a good approximation. I believe, though I have not
+yet proved that this will be true whenever we are studying the
+dynamics well below the photosphere of an object. In such a case, we
+can probably assume that radiation carries energy like a conduction
+term. 
+
+The first law (equation~(\ref{eq:1LOT})) is essentially a statement of
+conservation of \emph{thermal} energy. Of course, in a fluid, we need
+a stronger statement: the \emph{total} energy must be conserved. In
+the case of stratified fluids, there are three energy reservoirs whose
+sum must be constant: thermal, kinetic, and gravitational
+potential. While above we used the \emph{specific} (that is, per unit
+mass) formulation, now we will use the \emph{density} (that, per unit
+volume) formulation. Thus, we write the total energy density
+$E = \rho \epsilon + \rho u^2/2 + g z$, which has dimension $\left[ M
+  L^2/T^2/L^3 \right] = \left[ M / L T^2 \right]$. We can write this in the form
+of a conservation law,
+\begin{equation}
+  \label{eq:energy_conservation}
+  \partial_t E  + \partial_i \mathcal{F}_{Ei} = 0,
+\end{equation}
+where $\mathcal{F}_{Ei}$ is the energy flux in the $i$
+direction. We can state without proof that the flux is 
+\begin{equation}
+  \label{eq:energy_flux}
+  \mathcal{F}_{Ei} = \rho u_i \left(\frac{u^2}{2} + h \right) -
+  K \partial_i T,
+\end{equation}
+where $h = \epsilon + P/\rho$ is the enthalpy. This is a somewhat
+curious equation. The second term in the heat flux is simply Fourier's
+law, where $K$ is the conductivity. One might reasonably suppose that
+the flux of \emph{total} energy might simply be the advection of that energy
+in the ideal limit $K \rightarrow 0$. However, when the enthalpy is
+added in, there is an additional term in the flux: $u_i P$. This is
+easy to understand if we integrate both sides of the equation over
+volume, to see the total energy:
+\begin{equation}
+  \label{eq:total_energy}
+  \partial_t \int \left(\frac{\rho u^2}{2} + \rho \epsilon \right) dV =
+  - \int \partial_i \left[ \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  \right] dV.
+\end{equation}
+Using divergence theorem, we can change the flux integral on the right
+hand side to 
+\begin{equation}
+  \label{eq:flux_int}
+  - \int \partial_i \left[ \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  \right] dV  = - \oint \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  df_i,
+\end{equation}
+where $df_i$ is the area normal to $x_i$. This surface integral can be
+further split into two terms:
+\begin{equation}
+  \label{eq:surf_int}
+    - \oint \left[ \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  \right] df_i = -\oint \rho u_i \left( \frac{u^2}{2} + \epsilon
+  \right) df_i - \oint P u_i df_i.
+\end{equation}
+The first term is simply the advection of energy by the velocity field
+$u_i$. Recalling that work is $W = \int F_i dx_i$ (where $F_i$ is a
+force vector), the second term is clearly the work done on the surface
+of the fluid by the pressure. This justifies the inclusion of enthalpy
+$h$, rather than simply internal energy density $\rho \epsilon$, in
+the energy flux $\mathcal{F}_{Ei}$.
+
+Using equation~(\ref{eq:int_en}) and the ideal gas internal energy
+relation, $\epsilon = c_v T$, we can write the temperature form of the
+internal energy equation,
+\begin{equation}
+  \label{eq:temp_eq}
+  c_v (\partial_t T + u_k \partial_k T)  = -\frac{P \partial_i
+    u_i}{\rho} + \frac{dq}{dt}.
+\end{equation}
+For an adiabatic fluid, $dq/dt = 0$, and the temperature equation is
+complete. However, a viscous fluid cannot be adiabatic, as the
+dissipation of kinetic energy by viscosity is irreversible and thus
+must raise the temperature $T$ and the entropy per unit mass $s$ of
+the fluid.
+
+In order to develop the terms corresponding to irreversible,
+non-adiabatic processes, we make use of the total energy equation, and
+the definition of entropy. In short, what we will do is construct a
+kinetic energy equation, an entropy equation, and then show that the
+losses from kinetic energy show up in the \emph{adiabatic} internal
+energy by reversible processes and in the entropy equation by
+irreversible processes. The right hand side of the entropy equation is
+simply $T^{-1} dq/dt$. With that in hand, we can complete
+equation~(\ref{eq:temp_eq}).
+
+The first step is to note that kinetic energy density
+$E_{kin} = \rho u^2/2$. We can then construct an equation for its time
+evolution using the Navier-Stokes equation, continutity, and yet
+another application of the chain rule:
+$\partial_t (\rho u^2)/2 = \rho u_i \partial_t u_i + u \partial_t
+\rho/2$.
+
+\section{Mean-field decomposition}
+\label{sec:meanfield}
+Because of our interest in convection and g-modes, all of which occurs
+on timescales much shorter than the secular evolution of the stellar
+or planetary structure, it is advantageous to split the background
+into a mean radial structure and a 3D fluctuation. Note that there is
+no approximation here; we make no assuption that the fluctuation is
+small. We will denote the pressure, for example, as $P = P_0(z) +
+P_1(x,y,z)$. $P_0$ is really a function of spherical radius, which in our
+cartesian boxes corresponds to $z$. 
+
+
+
+\end{document}
