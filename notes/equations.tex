@@ -203,7 +203,7 @@ sum must be constant: thermal, kinetic, and gravitational
 potential. While above we used the \emph{specific} (that is, per unit
 mass) formulation, now we will use the \emph{density} (that, per unit
 volume) formulation. Thus, we write the total energy density
-$E = \rho \epsilon + \rho u^2/2 + g z$, which has dimension $\left[ M
+$E = \rho \epsilon + \rho u^2/2 + \rho g z$, which has dimension $\left[ M
   L^2/T^2/L^3 \right] = \left[ M / L T^2 \right]$. We can write this in the form
 of a conservation law,
 \begin{equation}
@@ -224,7 +224,7 @@ the flux of \emph{total} energy might simply be the advection of that energy
 in the ideal limit $K \rightarrow 0$. However, when the enthalpy is
 added in, there is an additional term in the flux: $u_i P$. This is
 easy to understand if we integrate both sides of the equation over
-volume, to see the total energy:
+volume, to see the evolution of the total energy:
 \begin{equation}
   \label{eq:total_energy}
   \partial_t \int \left(\frac{\rho u^2}{2} + \rho \epsilon \right) dV =
@@ -283,7 +283,64 @@ $E_{kin} = \rho u^2/2$. We can then construct an equation for its time
 evolution using the Navier-Stokes equation, continutity, and yet
 another application of the chain rule:
 $\partial_t (\rho u^2)/2 = \rho u_i \partial_t u_i + u \partial_t
-\rho/2$.
+\rho/2$. Substituting from the continuity equation and the Navier-Stokes equations, 
+\begin{equation}
+  \label{eq:kin_en}
+  \partial_t E_{kin} = -u_i \partial_i P - \rho u_i u_k \partial_k u_i + \rho g_i u_i + u_i \partial_k \sigma_{ik} - \frac{u^2}{2} \partial_k ( \rho u_k).
+\end{equation}
+Next, we want to write this in conservation form
+$\partial_t E_{kin} = - \nabla \cdot \mathcal{F}_{E_{kin}} +
+\mathcal{L}_{E_{kin}}$.
+We'll call terms that contribute to $\mathcal{F}_{E_{kin}}$ ``flux
+terms,'' and terms contributing to $\mathcal{L}_{E_{kin}}$ ``loss
+terms,'' regardless of their sign. First, we need to rewrite the
+second and fifth terms on the right hand side of
+equation~(\ref{eq:kin_en}) as
+\begin{equation}
+  \label{eq:kin_en_term2}
+  - \rho u_i u_k \partial_k u_i = -\frac{\partial_k (\rho u_k u^2)}{2} + \frac{\rho u^2 \partial_k u_k}{2} + \frac{u_k u^2 \partial_k \rho}{2}, 
+\end{equation}
+and
+\begin{equation}
+  \label{eq:kin_en_term3}
+  -\frac{u^2}{2} \partial_k(\rho u_k) = -\frac{\rho u^2 \partial_k u_k }{2} -\frac{u^2 u_k \partial_k \rho}{2}.
+\end{equation}
+Both terms from equation~(\ref{eq:kin_en_term3}) cancel with the
+latter two in equation~(\ref{eq:kin_en_term2}), leaving the first term, which is in flux form. Next, we expand the pressure and viscous terms,
+\begin{equation}
+  \label{eq:kin_en_pressure}
+  -u_i \partial_i P  = - \partial_i (P u_i)+ P \partial_i u_i,
+\end{equation}
+and
+\begin{equation}
+  \label{eq:kin_en_viscous}
+u_i \partial_k \sigma_{ik} = \partial_k (u_i \sigma_{ik}) - \sigma_{ik} \partial_k u_i.
+\end{equation}
+Again, there are flux terms and loss terms. Combining all of these expansions and cancellations, we arrive at a final form for the kinetic energy density evolution,
+\begin{equation}
+  \label{eq:final_kin_en}
+  \partial_t E_{kin} = - \partial_k \left[ u_k P + \frac{\rho u^2 u_k}{2} - u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k u_i + \rho g_i u_i,
+\end{equation}
+so the loss term is
+$\mathcal{L}_{E_{kin}} = p \partial_i u_i - \sigma_{ik} \partial_k u_i
++ \rho g_i u_i$.
+These terms must appear in other forms of energy. The first two appear
+as thermal energy; the latter will appear in the gravitational potential energy budget.
+
+In a constant gravitational field with acceleration
+$g_i = -g \delta_{i3}$, we can define the gravitational energy density
+just like we would in high school, $E_g = \rho g z$. Thus, the
+evolution equation is 
+\begin{equation}
+  \label{eq:grav_en}
+  \partial_t E_g = \partial_t (\rho g z) = \rho g u_z + g z \partial_t \rho.
+\end{equation}
+Substituting from the continuity equation, and noting that $\partial_k
+z = 1 \delta_{i3}$, we end up with
+\begin{equation}
+  \label{eq:grav_en_final}
+  \partial_t E_g = 2 \rho g u_z - \partial_k (\rho g u_k z).
+\end{equation}
 
 \section{Mean-field decomposition}
 \label{sec:meanfield}
