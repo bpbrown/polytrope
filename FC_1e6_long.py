@@ -31,8 +31,8 @@ Lx = 4*Lz
 nx = 512
 nz = 256
 
-atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz, constant_kappa=True)
-atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz, constant_kappa=False)
+atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
 atmosphere.set_BC()
 problem = atmosphere.get_problem()
 
@@ -73,7 +73,7 @@ max_dt = atmosphere.buoyancy_time*0.25
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
-solver.stop_sim_time = 0.25*atmosphere.thermal_time
+solver.stop_sim_time = atmosphere.thermal_time
 solver.stop_iteration= np.inf
 solver.stop_wall_time = 23.5*3600
 

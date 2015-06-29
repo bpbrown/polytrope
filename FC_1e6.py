@@ -31,8 +31,8 @@ Lx = 4*Lz
 nx = 512
 nz = 256
 
-atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz, constant_kappa=True)
-atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz, constant_kappa=False)
+atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
 atmosphere.set_BC()
 problem = atmosphere.get_problem()
 

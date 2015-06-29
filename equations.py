@@ -435,9 +435,12 @@ class FC_polytrope(polytrope):
         analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
         analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
         analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
-        analysis_scalar.add_task("vol_avg((dx(w) - u_z)**2)", name="enstrophy")
+        analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
 
         analysis_tasks.append(analysis_scalar)
+
+        # workaround for issue #29
+        self.problem.namespace['enstrophy'].store_last = True
 
         return self.analysis_tasks
 

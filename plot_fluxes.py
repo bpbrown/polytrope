@@ -42,11 +42,11 @@ def read_data(files, verbose=False):
         # clumsy
         if N == 1:
             enthalpy = f['tasks']['enthalpy_flux_z'][:]
-            kappa = f['tasks']['kappa_flux_z'][:]
+            kappa = f['tasks']['kappa_flux_fluc_z'][:]
             KE = f['tasks']['KE_flux_z'][:]
         else:
             enthalpy += f['tasks']['enthalpy_flux_z'][:]
-            kappa += f['tasks']['kappa_flux_z'][:]
+            kappa += f['tasks']['kappa_flux_fluc_z'][:]
             KE += f['tasks']['KE_flux_z'][:]
         N += 1
         # same z for all files
