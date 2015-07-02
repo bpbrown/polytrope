@@ -48,7 +48,7 @@ summation convetion as
     P = R \rho T,
   \end{equation}
 \end{subequations}
-where $R = c_p - c_v$, $\gamma = c_p/c_v$, $g_i = -g \delta_{i3}$ is the acceleration
+where $R = c_p - c_v$, $\gamma = c_p/c_v$, $g_i = -g \delta_{iz}$ is the acceleration
 due to gravity, $K$ is the heat conductivity, and $\sigma_{ik}$ is the
 stress tensor, defined below.
 
@@ -328,7 +328,7 @@ These terms must appear in other forms of energy. The first two appear
 as thermal energy; the latter will appear in the gravitational potential energy budget.
 
 In a constant gravitational field with acceleration
-$g_i = -g \delta_{i3}$, we can define the gravitational energy density
+$g_i = -g \delta_{iz}$, we can define the gravitational energy density
 just like we would in high school, $E_g = \rho g z$. Thus, the
 evolution equation is 
 \begin{equation}
@@ -336,11 +336,20 @@ evolution equation is
   \partial_t E_g = \partial_t (\rho g z) = \rho g u_z + g z \partial_t \rho.
 \end{equation}
 Substituting from the continuity equation, and noting that $\partial_k
-z = 1 \delta_{i3}$, we end up with
+z = \delta_{iz}$, we end up with
 \begin{equation}
   \label{eq:grav_en_final}
   \partial_t E_g = 2 \rho g u_z - \partial_k (\rho g u_k z).
 \end{equation}
+
+To complete our argument, we formulate a total energy equation,
+\begin{equation}
+  \label{eq:total_energy}
+  \partial_t E = - \partial_k \mathcal{F}_{tot,i}.
+\end{equation}
+Here, of course, there can be no source nor sink terms, though the
+boundary conditions will allow for energy fluxes into and out of the
+box. 
 
 \section{Mean-field decomposition}
 \label{sec:meanfield}
