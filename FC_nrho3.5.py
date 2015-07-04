@@ -51,25 +51,38 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, data_dir='./'):
     # Build solver
     solver = problem.build_solver(ts)
 
+    do_checkpointing=True
+    if do_checkpointing:
+        checkpoint = Checkpoint(data_dir)
+        checkpoint.set_checkpoint(solver, wall_dt=1800)
+
     x = atmosphere.domain.grid(0)
     z = atmosphere.domain.grid(1)
 
 
     # initial conditions
-    u = solver.state['u']
-    w = solver.state['w']
     T = solver.state['T1']
     ln_rho = solver.state['ln_rho1']
 
-    A0 = 1e-6
-    np.random.seed(1+atmosphere.domain.distributor.rank)
+    if restart is None:
+         # Random perturbations, initialized globally for same results in parallel
+        gshape = atmosphere.domain.dist.grid_layout.global_shape(scales=1)
+        slices = atmosphere.domain.dist.grid_layout.slices(scales=1)
+        rand = np.random.RandomState(seed=42)
+        noise = rand.standard_normal(gshape)[slices]
 
-    T.set_scales(atmosphere.domain.dealias, keep_data=True)
-    z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-    T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*np.random.randn(*T['g'].shape)*atmosphere.T0['g']
+        A0 = 1e-6
+        
+        T.set_scales(atmosphere.domain.dealias, keep_data=True)
+        z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
+        T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*noise*atmosphere.T0['g']
 
-    logger.info("A0 = {:g}".format(A0))
-    logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
+        logger.info("A0 = {:g}".format(A0))
+        logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
+        
+    else:
+        logger.info("restarting from {}".format(restart))
+        checkpoint.restart(restart, solver)
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
@@ -86,13 +99,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, data_dir='./'):
 
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence)
 
-    do_checkpointing=True
-    if do_checkpointing:
-        checkpoint = Checkpoint(data_dir)
-        checkpoint.set_checkpoint(solver, wall_dt=1800)
-
-
-
+    
     cfl_cadence = 1
     CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt)
