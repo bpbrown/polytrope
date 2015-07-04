@@ -66,8 +66,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, data_dir='./'):
 
     if restart is None:
          # Random perturbations, initialized globally for same results in parallel
-        gshape = atmosphere.domain.dist.grid_layout.global_shape(scales=1)
-        slices = atmosphere.domain.dist.grid_layout.slices(scales=1)
+        gshape = atmosphere.domain.dist.grid_layout.global_shape(scales=atmosphere.domain.dealias)
+        slices = atmosphere.domain.dist.grid_layout.slices(scales=atmosphere.domain.dealias)
         rand = np.random.RandomState(seed=42)
         noise = rand.standard_normal(gshape)[slices]
 
