@@ -40,9 +40,9 @@ summation convetion as
     g_i + \frac{\partial_k \sigma_{ik}}{\rho}\\
   \end{equation}
   \begin{equation}
-    \partial_t T = (\gamma - 1) T \partial_i u_i +
-    \frac{\sigma_{ik}}{c_v} \partial_k u_i + \frac{\partial_i
-      (K \partial_i T)}{c_v}
+    \partial_t T + u_i \partial_i T = - (\gamma - 1) T \partial_i u_i +
+    \frac{\sigma_{ik}}{c_v \rho} \partial_k u_i + \frac{\partial_i
+      (K \partial_i T)}{c_v \rho}
   \end{equation}
   \begin{equation}
     P = R \rho T,
@@ -86,10 +86,22 @@ $\sigma_{ik} = \mu \sigma^{'}_{ik}$.
 
 Our dynamical variables are $u_i = (u,v,w)$, $\lnrho$, $P$, and $T$,
 though we eliminate $P$ via the equation of state in the developed
-version. We parameterize dissipation by $\nu = \mu /\rho$ and $K$. $K$
-is the \emph{heat} diffusion coefficient, where
-$F_T = K \nabla T$ is the total heat flux in the
-absence of bulk motions.
+version. Typically, we parameterize dissipation by the kinematic
+viscosity $\nu = \mu /\rho$ and $K$. $K$ is the \emph{heat} diffusion
+coefficient, where $F_T = K \nabla T$ is the total heat flux in the
+absence of bulk motions. 
+
+$\nu$ is a dissipation coefficient with dimensions
+$\left[ L^2/T\right]$, while $[K] = \left[ L^2 E/ T \Theta\right]$,
+where $\Theta$ is a temperature unit and $E$ is an energy unit. We may
+also want to use the dynamic viscosity,
+$\mu = \rho \nu = \left[ M /L T\right]$. We may also want to
+parameterize thermal diffusion via the temperature dissipation
+coefficient, $\chi = K/c_p \rho = \left[ L^2/T\right]$.
+
+We will hold either $\chi$ or $K$ constant and either $\nu$ or $\mu$
+constant. How these choices affect the results of calculations is a
+secondary objective of our study.
 
 
 \subsection{Continuity}
@@ -185,15 +197,15 @@ a given parcel of fluid only changes due to compression (that is,
 negative divergence) or from heat flowing into the fluid. 
 
 Each of these terms must come at the expense of some other part of the
-overall energy budget if the fluid is thermally isolated. This is, of
-course, a terrible approximation for much of astrophysical fluid
-dynamics: often the cooling rate $\mathcal{L} = - dq/dt$ is a dominant
-driver of dynamics, especially in the ISM. However, here we will
-assume that it is a good approximation. I believe, though I have not
-yet proved that this will be true whenever we are studying the
-dynamics well below the photosphere of an object. In such a case, we
-can probably assume that radiation carries energy like a conduction
-term. 
+overall energy budget if the fluid is thermally isolated. Thermal
+isolation is, of course, a terrible approximation for much of
+astrophysical fluid dynamics: often the cooling rate
+$\mathcal{L} = - dq/dt$ is a dominant driver of dynamics, especially
+in the ISM. However, here we will assume that it is a good
+approximation. I believe, though I have not yet proved that this will
+be true whenever we are studying the dynamics well below the
+photosphere of an object. In such a case, we can probably assume that
+radiation carries energy like a conduction term.
 
 The first law (equation~(\ref{eq:1LOT})) is essentially a statement of
 conservation of \emph{thermal} energy. Of course, in a fluid, we need
@@ -319,7 +331,7 @@ u_i \partial_k \sigma_{ik} = \partial_k (u_i \sigma_{ik}) - \sigma_{ik} \partial
 Again, there are flux terms and loss terms. Combining all of these expansions and cancellations, we arrive at a final form for the kinetic energy density evolution,
 \begin{equation}
   \label{eq:final_kin_en}
-  \partial_t E_{kin} = - \partial_k \left[ u_k P + \frac{\rho u^2 u_k}{2} - u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k u_i + \rho g_i u_i,
+  \partial_t E_{kin} = - \partial_k \left[ u_k P + \frac{\rho u^2 u_k}{2} - u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k u_i - \rho g u_z,
 \end{equation}
 so the loss term is
 $\mathcal{L}_{E_{kin}} = p \partial_i u_i - \sigma_{ik} \partial_k u_i
@@ -333,23 +345,102 @@ just like we would in high school, $E_g = \rho g z$. Thus, the
 evolution equation is 
 \begin{equation}
   \label{eq:grav_en}
-  \partial_t E_g = \partial_t (\rho g z) = \rho g u_z + g z \partial_t \rho.
+  \partial_t E_g = \partial_t (\rho g z) = g z \partial_t \rho.
 \end{equation}
 Substituting from the continuity equation, and noting that $\partial_k
 z = \delta_{iz}$, we end up with
 \begin{equation}
   \label{eq:grav_en_final}
-  \partial_t E_g = 2 \rho g u_z - \partial_k (\rho g u_k z).
+  \partial_t E_g = \rho g u_z - \partial_k (\rho g u_k z).
 \end{equation}
 
 To complete our argument, we formulate a total energy equation,
 \begin{equation}
   \label{eq:total_energy}
-  \partial_t E = - \partial_k \mathcal{F}_{tot,i}.
+  \partial_t E = - \partial_i \mathcal{F}_{tot,i},
 \end{equation}
-Here, of course, there can be no source nor sink terms, though the
-boundary conditions will allow for energy fluxes into and out of the
-box. 
+where $E = \rho u^2/2 + \rho \epsilon + \rho g z$.
+
+Because we neglect radiative losses from the bulk of the fluid, there
+are no source nor sink terms, though the boundary conditions will
+allow for energy fluxes into and out of the box. We can write the
+total energy flux as 
+\begin{equation}
+  \label{eq:total_flux}
+  \mathcal{F}_{tot,i} = \rho u_i \left( \frac{u^2}{2} + h + gz\right) - u_k \sigma_{ki} - K \partial_i T,
+\end{equation}
+where again the enthalpy $h = \epsilon + \frac{P}{\rho}$. 
+
+We expand the left hand side of equation~(\ref{eq:total_energy}) as
+$\partial_t (\rho \epsilon) + \partial_t (\rho u^2/2) + \partial_t
+(\rho g z)$, and use the results from our previous decompositions of
+$E_{kin}$ (equation~\ref{eq:final_kin_en}) and $E_{g}$
+(equation~(\ref{eq:grav_en_final}) to arrive at
+\begin{equation}
+  \label{eq:total_thermal}
+\partial_t E = \partial_t (\rho \epsilon) - \partial_k \left[ u_k P + \frac{\rho u^2 u_k}{2} -
+  u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k
+u_i - \rho g u_z + \rho g u_z - \partial_k (\rho g u_k z).
+\end{equation}
+Now, we use the chain rule on $\partial_t (\rho \epsilon) =
+\rho \partial_t \epsilon + \epsilon \partial_t \rho$ and then use
+continuity to get 
+\begin{equation}
+  \label{eq:thermal_terms}
+  \rho \partial_t \epsilon - \epsilon \partial_i (\rho u_i) =
+  \rho \partial_t \epsilon + \rho u_i \partial_i \epsilon - \partial_i
+  (\rho u_i \epsilon) = \rho d_t \epsilon - \partial_i (\rho u_i \epsilon),
+\end{equation}
+where $d_t \epsilon$ is the Lagrangian derivative of the internal
+energy. Substituting equation~(\ref{eq:thermal_terms}) into
+equation~(\ref{eq:total_thermal}) and collecting flux terms, we arrive
+at
+\begin{equation}
+  \label{eq:nearly_final_energy}
+\partial_t E = \rho d_t \epsilon - \partial_k \left[ \rho u_k
+  \epsilon u_k +  P + \frac{\rho u^2 u_k}{2} \rho g u_k z -
+  u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k
+u_i.
+\end{equation}
+To complete our task, we simply add and subtract $\partial_i
+(K \partial_i T)$ to the right hand side. Then the $\partial_t E$ on the
+left and the $\partial_k [\ldots ]$ term on the right sum to zero,
+leaving a residual equation for $\epsilon$:
+\begin{equation}
+  \label{eq:residual_eps}
+  \rho d_t \epsilon + p \partial_i u_i = \partial_k u_i \sigma_{ik}
+  + \partial_i (K \partial_i T).
+\end{equation}
+Once again, we invoke the first law (equation~(\ref{eq:1LOT})) in
+entropy form, and we arrive at 
+\begin{equation}
+  \label{eq:final_entropy}
+  \rho T d_t s = \partial_k u_i \sigma_{ik}
+  + \partial_i (K \partial_i T).
+\end{equation}
+A simple reshuffling, plus the identity $T ds = \dbar q$ gives us 
+\begin{equation}
+  \label{eq:heat_dt}
+  \partial_t q = \frac{\partial_k u_i \sigma_{ik}}{\rho}
+  + \frac{\partial_i (K \partial_i T)}{\rho},
+\end{equation}
+which can be substitued into equation~(\ref{eq:temp_eq}) to arrive at
+our final temperature equation,
+\begin{equation}
+  \label{eq:final_temperature}
+    \partial_t T + u_i \partial_i T  = -(\gamma - 1) T \partial_i
+    u_i + \frac{\partial_k u_i \sigma_{ik}}{c_v \rho}
+  + \frac{\partial_i (K \partial_i T)}{c_v \rho}.
+\end{equation}
+We also note that we can write
+\begin{equation}
+  \label{eq:square_sigma}
+  \partial_k u_i \sigma_{ik} = \frac{\mu}{2} \left(\partial_k u_i
+    + \partial_i u_k - \frac{2}{3} \delta_{ik} \partial_l u_l
+  \right)^2,
+\end{equation}
+and in the next section, we will use this form to write out the
+actual, as-implemented version.
 
 \section{Mean-field decomposition}
 \label{sec:meanfield}
