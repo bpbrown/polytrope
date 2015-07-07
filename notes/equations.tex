@@ -449,10 +449,83 @@ on timescales much shorter than the secular evolution of the stellar
 or planetary structure, it is advantageous to split the background
 into a mean radial structure and a 3D fluctuation. Note that there is
 no approximation here; we make no assuption that the fluctuation is
-small. We will denote the pressure, for example, as $P = P_0(z) +
-P_1(x,y,z)$. $P_0$ is really a function of spherical radius, which in our
-cartesian boxes corresponds to $z$. 
+small. We will denote the pressure, for example, as
+$P = P_0(z) + P_1(x,y,z,t)$. $P_0$ is really a function of spherical
+radius, which in our cartesian boxes corresponds to $z$. We write the
+velocity in terms of its components as
+$\mathbf{u} = u \hat{x} + v \hat{y} + w \hat{z}$. The density is
+decomposed \emph{after} taking its natural log:
+$\lnrho = (\lnrho)_0 + (\lnrho)_1$; we will write this without
+the parentheses.
 
+We will write all of our equations Dedalus-style: with linear terms on
+the left hand side, non-linear terms on the right, and all in terms of
+first derivatives. In order to construct the first-order formulation,
+we first provide some auxiliary variables:
+\begin{equation}
+  \label{eq:aux_u}
+  \partial_z u + u_z = 0
+\end{equation}
+
+\begin{equation}
+  \label{eq:aux_v}
+  \partial_z v + v_z = 0
+\end{equation}
+
+\begin{equation}
+  \label{eq:aux_w}
+  \partial_z w + w_z = 0
+\end{equation}
+
+\begin{equation}
+  \label{eq:aux_u}
+  \partial_z T_1 + T_{1z} = 0
+\end{equation}
+
+\subsection{Continuity}
+\label{sec:continuity_mfd}
+
+We begin the mean field decomposition with continuity, which is straightforward:
+\begin{equation}
+  \label{eq:continuity_mfd}
+  \partial_t \lnrho_1 + u_z \partial_z \ln rho_0 + \partial_x u
+  + \partial_y v + w_z =
+  - u_x \partial_x \lnrho_1   - v \partial_y \lnrho_1   - w \partial_z \lnrho_1.
+\end{equation}
+
+\subsection{Navier-Stokes}
+\label{sec:ns_mfd}
+
+The Navier-Stokes equation comes in two forms, with constant $\nu$ and
+constant $\mu$. First we consider constant $\mu$. Here, we write each
+component separately.
+\begin{equation}
+  \begin{aligned}
+    \label{eq:ns_x_mfd}
+    \partial_t u & + R \partial_x T_1 + R T_0 \partial_x \lnrho_1 - \nu
+    \left[ \partial_x^2 u + \partial_y^2 u + \partial_z u_z +
+      \frac{1}{3}\partial_x \nabla \cdot u \right] \\
+& - \nu \partial_z \lnrho_0 \left(\partial_x w + u_z \right)  \\
+    & = - u \partial_x u - v \partial_y u - w v_z - R T_1 \partial_x \lnrho_1 \\
+    & + \nu \left[ \left( 2 \partial_x u - \frac{2}{3} \nabla \cdot
+        u\right) \partial_x \lnrho_1 + (\partial_x v + \partial_y
+      u)\partial_y \lnrho_1 + (\partial_x w + \partial_x u) \partial_z \lnrho_1 \right]\\
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+  \begin{aligned}
+    \label{eq:ns_y_mfd}
+    \partial_t v & + R \partial_y T_1 + R T_0 \partial_y \lnrho_1 - \nu
+    \left[ \partial_x^2 v + \partial_y^2 v + \partial_z v_z +
+      \frac{1}{3} \partial_y \nabla \cdot u \right] \\
+& - \nu \partial_z \lnrho_0 \left(\partial_y w + v_z \right)  \\
+    & = - u \partial_x v - v \partial_y v - w v_z - R T_1 \partial_y \lnrho_1 \\
+    & + \nu \left[ \left( 2 \partial_y w - \frac{2}{3} \nabla \cdot
+        u\right) \partial_x \lnrho_1 + (\partial_x v + \partial_y
+      u)\partial_y \lnrho_1 + (\partial_x w + \partial_x u) \partial_z \lnrho_1 \right]\\
+\end{aligned}
+\end{equation}
 
 
 \end{document}
