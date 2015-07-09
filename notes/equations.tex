@@ -9,6 +9,7 @@
 
 \newcommand{\lnrho}{\ensuremath{\ln \rho}}
 \newcommand{\fast}{\ensuremath{\epsilon_{ijk}}}
+\newcommand{\divu}{\ensuremath{\mathbf{\nabla \cdot u}}}
 \def\dbar{{\mathchar'26\mkern-12mu d}}
 
 \title{Notes on fully compressible, stratified convection}
@@ -488,7 +489,7 @@ we first provide some auxiliary variables:
 We begin the mean field decomposition with continuity, which is straightforward:
 \begin{equation}
   \label{eq:continuity_mfd}
-  \partial_t \lnrho_1 + u_z \partial_z \ln rho_0 + \partial_x u
+  \partial_t \lnrho_1 + u_z \partial_z \lnrho_0 + \partial_x u
   + \partial_y v + w_z =
   - u_x \partial_x \lnrho_1   - v \partial_y \lnrho_1   - w \partial_z \lnrho_1.
 \end{equation}
@@ -543,5 +544,60 @@ component separately.
 \end{aligned}
 \end{equation}
 
+\subsection{Temperature}
+\label{sec:temp_mfd}
+
+First, we use constant $K$. In order to do this, I've made a single
+approximation. This may not be necessary, but I'm not sure how to
+avoid it. From equation~(\ref{eq:final_temperature}), we see that the
+temperature equation has a heat flux term $\partial_i (K \partial_i
+T)/\rho c_v$. If we take $K$ constant, we have 
+\begin{equation}
+  \label{eq:const_K}
+  \frac{K}{\rho c_v} \partial_i^2 T = \frac{\chi}{c_v} \partial_i^2 T.
+\end{equation}
+However, $\rho$ is not constant, and I don't see an easy way to put it
+into $\lnrho$ form. So, instead, we can linearize $\rho$ in the
+denominator of $\chi$:
+\begin{equation}
+  \label{eq:chi_expansion}
+  \chi = \frac{K}{\rho_0 + \rho_1} = \frac{K}{\rho_0 (1 + \epsilon)}
+  \simeq \frac{K}{\rho_0} + \mathcal{O}(\epsilon),
+\end{equation}
+where $\epsilon = \rho_1/\rho_0$, and should be small in the low
+Mach-number flows we are interested in. With this approximation,
+$\chi$ is simply a function of $\rho_0$, which is specified by the
+background state. We just need to be careful to use $\rho_0$ and not
+$\lnrho_0$ in constructing $\chi$. In what follows, we will call this approximate
+diffusion coefficient $\chi_0 = K/\rho_0$.
+
+Using this approximation, the mean field decomposed temperature
+equation is 
+\begin{equation}
+  \label{eq:temp_mfd}
+  \begin{aligned}
+  \partial_t T_1 & + u_z \partial_z T_0 + (\gamma - 1) T_0 \divu  -
+  \frac{\chi_0}{c_v} \partial_x^2 T_0 -
+  \frac{\chi_0}{c_v} \partial_x^2 T_1 -
+  \frac{\chi_0}{c_v} \partial_y^2 T_1 -
+  \frac{\chi_0}{c_v} \partial_z^2 T_1\\
+  & = -u \partial_x T_1 - v \partial_y T_1 - w T_{1z} - (\gamma - 1)
+  T_1 \divu\\
+&+ \frac{\nu}{c_v}\left[ (\partial_x v)^2 + (\partial_x w)^2 + (\partial_y
+u)^2 + (\partial_y w)^2 + u_z^2 + v_z^2 + 2 (\partial_x u)^2 + 2
+(\partial_y v)^2 + 2 w_z^2\right] \\
+& + \frac{\nu}{c_v}\left[2 \partial_y u \partial_x v + 2 u_z \partial_x w + 2 v_z \partial_y
+w - \frac{2}{3} (\divu)^2 \right]
+\end{aligned}
+\end{equation}
+
+We may also want to use a constant $\chi$ instead of a constant
+$K$. In this case, 
+\begin{equation}
+  \label{eq:constant_chi}
+  \frac{1}{\rho c_v} \partial_i (K \partial_i T) = \frac{1}{\rho
+    c_v} \partial_i (\chi \rho \partial_i T) = \frac{\chi}{c_v}
+  \left( \partial_i \lnrho \partial_i T + \partial_i^2 T \right).
+\end{equation}
 
 \end{document}
