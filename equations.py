@@ -9,30 +9,14 @@ from dedalus import public as de
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-class polytrope:
-    def __init__(self, nx=256, nz=128, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
-                 constant_diffusivities=True, constant_kappa=False):
+class atmosphere:
+    def __init__(self, **kwargs):
+        self._set_domain(**kwargs)
         
+    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
-
-        self.constant_diffusivities = constant_diffusivities
-        if constant_kappa:
-            self.constant_diffusivities = False
-            
-        self._set_atmosphere(epsilon, gamma)
-
-    def _new_ncc(self):
-        field = self.domain.new_field()
-        field.meta['x']['constant'] = True
-        return field
-        
-    def _set_atmosphere(self, epsilon, gamma):
-        # polytropic atmosphere characteristics
-        self.epsilon = epsilon
-        self.gamma = gamma
-        self.poly_n = 1/(gamma-1) - epsilon
 
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -42,6 +26,58 @@ class polytrope:
         self.z = self.domain.grid(-1) # need to access globally-sized z-basis
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
         self.nz = self.domain.bases[-1].coeff_size
+
+    def _new_ncc(self):
+        field = self.domain.new_field()
+        field.meta['x']['constant'] = True
+        return field
+        
+class polytrope(atmosphere):
+    def __init__(self,
+                 nx=256, nz=128,
+                 Lx=None, aspect_ratio=4,
+                 Lz=None, n_rho_cz = 3.5,
+                 m_cz=None, epsilon=1e-4, gamma=5/3,
+                 constant_diffusivities=True, constant_kappa=False):
+
+        self.m_ad = 1/(gamma-1)
+        
+        if m_cz is None:
+            if epsilon is not None:
+                m_cz = self.m_ad - epsilon
+            else:
+                logger.error("Either m_cz or epsilon must be set")
+                raise
+        if Lz is None:
+            if n_rho is not None:
+                Lz = self._calculate_Lz(n_rho_cz, m_cz)
+            else:
+                logger.error("Either Lz or n_rho must be set")
+                raise
+        if Lx is None:
+            Lx = Lz*aspect_ratio
+            
+        super().__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        
+        self.constant_diffusivities = constant_diffusivities
+        if constant_kappa:
+            self.constant_diffusivities = False
+            
+        self._set_atmosphere(epsilon, gamma)
+        
+    def _calculate_Lz(self, n_rho_cz, m_cz):
+        '''
+        Calculate Lz based on the number of density scale heights and the initial polytrope.
+        '''
+        L_cz = np.exp(n_rho_cz/m_cz)-1
+        return L_cz
+        
+    def _set_atmosphere(self, epsilon, gamma):
+                
+        # polytropic atmosphere characteristics
+        self.epsilon = epsilon
+        self.gamma = gamma
+        self.poly_n = 1/(gamma-1) - epsilon
 
         self.z0 = 1. + self.Lz
 
@@ -71,10 +107,7 @@ class polytrope:
         if self.constant_diffusivities:
             self.scale['g'] = self.z0 - self.z
         else:
-            # this may be a better scale factor for the diffusion terms.  Wow.  None of these work particularly well.
-            self.scale['g'] = (self.z0 - self.z)**(3)
-            self.scale['g'] = (self.z0 - self.z)**(self.poly_n)
-            self.scale['g'] = (self.z0 - self.z)**(self.poly_n+1)
+            # consider whether to scale nccs involving chi differently (e.g., energy equation)
             self.scale['g'] = self.z0 - self.z
 
         self.g = self.poly_n + 1
@@ -103,12 +136,6 @@ class polytrope:
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
                                                                                                self.freefall_time,
                                                                                                self.buoyancy_time))
-
-        #fig = plt.figure()
-        #ax = fig.add_subplot(1,1,1)
-        #ax.plot(self.z[0,:], self.del_ln_rho0['g'][0,:])
-        #ax.plot(self.del_ln_rho0['g'][0,:])
-        #fig.savefig("del_ln_rho0_{:d}.png".format(self.domain.distributor.rank))
         
     def _set_diffusivity(self, Rayleigh, Prandtl):
         
