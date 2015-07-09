@@ -37,6 +37,21 @@ class atmosphere:
     def get_problem(self):
         return self.problem
 
+    def _set_atmosphere(self):
+        self.phi = self._new_ncc()
+
+        self.del_ln_rho0 = self._new_ncc()
+        self.rho0 = self._new_ncc()
+
+        self.del_s0 = self._new_ncc()
+        
+        self.T0_zz = self._new_ncc()
+        self.del_T0 = self._new_ncc()
+        self.T0 = self._new_ncc()
+        
+        self.scale = self._new_ncc()
+
+
     def _set_parameters(self):
         '''
         Basic parameters needed for any stratified atmosphere.
@@ -77,6 +92,9 @@ class atmosphere:
             
         
 class polytrope(atmosphere):
+    '''
+    Single polytrope, stable or unstable.
+    '''
     def __init__(self,
                  nx=256, nz=128,
                  Lx=None, aspect_ratio=4,
@@ -89,12 +107,13 @@ class polytrope(atmosphere):
         if m_cz is None:
             if epsilon is not None:
                 m_cz = self.m_ad - epsilon
+                self.epsilon = epsilon
             else:
                 logger.error("Either m_cz or epsilon must be set")
                 raise
         if Lz is None:
             if n_rho is not None:
-                Lz = self._calculate_Lz(n_rho_cz, m_cz)
+                Lz = self._calculate_Lz_cz(n_rho_cz, m_cz)
             else:
                 logger.error("Either Lz or n_rho must be set")
                 raise
@@ -107,46 +126,36 @@ class polytrope(atmosphere):
         if constant_kappa:
             self.constant_diffusivities = False
             
-        self._set_atmosphere(epsilon)
+        self._set_atmosphere()
         
-    def _calculate_Lz(self, n_rho_cz, m_cz):
+    def _calculate_Lz_cz(self, n_rho_cz, m_cz):
         '''
         Calculate Lz based on the number of density scale heights and the initial polytrope.
         '''
-        L_cz = np.exp(n_rho_cz/m_cz)-1
-        return L_cz
+        Lz_cz = np.exp(n_rho_cz/m_cz)-1
+        return Lz_cz
         
-    def _set_atmosphere(self, epsilon):
-                
+    def _set_atmosphere(self):
+        super()._set_atmosphere()
+        
         # polytropic atmosphere characteristics
-        self.epsilon = epsilon
-        self.poly_n = 1/(self.gamma-1) - epsilon
+        self.poly_n = 1/(self.gamma-1) - self.epsilon
 
         self.z0 = 1. + self.Lz
 
         self.del_ln_rho_factor = -self.poly_n
-        
-        self.del_ln_rho0 = self._new_ncc()
         self.del_ln_rho0['g'] = self.del_ln_rho_factor/(self.z0 - self.z)
-        
-        self.rho0 = self._new_ncc()
         self.rho0['g'] = (self.z0 - self.z)**self.poly_n
 
         self.del_s0_factor = - self.epsilon/self.gamma
-
-        self.del_s0 = self._new_ncc()
+        self.delta_s = self.del_s0_factor*np.log(self.z0)
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
 
-        self.delta_s = self.del_s0_factor*np.log(self.z0)
-
-        self.T0 = self._new_ncc()
-        self.T0['g'] = self.z0 - self.z       
-        self.del_T0 = self._new_ncc()
+    
+        self.T0_zz['g'] = 0        
         self.del_T0['g'] = -1
-        self.T0_zz = self._new_ncc()
-        self.T0_zz['g'] = 0
+        self.T0['g'] = self.z0 - self.z       
 
-        self.scale = self._new_ncc()
         if self.constant_diffusivities:
             self.scale['g'] = self.z0 - self.z
         else:
@@ -156,7 +165,6 @@ class polytrope(atmosphere):
         self.g = self.poly_n + 1
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
-        self.phi = self._new_ncc()
         self.phi['g'] = -self.g*(self.z0 - self.z)
         
         logger.info("polytropic atmosphere parameters:")
@@ -188,10 +196,14 @@ class polytrope(atmosphere):
         self.nu = self._new_ncc()
         self.chi = self._new_ncc()
 
+        # set nu and chi at top based on Rayleigh number
+        nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
+        chi_top = nu_top/Prandtl
+
         if self.constant_diffusivities:
             # take constant nu, chi
-            nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
-            chi = nu/Prandtl
+            nu = nu_top
+            chi = chi_top
 
             logger.info("   using constant nu, chi")
             logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
@@ -204,38 +216,30 @@ class polytrope(atmosphere):
             self.top_viscous_time = 1/nu
         
         else:
-            # take constant mu, kappa based on setting a top-of-domain Rayleigh number
-            nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
-            chi_top = nu_top/Prandtl
-
-            # we're using internal chebyshev grid points... right.
-            # take constant nu, constant kappa (non-constant chi); Prandtl changes.
-            # nu  =  nu_top/(self.rho0['g'])
             self.constant_kappa = True
-            nu  = nu_top
-            chi = chi_top/(self.rho0['g'])
-            
-            if self.constant_kappa:
-                # this doesn't work in parallel.
-                logger.info("   using constant nu, kappa")
-                logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top)) #chi[...,-1][0]))
-                #logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu, chi[...,self.nz/2][0]))
-                #logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu, chi[...,0][0]))
 
+            if self.constant_kappa:
+                # take constant nu, constant kappa (non-constant chi); Prandtl changes.
+                nu  = nu_top
+                logger.info("   using constant nu, kappa")
             else:
-                # this doesn't work in parallel.
-                logger.info("   using constant mu, kappa")
-                logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu[...,-1][0], chi[...,-1][0]))
-                #logger.info("   nu_mid = {:g}, chi_mid = {:g}".format(nu[...,self.nz/2][0], chi[...,self.nz/2][0]))
-                #logger.info("   nu_bot = {:g}, chi_bot = {:g}".format(nu[...,0][0], chi[...,0][0]))
+                # take constant mu, kappa based on setting a top-of-domain Rayleigh number
+                # nu  =  nu_top/(self.rho0['g'])
+                logger.error("   using constant mu, kappa <DISABLED>")
+                raise
+            
+            chi = chi_top/(self.rho0['g'])
+        
+            logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top))
 
             # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
-            # also broken in parallel runs.
+            # broken in parallel runs.
             self.thermal_time = self.Lz**2/chi_top #chi[...,self.nz/2][0]
             self.top_thermal_time = 1/chi_top
 
             self.viscous_time = self.Lz**2/nu_top #nu[...,self.nz/2][0]
             self.top_viscous_time = 1/nu_top
+            
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
         self.nu['g'] = nu
@@ -245,17 +249,37 @@ class polytrope(atmosphere):
             self.chi.differentiate('z', out=self.del_chi)
             self.chi.set_scales(1, keep_data=True)
             
-        return nu, chi
 
-
-class multitrope(polytrope):
+class multitrope(atmosphere):
+    '''
+    Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.
+    '''
     def __init__(self, nx=256, nz=128,
-                 constant_diffusivities=True, constant_kappa=False,
+                 aspect_ratio=4,
+                 gamma=5/3,
+                 n_rho_cz=3, n_rho_rz=2, 
+                 m_rz=3, stiffness=100,
                  **kwargs):
         
-        x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
-        z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
+        # gamma = c_p/c_v
+        # n_rho_cz = number of density scale heights in CZ
+        # n_rho_rz = number of density scale heights in RZ
+        # m_rz = polytropic index of radiative zone
+        # stiffness = (m_rz - m_ad)/(m_ad - m_cz) = (m_rz - m_ad)/epsilon
+
+        self.m_ad = 1/(gamma-1)
+        self.m_rz = m_rz
+        self.epsilon = (self.m_rz - self.m_ad)/stiffness
+        self.m_cz = self.m_ad - self.epsilon
+
+        Lz_cz, Lz_rz, Lz = self._calculate_Lz(n_rho_cz, self.m_cz, n_rho_rz, self.m_rz)
+        self.Lz_cz = Lz_cz
+        self.Lz_rz = Lz_rz
+        
+        if Lx is None:
+            Lx = Lz*aspect_ratio
+            
+        super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
 
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -263,37 +287,10 @@ class multitrope(polytrope):
 
         self._set_atmosphere(**kwargs)
         
-    def _set_atmosphere(self,
-                        Rayleigh_top=1e8, Prandtl_top=1,
-                        gamma=5/3,
-                        n_rho_cz=3, n_rho_rz=2, 
-                        m_rz=3, stiffness=100):
-        # inputs:
-        # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
-        # Prandtl_top = nu_top/chi_top
-        # gamma = c_p/c_v
-        # n_rho_cz = number of density scale heights in CZ
-        # n_rho_rz = number of density scale heights in RZ
-        # m_rz = polytropic index of radiative zone
-        # stiffness = (m_rz - m_ad)/(m_ad - m_cz) = (m_rz - m_ad)/epsilon
-    
-        # this is not a totally awesome solution,
-        # but inspect.signature and inspect.getfullargspec
-        # are failing to get the actual entered values (vs. defaults)
-        # this will choke if we have imports.
-        #
-        # This only gets the kwargs if it's the first thing called
-        #
-        # gah... this is going to get self, isn't it... (7/8/15, 4:50pm)
-        entered_parameters = locals()
-
-        m_ad = 1/(gamma-1)
-
-        epsilon = (m_rz - m_ad)/stiffness
-        m_cz = m_ad - epsilon
-
-        kappa_ratio = (m_rz + 1)/(m_cz + 1)
-
+    def _calculate_Lz(self, n_rho_cz, m_cz, n_rho_rz, m_rz):
+        '''
+        Estimate the depth of the CZ and the RZ.
+        '''
         # T = del_T*(z-z_interface) + T_interface
         # del_T = -g/(m+1) = -(m_cz+1)/(m+1)
         # example: cz: z_interface = L_cz (top), T_interface = 1, del_T = -1
@@ -305,41 +302,68 @@ class multitrope(polytrope):
         #       = m*ln(-del_T*z_interface/T_interface + 1)
         # 
         # z_interface = (T_interface/(-del_T))*(np.exp(n_rho/m)-1)
-        L_cz = np.exp(n_rho_cz/m_cz)-1
+
+        Lz_cz = np.exp(n_rho_cz/m_cz)-1
 
         del_T_rz = -(m_cz+1)/(m_rz+1)
-        T_interface = (L_cz+1) # T at bottom of CZ
-        L_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
+        T_interface = (Lz_cz+1) # T at bottom of CZ
+        Lz_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
 
-        L_tot = L_cz + L_rz
+        Lz = Lz_cz + Lz_rz
+        return (Lz_cz, Lz_rz, Lz)
 
-        z_cz = L_cz + 1
+    def _compute_kappa_profile(self, chi_top, kappa_ratio, tanh_center=None, tanh_width=0.1):
+        if tanh_center is None:
+            tanh_center = self.Lz_rz
+            
+        kappa_top = chi_top
+        kappa_ratio = parameters['kappa_ratio']
+    
+        phi = (1/2*(1-np.tanh((self.z-tanh_center)/tanh_width)))
+        inv_phi = 1-phi
+        self.kappa = self._new_ncc() 
+        self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
+        
+    def _set_atmosphere(self,
+                        Rayleigh_top=1e8, Prandtl_top=1):
+        # inputs:
+        # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
+        # Prandtl_top = nu_top/chi_top
+        super()._set_atmosphere()
+        
+        kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
+        
+        z_cz =self.Lz_cz + 1
 
         delta_S = epsilon*(gamma-1)/gamma*np.log(z_cz)
 
-        g = (m_cz + 1)
+        self.g = (self.m_cz + 1)
 
-        chi_top = np.sqrt((g*delta_S*L_cz**3)/(Rayleigh_top*Prandtl_top))
+        chi_top = np.sqrt((self.g*delta_S*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
         nu_top = chi_top*Prandtl_top
 
-        parameters = dict()
-        parameters['chi_top'] = chi_top
-        parameters['nu_top']  = nu_top
-        parameters['kappa_ratio'] = kappa_ratio
-        parameters['L_cz'] = L_cz
-        parameters['L_rz'] = L_rz
-        parameters['L_tot'] = L_tot
-        parameters['m_ad'] = m_ad
-        parameters['m_cz'] = m_cz
-        parameters['epsilon'] = epsilon
-        parameters['delta_S'] = delta_S
-        parameters['gamma'] = gamma
-        parameters['g'] = g
+        _compute_kappa_profile(chi_top, kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
 
-        parameters.update(entered_parameters)
+        flux_top = -chi_top
+        self.del_T0['g'] = flux_top/self.kappa['g']
+    
+        self.del_T0.antidifferentiate('z',('right',0), out=self.T0)
+        self.T0['g'] += 1
+        self.T0.set_scales((1,), keep_data=True)
+    
+        self.del_ln_P = self._new_ncc()
+        self.ln_P = self._new_ncc()
+        self.P0 = self._new_ncc()
 
-        return parameters
-      
+        # assumes ideal gas equation of state
+        self.del_ln_P['g'] = self.g/self.T['g']
+        self.del_ln_P.antidifferentiate('z',('right',0),out=self.ln_P)
+        self.ln_P.set_scales(1, keep_data=True)
+        self.P0['g'] = np.exp(-self.ln_P['g'])
+
+        self.rho0['g'] = self.P0['g']/self.T0['g']
+        self.rho0.set_scales(1, keep_data=True)
+
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
