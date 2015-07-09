@@ -10,9 +10,11 @@ import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
 class atmosphere:
-    def __init__(self, **kwargs):
+    def __init__(self, gamma=5/3, **kwargs):
         self._set_domain(**kwargs)
-        
+
+        self.gamma = gamma
+                
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
@@ -31,6 +33,48 @@ class atmosphere:
         field = self.domain.new_field()
         field.meta['x']['constant'] = True
         return field
+
+    def get_problem(self):
+        return self.problem
+
+    def _set_parameters(self):
+        '''
+        Basic parameters needed for any stratified atmosphere.
+        '''
+        self.problem.parameters['Lz'] = self.Lz
+        self.problem.parameters['Lx'] = self.Lx
+
+        self.problem.parameters['Cv_inv'] = self.gamma-1
+        self.problem.parameters['gamma'] = self.gamma
+        self.problem.parameters['Cv'] = 1/(self.gamma-1)
+
+        # the following quantities must be calculated and are missing
+        # from the atmosphere stub.
+
+        # thermodynamic quantities
+        self.problem.parameters['T0'] = self.T0
+        self.problem.parameters['del_T0'] = self.del_T0
+        self.problem.parameters['T0_zz'] = self.T0_zz
+        
+        self.problem.parameters['rho0'] = self.rho0
+        self.problem.parameters['del_ln_rho0'] = self.del_ln_rho0
+                    
+        self.problem.parameters['del_s0'] = self.del_s0
+
+        # gravity
+        self.problem.parameters['g']  = self.g
+        self.problem.parameters['phi']  = self.phi
+
+        # scaling factor to reduce NCC bandwidth of all equations
+        self.problem.parameters['scale'] = self.scale
+
+        # diffusivities
+        self.problem.parameters['nu'] = self.nu
+        self.problem.parameters['chi'] = self.chi
+
+        if not self.constant_diffusivities:
+            self.problem.parameters['del_chi'] = self.del_chi
+            
         
 class polytrope(atmosphere):
     def __init__(self,
@@ -57,13 +101,13 @@ class polytrope(atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super().__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
             self.constant_diffusivities = False
             
-        self._set_atmosphere(epsilon, gamma)
+        self._set_atmosphere(epsilon)
         
     def _calculate_Lz(self, n_rho_cz, m_cz):
         '''
@@ -72,12 +116,11 @@ class polytrope(atmosphere):
         L_cz = np.exp(n_rho_cz/m_cz)-1
         return L_cz
         
-    def _set_atmosphere(self, epsilon, gamma):
+    def _set_atmosphere(self, epsilon):
                 
         # polytropic atmosphere characteristics
         self.epsilon = epsilon
-        self.gamma = gamma
-        self.poly_n = 1/(gamma-1) - epsilon
+        self.poly_n = 1/(self.gamma-1) - epsilon
 
         self.z0 = 1. + self.Lz
 
@@ -203,38 +246,6 @@ class polytrope(atmosphere):
             self.chi.set_scales(1, keep_data=True)
             
         return nu, chi
-
-    def _set_parameters(self):
-        self.problem.parameters['nu'] = self.nu
-        self.problem.parameters['chi'] = self.chi
-
-        if not self.constant_diffusivities:
-            self.problem.parameters['del_chi'] = self.del_chi
-            
-        self.problem.parameters['T0'] = self.T0
-        self.problem.parameters['del_T0'] = self.del_T0
-        self.problem.parameters['T0_zz'] = self.T0_zz
-        
-        self.problem.parameters['rho0'] = self.rho0
-        self.problem.parameters['del_ln_rho0'] = self.del_ln_rho0
-        
-        self.problem.parameters['Cv_inv'] = self.gamma-1
-        self.problem.parameters['gamma'] = self.gamma
-        self.problem.parameters['Cv'] = 1/(self.gamma-1)
-
-        self.problem.parameters['del_s0'] = self.del_s0
-
-        self.problem.parameters['g']  = self.g
-        self.problem.parameters['phi']  = self.phi
-        
-        self.problem.parameters['scale'] = self.scale
-
-        self.problem.parameters['Lz'] = self.Lz
-        self.problem.parameters['Lx'] = self.Lx
-
-        
-    def get_problem(self):
-        return self.problem
 
 
 class multitrope(polytrope):
