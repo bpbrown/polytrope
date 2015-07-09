@@ -209,6 +209,99 @@ class polytrope:
     def get_problem(self):
         return self.problem
 
+
+class multitrope(polytrope):
+    def __init__(self, nx=256, nz=128,
+                 constant_diffusivities=True, constant_kappa=False,
+                 **kwargs):
+        
+        x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
+        z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
+
+        self.constant_diffusivities = constant_diffusivities
+        if constant_kappa:
+            self.constant_diffusivities = False
+
+        self._set_atmosphere(**kwargs)
+        
+    def _set_atmosphere(self,
+                        Rayleigh_top=1e8, Prandtl_top=1,
+                        gamma=5/3,
+                        n_rho_cz=3, n_rho_rz=2, 
+                        m_rz=3, stiffness=100):
+        # inputs:
+        # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
+        # Prandtl_top = nu_top/chi_top
+        # gamma = c_p/c_v
+        # n_rho_cz = number of density scale heights in CZ
+        # n_rho_rz = number of density scale heights in RZ
+        # m_rz = polytropic index of radiative zone
+        # stiffness = (m_rz - m_ad)/(m_ad - m_cz) = (m_rz - m_ad)/epsilon
+    
+        # this is not a totally awesome solution,
+        # but inspect.signature and inspect.getfullargspec
+        # are failing to get the actual entered values (vs. defaults)
+        # this will choke if we have imports.
+        #
+        # This only gets the kwargs if it's the first thing called
+        #
+        # gah... this is going to get self, isn't it... (7/8/15, 4:50pm)
+        entered_parameters = locals()
+
+        m_ad = 1/(gamma-1)
+
+        epsilon = (m_rz - m_ad)/stiffness
+        m_cz = m_ad - epsilon
+
+        kappa_ratio = (m_rz + 1)/(m_cz + 1)
+
+        # T = del_T*(z-z_interface) + T_interface
+        # del_T = -g/(m+1) = -(m_cz+1)/(m+1)
+        # example: cz: z_interface = L_cz (top), T_interface = 1, del_T = -1
+        #     .: T = -1*(z - L_cz) + 1 = (L_cz + 1 - z) = (z0 - z)
+        # this recovers the Lecoanet et al 2014 notation
+        #
+        # T_bot = -del_T*z_interface + T_interface
+        # n_rho = ln(rho_bot/rho_interface) = m*ln(T_bot/T_interface)
+        #       = m*ln(-del_T*z_interface/T_interface + 1)
+        # 
+        # z_interface = (T_interface/(-del_T))*(np.exp(n_rho/m)-1)
+        L_cz = np.exp(n_rho_cz/m_cz)-1
+
+        del_T_rz = -(m_cz+1)/(m_rz+1)
+        T_interface = (L_cz+1) # T at bottom of CZ
+        L_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
+
+        L_tot = L_cz + L_rz
+
+        z_cz = L_cz + 1
+
+        delta_S = epsilon*(gamma-1)/gamma*np.log(z_cz)
+
+        g = (m_cz + 1)
+
+        chi_top = np.sqrt((g*delta_S*L_cz**3)/(Rayleigh_top*Prandtl_top))
+        nu_top = chi_top*Prandtl_top
+
+        parameters = dict()
+        parameters['chi_top'] = chi_top
+        parameters['nu_top']  = nu_top
+        parameters['kappa_ratio'] = kappa_ratio
+        parameters['L_cz'] = L_cz
+        parameters['L_rz'] = L_rz
+        parameters['L_tot'] = L_tot
+        parameters['m_ad'] = m_ad
+        parameters['m_cz'] = m_cz
+        parameters['epsilon'] = epsilon
+        parameters['delta_S'] = delta_S
+        parameters['gamma'] = gamma
+        parameters['g'] = g
+
+        parameters.update(entered_parameters)
+
+        return parameters
+      
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
