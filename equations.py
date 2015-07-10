@@ -123,6 +123,8 @@ class polytrope(atmosphere):
                  Lz=None, n_rho_cz = 3.5,
                  m_cz=None, epsilon=1e-4, gamma=5/3,
                  constant_diffusivities=True, constant_kappa=False):
+        
+        self.atmosphere_name = 'single polytrope'
 
         self.m_ad = 1/(gamma-1)
         
@@ -285,6 +287,8 @@ class multitrope(atmosphere):
                  n_rho_cz=3, n_rho_rz=2, 
                  m_rz=3, stiffness=100,
                  **kwargs):
+
+        self.atmosphere_name = 'multitrope'
         
         # gamma = c_p/c_v
         # n_rho_cz = number of density scale heights in CZ
@@ -404,7 +408,8 @@ class multitrope(atmosphere):
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        self.atmosphere_name = 'single polytrope'
+        
     def _set_diffusivity(self, Rayleigh, Prandtl):
         
         logger.info("problem parameters:")
@@ -638,12 +643,21 @@ class FC_equations(equations):
         self.problem.add_bc("right(w) = 0")
 
 
-class FC_polytrope(polytrope, FC_equations):
+class FC_polytrope(FC_equations, polytrope):
     def __init__(self, *args, **kwargs):
-        polytrope().__init__(*args, **kwargs)
-        FC_equations().__init__()
+        super().__init__() # this does work
+        #FC_equations.__init__(self) # this should work, but doesn't
+        polytrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
-        
+class FC_multitrope(FC_equations, multitrope):
+    def __init__(self, *args, **kwargs):
+        super().__init__() # this does work
+        #FC_equations.__init__(self) # this should work, but doesn't
+        multitrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+                
 # needs to be tested again and double-checked
 class AN_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
