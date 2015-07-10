@@ -15,10 +15,10 @@ class atmosphere:
         
         self.gamma = gamma
                 
-    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1):
+    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, dtype=np.float64):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=dtype)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -122,7 +122,8 @@ class polytrope(atmosphere):
                  Lx=None, aspect_ratio=4,
                  Lz=None, n_rho_cz = 3.5,
                  m_cz=None, epsilon=1e-4, gamma=5/3,
-                 constant_diffusivities=True, constant_kappa=False):
+                 constant_diffusivities=True, constant_kappa=False,
+                 **kwargs):
         
         self.atmosphere_name = 'single polytrope'
 
@@ -144,7 +145,7 @@ class polytrope(atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -471,7 +472,7 @@ class equations():
     def set_eigenvalue_problem(self, *args, **kwargs):
         self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
-        self.set_equations(*args, **kwarg)
+        self.set_equations(*args, **kwargs)
 
     def _set_subs(self):
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
