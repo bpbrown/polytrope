@@ -577,10 +577,10 @@ equation is
   \label{eq:temp_mfd}
   \begin{aligned}
   \partial_t T_1 & + u_z \partial_z T_0 + (\gamma - 1) T_0 \divu  -
-  \frac{\chi_0}{c_v} \partial_x^2 T_0 -
-  \frac{\chi_0}{c_v} \partial_x^2 T_1 -
-  \frac{\chi_0}{c_v} \partial_y^2 T_1 -
-  \frac{\chi_0}{c_v} \partial_z^2 T_1\\
+  \frac{\chi_0}{c_v} (\partial_x^2 T_0 -
+  \partial_x^2 T_1 -
+  \partial_y^2 T_1 -
+  \partial_z^2 T_1)\\
   & = -u \partial_x T_1 - v \partial_y T_1 - w T_{1z} - (\gamma - 1)
   T_1 \divu\\
 &+ \frac{\nu}{c_v}\left[ (\partial_x v)^2 + (\partial_x w)^2 + (\partial_y
@@ -599,5 +599,33 @@ $K$. In this case,
     c_v} \partial_i (\chi \rho \partial_i T) = \frac{\chi}{c_v}
   \left( \partial_i \lnrho \partial_i T + \partial_i^2 T \right).
 \end{equation}
+Once we expand this in terms of the mean and fluctuating variables and
+replace all terms proportional to $\chi_0$ in
+equation~(\ref{eq:temp_mfd}), we end up with
+\begin{equation}
+  \label{eq:temp_const_chi_mfd}
+  \begin{aligned}
+  \partial_t T_1 & + u_z \partial_z T_0 + (\gamma - 1) T_0 \divu  \\
+  &-\frac{\chi}{c_v}\left[ \partial_z \lnrho_0 \partial_z T_0 +
+    \partial_z \lnrho_0 \partial_z T_1 + \partial_z T_0 \partial_z
+    \lnrho_1 + \partial_z^2 T_0 + \partial_x^2 T_1 + \partial_y^2 T_1
+    + \partial_z T_{1z}\right]\\
+  & = -u \partial_x T_1 - v \partial_y T_1 - w T_{1z} - (\gamma - 1)
+  T_1 \divu\\
+&+ \frac{\nu}{c_v}\left[ (\partial_x v)^2 + (\partial_x w)^2 + (\partial_y
+u)^2 + (\partial_y w)^2 + u_z^2 + v_z^2 + 2 (\partial_x u)^2 + 2
+(\partial_y v)^2 + 2 w_z^2\right] \\
+& + \frac{\nu}{c_v}\left[2 \partial_y u \partial_x v + 2 u_z \partial_x w + 2 v_z \partial_y
+w - \frac{2}{3} (\divu)^2 \right]\\
+& + \frac{\chi}{c_v} \left[ \partial_x \lnrho_1 \partial_x T_1
+  + \partial_y \lnrho_1 \partial_y T_1 + \partial_z \lnrho_1 \partial_z T_1\right].
+\end{aligned}
+\end{equation}
+In this case, there is a non-linear temperature diffusion as well as
+the non-linear viscous dissipation.
 
+In both versions of the temperature equation, there are terms
+proportional to $\partial_z^2 T_0$. Typically, we will assume a linear
+background temperature gradient, and thus these will vanish. I've left
+them in here for completeness.
 \end{document}
