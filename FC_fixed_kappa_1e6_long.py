@@ -73,7 +73,7 @@ max_dt = atmosphere.buoyancy_time*0.25
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
-solver.stop_sim_time = 0.25*atmosphere.thermal_time
+solver.stop_sim_time = atmosphere.thermal_time
 solver.stop_iteration= np.inf
 solver.stop_wall_time = 23.5*3600
 
