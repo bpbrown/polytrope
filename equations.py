@@ -48,10 +48,13 @@ class atmosphere:
         self.T0_zz = self._new_ncc()
         self.del_T0 = self._new_ncc()
         self.T0 = self._new_ncc()
+
+        self.del_P0 = self._new_ncc()
+        self.P0 = self._new_ncc()
         
         self.scale = self._new_ncc()
 
-
+    
     def _set_parameters(self):
         '''
         Basic parameters needed for any stratified atmosphere.
@@ -90,7 +93,26 @@ class atmosphere:
         if not self.constant_diffusivities:
             self.problem.parameters['del_chi'] = self.del_chi
             
+     def test_hydrostatic_balance(self):
+        # error in hydrostatic balance diagnostic
+        HS_balance = self.del_P0['g']+self.g*self.rho0['g']
+        relative_error = HS_balance/self.del_P0['g']
         
+        if self.make_plots:
+            fig = plt.figure()
+            ax1 = fig.add_subplot(2,1,1)
+            ax1.plot(self.z, self.del_P['g'])
+            ax1.plot(self.z, -self.g*self.rho['g'])
+            ax1.set_ylabel(r'$\nabla P$ and $\rho g$')
+            ax1.set_xlabel('z')
+        
+            ax2 = fig.add_subplot(2,1,2)
+            ax2.semilogy(self.z, np.abs(relative_error))
+            ax2.set_ylabel(r'$|\nabla P + \rho g |/|del P|$')
+            ax2.set_xlabel('z')
+        
+        logger.debug('max error in HS balance: {}'.format(np.max(np.abs(relative_error))))
+   
 class polytrope(atmosphere):
     '''
     Single polytrope, stable or unstable.
@@ -150,11 +172,14 @@ class polytrope(atmosphere):
         self.del_s0_factor = - self.epsilon/self.gamma
         self.delta_s = self.del_s0_factor*np.log(self.z0)
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
-
-    
+ 
         self.T0_zz['g'] = 0        
         self.del_T0['g'] = -1
         self.T0['g'] = self.z0 - self.z       
+
+        self.P0['g'] = (self.z0 - self.z)**(self.poly_n+1)
+        self.P0.differentiate('z', out=self.del_P0)
+        self.del_P0.set_scales(1, keep_data=True)
 
         if self.constant_diffusivities:
             self.scale['g'] = self.z0 - self.z
@@ -338,11 +363,15 @@ class multitrope(atmosphere):
         delta_S = epsilon*(gamma-1)/gamma*np.log(z_cz)
 
         self.g = (self.m_cz + 1)
+        # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
+        # double negative is correct.
+        self.phi['g'] = -self.g*(self.z_cz - self.z)
 
+        
         chi_top = np.sqrt((self.g*delta_S*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
         nu_top = chi_top*Prandtl_top
 
-        _compute_kappa_profile(chi_top, kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
+        self._compute_kappa_profile(chi_top, kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
 
         flux_top = -chi_top
         self.del_T0['g'] = flux_top/self.kappa['g']
@@ -351,19 +380,26 @@ class multitrope(atmosphere):
         self.T0['g'] += 1
         self.T0.set_scales((1,), keep_data=True)
     
-        self.del_ln_P = self._new_ncc()
-        self.ln_P = self._new_ncc()
-        self.P0 = self._new_ncc()
+        self.del_ln_P0 = self._new_ncc()
+        self.ln_P0 = self._new_ncc()
 
         # assumes ideal gas equation of state
-        self.del_ln_P['g'] = self.g/self.T['g']
-        self.del_ln_P.antidifferentiate('z',('right',0),out=self.ln_P)
-        self.ln_P.set_scales(1, keep_data=True)
-        self.P0['g'] = np.exp(-self.ln_P['g'])
+        self.del_ln_P0['g'] = self.g/self.T0['g']
+        self.del_ln_P0.antidifferentiate('z',('right',0),out=self.ln_P0)
+        self.ln_P0.set_scales(1, keep_data=True)
+        self.P0['g'] = np.exp(-self.ln_P0['g'])
 
         self.rho0['g'] = self.P0['g']/self.T0['g']
         self.rho0.set_scales(1, keep_data=True)
 
+        self.rho0.differentiate('z', out=self.del_ln_rho0)
+        self.del_ln_rho0.set_scales(1, keep_data=True)
+
+        self.del_ln_rho0['g'] /= self.rho0['g']
+        self.del_ln_rho0.set_scales(1, keep_data=True)
+                
+        self.del_s0['g'] = 1/gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
+        
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
