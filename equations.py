@@ -367,6 +367,7 @@ class multitrope(atmosphere):
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z_cz - self.z)
 
+        self.scale['g'] = (self.z_cz - self.z)
         
         self.chi_top = np.sqrt((self.g*self.delta_s*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
         self.nu_top = self.chi_top*Prandtl_top
