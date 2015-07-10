@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__.split('.')[-1])
 class atmosphere:
     def __init__(self, gamma=5/3, **kwargs):
         self._set_domain(**kwargs)
-
+        
         self.gamma = gamma
                 
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=np.float64)
-
+        
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
         self.nx = self.domain.bases[0].coeff_size
@@ -92,8 +92,8 @@ class atmosphere:
 
         if not self.constant_diffusivities:
             self.problem.parameters['del_chi'] = self.del_chi
-            
-     def test_hydrostatic_balance(self):
+
+    def test_hydrostatic_balance(self):
         # error in hydrostatic balance diagnostic
         HS_balance = self.del_P0['g']+self.g*self.rho0['g']
         relative_error = HS_balance/self.del_P0['g']
@@ -134,7 +134,7 @@ class polytrope(atmosphere):
                 logger.error("Either m_cz or epsilon must be set")
                 raise
         if Lz is None:
-            if n_rho is not None:
+            if n_rho_cz is not None:
                 Lz = self._calculate_Lz_cz(n_rho_cz, m_cz)
             else:
                 logger.error("Either Lz or n_rho must be set")
@@ -442,83 +442,13 @@ class polytrope_flux(polytrope):
         self.problem.add_bc("right(u) = 0")
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
-        
 
-class FC_polytrope(polytrope):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-        
-    def set_equations(self, Rayleigh, Prandtl, include_background_flux=False):
-        self._set_diffusivity(Rayleigh, Prandtl)
-        self._set_parameters()
-        self._set_subs()
-
-        self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
-        self.problem.substitutions['Div(f, f_z)'] = "(dx(f) + f_z)"
-        self.problem.substitutions['Div_u'] = "Div(u, w_z)"
-        self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + w*(f_z))"
-        
-        # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
-        self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
-        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
-        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
-
-        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-
-        # double check implementation of variabile chi and background coupling term.
-        self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.thermal_diff           = " Cv_inv*chi*(Lap(T1, T1_z)      + T1_z*del_ln_rho0)"
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source = ""
-        if include_background_flux:
-            self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
-        else:
-            self.source += " +0 "
-        if not self.constant_diffusivities:
-            self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
-            if include_background_flux:
-                self.source += " + Cv_inv*del_chi*del_T0"
-                
-        self.problem.substitutions['L_thermal'] = self.thermal_diff 
-        self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
-        self.problem.substitutions['source_terms'] = self.source
-        
-        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
-        
-        self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(T1) - T1_z = 0")
-        
-        self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
-
-        self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
-
-        self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
-
-        # here we have assumed chi = constant in both rho and radius
-        self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
-        
-        logger.info("using nonlinear EOS for entropy, via substitution")
-        # non-linear EOS for s, where we've subtracted off
-        # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
-        # move entropy to a substitution; no need to solve for it.
-        #self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
-        #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
-
-                
+class equations():
+    def __init__(self):
+        pass
+    
     def set_IVP_problem(self, *args, **kwargs):
-
         self.problem = de.IVP(self.domain, variables=self.variables)
         self.set_equations(*args, **kwargs)
 
@@ -526,19 +456,6 @@ class FC_polytrope(polytrope):
         self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwarg)
-
-    def set_BC(self, fixed_flux=False):
-        if fixed_flux:
-            self.problem.add_bc( "left(Q_z) = 0")
-            self.problem.add_bc("right(Q_z) = 0")
-        else:
-            self.problem.add_bc("left(Q_z) = 0")
-            self.problem.add_bc("right(T1) = 0")
-            
-        self.problem.add_bc( "left(u) = 0")
-        self.problem.add_bc("right(u) = 0")
-        self.problem.add_bc( "left(w) = 0")
-        self.problem.add_bc("right(w) = 0")
 
     def _set_subs(self):
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
@@ -634,8 +551,99 @@ class FC_polytrope(polytrope):
         self.problem.namespace['enstrophy'].store_last = True
 
         return self.analysis_tasks
+    
+class FC_equations(equations):
+    def __init__(self):
+        self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
+        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
+        
+    def set_equations(self, Rayleigh, Prandtl, include_background_flux=False):
+        self._set_diffusivity(Rayleigh, Prandtl)
+        self._set_parameters()
+        self._set_subs()
+
+        self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
+        self.problem.substitutions['Div(f, f_z)'] = "(dx(f) + f_z)"
+        self.problem.substitutions['Div_u'] = "Div(u, w_z)"
+        self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + w*(f_z))"
+        
+        # here, nu and chi are constants        
+        self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
+        self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
+        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
+        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
+
+        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
+        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
+        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
+        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
+
+        # double check implementation of variabile chi and background coupling term.
+        self.problem.substitutions['Q_z'] = "(-T1_z)"
+        self.thermal_diff           = " Cv_inv*chi*(Lap(T1, T1_z)      + T1_z*del_ln_rho0)"
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.source = ""
+        if include_background_flux:
+            self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
+        else:
+            self.source += " +0 "
+        if not self.constant_diffusivities:
+            self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
+            if include_background_flux:
+                self.source += " + Cv_inv*del_chi*del_T0"
+                
+        self.problem.substitutions['L_thermal'] = self.thermal_diff 
+        self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
+        self.problem.substitutions['source_terms'] = self.source
+        
+        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
+        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
+        
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
+        
+        self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+
+        self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
+
+        self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        # here we have assumed chi = constant in both rho and radius
+        self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+        
+        logger.info("using nonlinear EOS for entropy, via substitution")
+        # non-linear EOS for s, where we've subtracted off
+        # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
+        # move entropy to a substitution; no need to solve for it.
+        #self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
+        #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
+
+                
+    def set_BC(self, fixed_flux=False):
+        if fixed_flux:
+            self.problem.add_bc( "left(Q_z) = 0")
+            self.problem.add_bc("right(Q_z) = 0")
+        else:
+            self.problem.add_bc("left(Q_z) = 0")
+            self.problem.add_bc("right(T1) = 0")
+            
+        self.problem.add_bc( "left(u) = 0")
+        self.problem.add_bc("right(u) = 0")
+        self.problem.add_bc( "left(w) = 0")
+        self.problem.add_bc("right(w) = 0")
 
 
+class FC_polytrope(polytrope, FC_equations):
+    def __init__(self, *args, **kwargs):
+        polytrope().__init__(*args, **kwargs)
+        FC_equations().__init__()
+
+        
 # needs to be tested again and double-checked
 class AN_polytrope(polytrope):
     def __init__(self, *args, **kwargs):
