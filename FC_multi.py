@@ -30,12 +30,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
     # Set domain
-    Lz = 10
-    Lx = 4*Lz
-
     nx = nz*2
     
-    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz, constant_kappa=True)
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -74,7 +71,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
         
         T.set_scales(atmosphere.domain.dealias, keep_data=True)
         z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-        T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*noise*atmosphere.T0['g']
+        T['g'] = A0*np.sin(np.pi*z_dealias/atmosphere.Lz)*noise*atmosphere.T0['g']
 
         logger.info("A0 = {:g}".format(A0))
         logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))

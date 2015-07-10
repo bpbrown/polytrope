@@ -305,14 +305,11 @@ class multitrope(atmosphere):
         self.Lz_cz = Lz_cz
         self.Lz_rz = Lz_rz
         
-        if Lx is None:
-            Lx = Lz*aspect_ratio
+        Lx = Lz*aspect_ratio
             
         super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
 
-        self.constant_diffusivities = constant_diffusivities
-        if constant_kappa:
-            self.constant_diffusivities = False
+        self.constant_diffusivities = False
 
         self._set_atmosphere(**kwargs)
         
@@ -346,7 +343,6 @@ class multitrope(atmosphere):
             tanh_center = self.Lz_rz
             
         kappa_top = chi_top
-        kappa_ratio = parameters['kappa_ratio']
     
         phi = (1/2*(1-np.tanh((self.z-tanh_center)/tanh_width)))
         inv_phi = 1-phi
@@ -362,27 +358,27 @@ class multitrope(atmosphere):
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
         
-        z_cz =self.Lz_cz + 1
+        self.z_cz =self.Lz_cz + 1
 
-        delta_S = epsilon*(gamma-1)/gamma*np.log(z_cz)
-
+        self.delta_s = self.epsilon*(self.gamma-1)/self.gamma*np.log(self.z_cz)
+        
         self.g = (self.m_cz + 1)
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z_cz - self.z)
 
         
-        chi_top = np.sqrt((self.g*delta_S*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
-        nu_top = chi_top*Prandtl_top
-
-        self._compute_kappa_profile(chi_top, kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
-
-        flux_top = -chi_top
+        self.chi_top = np.sqrt((self.g*self.delta_s*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
+        self.nu_top = self.chi_top*Prandtl_top
+        
+        self._compute_kappa_profile(self.chi_top, kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
+        
+        flux_top = -self.chi_top
         self.del_T0['g'] = flux_top/self.kappa['g']
     
         self.del_T0.antidifferentiate('z',('right',0), out=self.T0)
         self.T0['g'] += 1
-        self.T0.set_scales((1,), keep_data=True)
+        self.T0.set_scales(1, keep_data=True)
     
         self.del_ln_P0 = self._new_ncc()
         self.ln_P0 = self._new_ncc()
@@ -394,16 +390,30 @@ class multitrope(atmosphere):
         self.P0['g'] = np.exp(-self.ln_P0['g'])
 
         self.rho0['g'] = self.P0['g']/self.T0['g']
-        self.rho0.set_scales(1, keep_data=True)
 
         self.rho0.differentiate('z', out=self.del_ln_rho0)
-        self.del_ln_rho0.set_scales(1, keep_data=True)
+        self.del_ln_rho0['g'] = self.del_ln_rho0['g']/self.rho0['g']
 
-        self.del_ln_rho0['g'] /= self.rho0['g']
-        self.del_ln_rho0.set_scales(1, keep_data=True)
-                
-        self.del_s0['g'] = 1/gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
+        self.rho0.set_scales(1, keep_data=True)         
+        self.del_ln_P0.set_scales(1, keep_data=True)        
+        self.del_ln_rho0.set_scales(1, keep_data=True)        
+        self.del_s0['g'] = 1/self.gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
+
+        self.buoyancy_time = np.sqrt(self.Lz_cz/self.g/np.abs(self.epsilon))
+    
+    def _set_diffusivity(self, *args, **kwargs):
+        self.nu = self._new_ncc()
+        self.chi = self._new_ncc()
         
+        self.nu['g'] = self.nu_top
+        self.chi['g'] = self.kappa['g']/self.rho0['g']
+        self.del_chi = self._new_ncc()
+        self.chi.differentiate('z', out=self.del_chi)
+        self.chi.set_scales(1, keep_data=True)
+
+        self.top_thermal_time = 1/self.chi_top
+        self.thermal_time = self.Lz_cz**2/self.chi_top
+            
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
