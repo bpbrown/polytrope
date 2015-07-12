@@ -3,13 +3,15 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_nrho3.5.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz=<nz>] 
+    FC_nrho3.5.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
     --restart=<restart_file>   Restart from checkpoint
-    --nz=<nz>                  vertical z (chebyshev) resolution [default: 128]
+    --nz_rz=<nz_rz>            vertical z (chebyshev) resolution in stable region   [default: 128]
+    --nz_cz=<nz_cz>            vertical z (chebyshev) resolution in unstable region [default: 128]
+
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -19,7 +21,7 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 from dedalus.extras.checkpointing import Checkpoint
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=128, data_dir='./'):
     import numpy as np
     import time
     import equations
@@ -28,11 +30,13 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
     initial_time = time.time()
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
-
-    # Set domain
-    nx = nz*2
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz)
+    # Set domain
+    nz = nz_rz+nz_cz
+    nx = nz_cz*2
+    nz_list = [nz_rz, nz_cz]
+    
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -185,6 +189,7 @@ if __name__ == "__main__":
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
-                      nz=int(args['--nz']),
+                      nz_rz=int(args['--nz_rz']),
+                      nz_cz=int(args['--nz_cz']),
                       restart=(args['--restart']),
                       data_dir=data_dir)

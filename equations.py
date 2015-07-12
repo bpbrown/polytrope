@@ -112,7 +112,46 @@ class atmosphere:
             ax2.set_xlabel('z')
         
         logger.debug('max error in HS balance: {}'.format(np.max(np.abs(relative_error))))
-   
+
+class multi_layer_atmosphere(atmosphere):
+    def __init__(self, *args, **kwargs):
+        super(atmosphere, self).__init__(*args, **kwargs)
+        
+    def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64):
+        '''
+        Specify 2-D domain, with compund basis in z-direction.
+
+        First entries in nz, Lz are the bottom entries (build upwards).
+        '''
+        print(nz)
+        print(Lz)
+        if len(nz) != len(Lz):
+            logger.error("nz {} has different number of elements from Lz {}".format(nz, Lz))
+            raise
+                         
+        x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
+        z_basis_list = []
+        Lz_interface = 0.
+        for iz, nz in enumerate(nz):
+            Lz_top = Lz[iz]
+            z_basis = de.Chebyshev('z', nz, interval=[Lz_interface, Lz_top], dealias=3/2)
+            z_basis_list.append(z_basis)
+            Lz_interface += Lz_top
+
+        print(z_basis_list)
+        z_basis = de.Compound('z', tuple(z_basis_list))
+        
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
+        
+        self.x = self.domain.grid(0)
+        self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
+        self.nx = self.domain.bases[0].coeff_size
+        self.delta_x = self.Lx/self.nx
+        
+        self.z = self.domain.grid(-1) # need to access globally-sized z-basis
+        self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
+        self.nz = self.domain.bases[-1].coeff_size
+        
 class polytrope(atmosphere):
     '''
     Single polytrope, stable or unstable.
@@ -277,11 +316,17 @@ class polytrope(atmosphere):
             self.chi.set_scales(1, keep_data=True)
             
 
-class multitrope(atmosphere):
+class multitrope(multi_layer_atmosphere):
     '''
     Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.
+
+    When specifying the z resolution, use a list, with the stable layer
+    as the first entry and the unstable layer as the second list entry.
+    e.g.,
+    nz = [nz_rz, nz_cz]
+    
     '''
-    def __init__(self, nx=256, nz=128,
+    def __init__(self, nx=256, nz=[128, 128],
                  aspect_ratio=4,
                  gamma=5/3,
                  n_rho_cz=3, n_rho_rz=2, 
@@ -306,8 +351,8 @@ class multitrope(atmosphere):
         self.Lz_rz = Lz_rz
         
         Lx = Lz*aspect_ratio
-            
-        super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        
+        super(multi_layer_atmosphere, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz])
 
         self.constant_diffusivities = False
 
