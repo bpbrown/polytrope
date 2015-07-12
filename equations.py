@@ -115,7 +115,7 @@ class atmosphere:
 
 class multi_layer_atmosphere(atmosphere):
     def __init__(self, *args, **kwargs):
-        super(atmosphere, self).__init__(*args, **kwargs)
+        super(multi_layer_atmosphere, self).__init__(*args, **kwargs)
         
     def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64):
         '''
@@ -123,8 +123,6 @@ class multi_layer_atmosphere(atmosphere):
 
         First entries in nz, Lz are the bottom entries (build upwards).
         '''
-        print(nz)
-        print(Lz)
         if len(nz) != len(Lz):
             logger.error("nz {} has different number of elements from Lz {}".format(nz, Lz))
             raise
@@ -138,7 +136,6 @@ class multi_layer_atmosphere(atmosphere):
             z_basis_list.append(z_basis)
             Lz_interface += Lz_top
 
-        print(z_basis_list)
         z_basis = de.Compound('z', tuple(z_basis_list))
         
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
@@ -183,7 +180,7 @@ class polytrope(atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super().__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        super(atmosphere, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -199,7 +196,7 @@ class polytrope(atmosphere):
         return Lz_cz
         
     def _set_atmosphere(self):
-        super()._set_atmosphere()
+        super(atmosphere, self)._set_atmosphere()
         
         # polytropic atmosphere characteristics
         self.poly_n = 1/(self.gamma-1) - self.epsilon
@@ -399,7 +396,7 @@ class multitrope(multi_layer_atmosphere):
         # inputs:
         # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
         # Prandtl_top = nu_top/chi_top
-        super()._set_atmosphere()
+        super(multi_layer_atmosphere, self)._set_atmosphere()
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
         
@@ -463,7 +460,7 @@ class multitrope(multi_layer_atmosphere):
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(polytrope, self).__init__(*args, **kwargs)
         self.atmosphere_name = 'single polytrope'
         
     def _set_diffusivity(self, Rayleigh, Prandtl):
@@ -701,15 +698,13 @@ class FC_equations(equations):
 
 class FC_polytrope(FC_equations, polytrope):
     def __init__(self, *args, **kwargs):
-        super().__init__() # this does work
-        #FC_equations.__init__(self) # this should work, but doesn't
+        super(FC_polytrope, self).__init__() 
         polytrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
 class FC_multitrope(FC_equations, multitrope):
     def __init__(self, *args, **kwargs):
-        super().__init__() # this does work
-        #FC_equations.__init__(self) # this should work, but doesn't
+        super(FC_multitrope, self).__init__() 
         multitrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
