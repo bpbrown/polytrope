@@ -14,13 +14,10 @@ class FC_onset_solver:
 
     def __init__(self, nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
         constant_diffusivities=True, constant_kappa=True,
-        dtype=np.complex128):
+        grid_dtype=np.complex128):
 
         self.atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz,
-                epsilon=epsilon, gamma=gamma,
-                constant_diffusivities=constant_diffusivities,
-                constant_kappa=constant_kappa,
-                dtype=dtype)
+                gamma=gamma, grid_dtype=grid_dtype)
 
         self.crit_ras = []
 
@@ -58,41 +55,60 @@ class FC_onset_solver:
 
 
 import matplotlib.pyplot as plt
+import os
+
+write_dir='./figures/'
+if not os.path.exists(write_dir):
+    os.makedirs(write_dir)
+
 
 plot_rows = 2
-plot_cols = 5
+plot_cols = 3
+eqs = 7
+nx = 64
+nz = 32
+Lx = 100
 
 
-plt.figure(figsize=(30,20))
-solver = FC_onset_solver(nz=32, Lx=100)
-for i in range(solver.atmosphere.nx-2):
-
-    ra = 1e2
-    plt.clf()
-    wavenum = i+1
+solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx)
+for e in range(nz*eqs):
+    plt.figure(figsize=(30,20))
+    wavenum = 2
     real_wavenum = 2*np.pi*wavenum/solver.atmosphere.Lx/solver.atmosphere.nx
 
-    print('solving wavenum {0} at ra = {1}'.format(real_wavenum, ra))
-    solver.solve_parallel([wavenum, ra])
+    string = 'wavenum {0:.4g}'.format(real_wavenum)
 
-    for e in range(len(solver.solver.eigenvalues)):#range(solver.atmosphere.nz*2, solver.atmosphere.nz*3):
-        if np.abs(np.imag(solver.solver.eigenvalues[e])) == np.inf:
-            continue
-        plt.clf()
+    for i in range(3):#solver.atmosphere.nx-2):
+        ra = 1e2*(10**(i+1))
+
+        print('solving wavenum {0} at ra = {1}'.format(real_wavenum, ra))
+        solver.solve_parallel([wavenum, ra])
+
         ws = solver.get_profiles(e)['w']
-        break
-        string = 'wavenum {0:.4g}; eigval {1:.4g}'.format(real_wavenum, solver.solver.eigenvalues[e])
-        if np.imag(solver.solver.eigenvalues[e]) > 0:
-            string += '; UNSTABLE'
-        else:
-            continue
-            string += '; STABLE'
+
+        string += '; eval{0}: {1:.3g}'.format(i+1, solver.solver.eigenvalues[e])
+        
         print(string)
-        plt.suptitle(string, fontsize=16) 
-        for j in range(plot_rows):
-            for k in range(plot_cols):
-                plt.subplot(plot_rows, plot_cols, j*plot_cols + k + 1)
-                plt.plot(np.real(ws['g'][j*plot_cols + k,:]))
-                plt.plot(np.imag(ws['g'][j*plot_cols + k,:]))
-        plt.subplots_adjust(top=0.88, wspace=0.5, hspace=0.4)
-        plt.savefig('./figures/unstable_first10_evalindex{:03d}_wavenum{:06d}_ra{:.1e}.png'.format(e,wavenum, ra), dpi=100)
+        plt.subplot(plot_rows, plot_cols, i+1)
+        plt.plot(solver.atmosphere.z[0], np.real(ws['g'][0,:]), color='blue')
+        plt.plot(solver.atmosphere.z[0], np.imag(ws['g'][0,:]), color='green')
+        plt.title('Ra = {0:.2e}'.format(ra))
+        plt.xlabel('z')
+        plt.ylabel('w[0,:] (Bu=Real, Gr=Imag)')
+        plt.xlim(0, solver.atmosphere.z[0][-1])
+        
+        
+        zs, xs = np.meshgrid(solver.atmosphere.z, solver.atmosphere.x)
+        
+        plt.subplot(plot_rows, plot_cols, plot_cols+i+1)
+        im = plt.pcolormesh(xs, zs, ws['g'], cmap='PuOr_r')
+        plt.xlabel('x')
+        plt.ylabel('z')
+        plt.title('w')
+        cbar = plt.colorbar(im)
+
+
+    plt.suptitle(string, fontsize=20) 
+    plt.subplots_adjust(top=0.88, wspace=0.3, hspace=0.4)
+    plt.savefig(write_dir+'res{}x{}_wavenum{:03d}_evalindex{:03d}.png'.format(nx, nz, wavenum,e), dpi=100)
+    plt.clf()
