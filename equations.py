@@ -2,19 +2,23 @@ import numpy as np
 import os
 from mpi4py import MPI
 
-from dedalus import public as de
-
-#import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
+
+from dedalus import public as de
+
 
 class atmosphere:
     def __init__(self, gamma=5/3, **kwargs):
         self._set_domain(**kwargs)
         
         self.gamma = gamma
-                
+        self.make_plots = False
+        
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
@@ -29,6 +33,8 @@ class atmosphere:
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
         self.nz = self.domain.bases[-1].coeff_size
 
+        self.z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+        
     def _new_ncc(self):
         field = self.domain.new_field()
         field.meta['x']['constant'] = True
@@ -98,25 +104,46 @@ class atmosphere:
         if not self.constant_diffusivities:
             self.problem.parameters['del_chi'] = self.del_chi
 
-    def test_hydrostatic_balance(self):
+    def plot_atmosphere(self):
+        fig_atm = plt.figure()
+        axT = fig_atm.add_subplot(2,2,1)
+        axT.plot(self.z[0,:], self.T0['g'][0,:])
+        axT.set_ylabel('T0')
+        axP = fig_atm.add_subplot(2,2,2)
+        axP.plot(self.z[0,:], self.P0['g'][0,:])
+        axP.set_ylabel('P0')
+        axR = fig_atm.add_subplot(2,2,3)
+        axR.plot(self.z[0,:], self.rho0['g'][0,:])
+        axR.set_ylabel(r'$\rho0$')
+        axS = fig_atm.add_subplot(2,2,4)
+        mask = (self.del_s0['g'][0,:]>0)
+        axS.semilogy(self.z[0,mask], self.del_s0['g'][0,mask])
+        mask = (self.del_s0['g'][0,:]<0)
+        axS.semilogy(self.z[0,mask], np.abs(self.del_s0['g'][0,mask]), linestyle='dashed', color='red')
+        
+        axS.set_ylabel(r'$\nabla s0$')
+        fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
+        
+    def test_hydrostatic_balance(self, make_plots=False):
         # error in hydrostatic balance diagnostic
         HS_balance = self.del_P0['g']+self.g*self.rho0['g']
         relative_error = HS_balance/self.del_P0['g']
         
-        if self.make_plots:
+        if self.make_plots or make_plots:
             fig = plt.figure()
             ax1 = fig.add_subplot(2,1,1)
-            ax1.plot(self.z, self.del_P['g'])
-            ax1.plot(self.z, -self.g*self.rho['g'])
+            ax1.plot(self.z[0,:], self.del_P0['g'][0,:])
+            ax1.plot(self.z[0,:], -self.g*self.rho0['g'][0,:])
             ax1.set_ylabel(r'$\nabla P$ and $\rho g$')
             ax1.set_xlabel('z')
-        
+
             ax2 = fig.add_subplot(2,1,2)
-            ax2.semilogy(self.z, np.abs(relative_error))
+            ax2.semilogy(self.z[0,:], np.abs(relative_error[0,:]))
             ax2.set_ylabel(r'$|\nabla P + \rho g |/|del P|$')
             ax2.set_xlabel('z')
-        
-        logger.debug('max error in HS balance: {}'.format(np.max(np.abs(relative_error))))
+            fig.savefig("atmosphere_HS_balance_p{}.png".format(self.domain.distributor.rank), dpi=300)
+            
+        logger.info('max error in HS balance: {}'.format(np.max(np.abs(relative_error))))
 
 class multi_layer_atmosphere(atmosphere):
     def __init__(self, *args, **kwargs):
@@ -155,7 +182,9 @@ class multi_layer_atmosphere(atmosphere):
         self.z = self.domain.grid(-1) # need to access globally-sized z-basis
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
         self.nz = self.domain.bases[-1].coeff_size
-        
+
+        self.z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+
 class polytrope(atmosphere):
     '''
     Single polytrope, stable or unstable.
@@ -225,7 +254,8 @@ class polytrope(atmosphere):
         self.P0['g'] = (self.z0 - self.z)**(self.poly_n+1)
         self.P0.differentiate('z', out=self.del_P0)
         self.del_P0.set_scales(1, keep_data=True)
-
+        self.P0.set_scales(1, keep_data=True)
+        
         if self.constant_diffusivities:
             self.scale['g'] = self.z0 - self.z
         else:
@@ -257,7 +287,9 @@ class polytrope(atmosphere):
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
                                                                                                self.freefall_time,
                                                                                                self.buoyancy_time))
-        
+        self.plot_atmosphere()
+        self.test_hydrostatic_balance(make_plots=True)
+
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         
         logger.info("problem parameters:")
@@ -426,11 +458,14 @@ class multitrope(multi_layer_atmosphere):
 
         logger.info("Solving for P0")
         # assumes ideal gas equation of state
-        self.del_ln_P0['g'] = self.g/self.T0['g']
+        self.del_ln_P0['g'] = -self.g/self.T0['g']
         self.del_ln_P0.antidifferentiate('z',('right',0),out=self.ln_P0)
         self.ln_P0.set_scales(1, keep_data=True)
-        self.P0['g'] = np.exp(-self.ln_P0['g'])
-
+        self.P0['g'] = np.exp(self.ln_P0['g'])
+        self.del_ln_P0.set_scales(1, keep_data=True)
+        self.del_P0['g'] = self.del_ln_P0['g']*self.P0['g']
+        self.del_P0.set_scales(1, keep_data=True)
+        
         self.rho0['g'] = self.P0['g']/self.T0['g']
 
         self.rho0.differentiate('z', out=self.del_ln_rho0)
@@ -447,16 +482,16 @@ class multitrope(multi_layer_atmosphere):
 
         logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
 
-        T0_max = self.domain.dist.comm_cart.allreduce(np.max(self.T0['g']))
-        T0_min = self.domain.dist.comm_cart.allreduce(np.min(self.T0['g']))
+        T0_max = self.domain.dist.comm_cart.allreduce(np.max(self.T0['g']), op=MPI.MAX)
+        T0_min = self.domain.dist.comm_cart.allreduce(np.min(self.T0['g']), op=MPI.MIN)
         logger.info("   temperature: min {}  max {}".format(T0_min, T0_max))
 
-        P0_max = self.domain.dist.comm_cart.allreduce(np.max(self.P0['g']))
-        P0_min = self.domain.dist.comm_cart.allreduce(np.min(self.P0['g']))
+        P0_max = self.domain.dist.comm_cart.allreduce(np.max(self.P0['g']), op=MPI.MAX)
+        P0_min = self.domain.dist.comm_cart.allreduce(np.min(self.P0['g']), op=MPI.MIN)
         logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
 
-        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']))
-        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']))
+        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
+        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
@@ -476,7 +511,8 @@ class multitrope(multi_layer_atmosphere):
                                                                                                self.freefall_time,
                                                                                                self.buoyancy_time))
 
-
+        self.plot_atmosphere()
+        self.test_hydrostatic_balance(make_plots=True)
 
             
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
