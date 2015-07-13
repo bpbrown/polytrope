@@ -142,8 +142,9 @@ class atmosphere:
             ax2.set_ylabel(r'$|\nabla P + \rho g |/|del P|$')
             ax2.set_xlabel('z')
             fig.savefig("atmosphere_HS_balance_p{}.png".format(self.domain.distributor.rank), dpi=300)
-            
-        logger.info('max error in HS balance: {}'.format(np.max(np.abs(relative_error))))
+
+        max_rel_err = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error)), op=MPI.MAX)
+        logger.info('max error in HS balance: {}'.format(max_rel_err))
 
 class multi_layer_atmosphere(atmosphere):
     def __init__(self, *args, **kwargs):
