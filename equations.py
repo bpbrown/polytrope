@@ -51,7 +51,12 @@ class atmosphere:
 
         self.del_P0 = self._new_ncc()
         self.P0 = self._new_ncc()
-        
+
+        self.nu = self._new_ncc()
+        self.chi = self._new_ncc()
+        self.del_chi = self._new_ncc()
+
+                
         self.scale = self._new_ncc()
 
     
@@ -128,13 +133,15 @@ class multi_layer_atmosphere(atmosphere):
             raise
                          
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
+
+        logger.info("Setting compound basis in vertical (z) direction")
         z_basis_list = []
         Lz_interface = 0.
-        for iz, nz in enumerate(nz):
-            Lz_top = Lz[iz]
-            z_basis = de.Chebyshev('z', nz, interval=[Lz_interface, Lz_top], dealias=3/2)
+        for iz, nz_i in enumerate(nz):
+            Lz_top = Lz[iz]+Lz_interface
+            z_basis = de.Chebyshev('z', nz_i, interval=[Lz_interface, Lz_top], dealias=3/2)
             z_basis_list.append(z_basis)
-            Lz_interface += Lz_top
+            Lz_interface = Lz_top
 
         z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
         
@@ -251,13 +258,10 @@ class polytrope(atmosphere):
                                                                                                self.freefall_time,
                                                                                                self.buoyancy_time))
         
-    def _set_diffusivity(self, Rayleigh, Prandtl):
+    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
-
-        self.nu = self._new_ncc()
-        self.chi = self._new_ncc()
 
         # set nu and chi at top based on Rayleigh number
         nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
@@ -308,7 +312,6 @@ class polytrope(atmosphere):
         self.nu['g'] = nu
         self.chi['g'] = chi
         if not self.constant_diffusivities:
-            self.del_chi = self._new_ncc()
             self.chi.differentiate('z', out=self.del_chi)
             self.chi.set_scales(1, keep_data=True)
             
@@ -342,16 +345,15 @@ class multitrope(multi_layer_atmosphere):
         self.m_rz = m_rz
         self.epsilon = (self.m_rz - self.m_ad)/stiffness
         self.m_cz = self.m_ad - self.epsilon
-
+        self.stiffness = stiffness
+        
         Lz_cz, Lz_rz, Lz = self._calculate_Lz(n_rho_cz, self.m_cz, n_rho_rz, self.m_rz)
         self.Lz_cz = Lz_cz
         self.Lz_rz = Lz_rz
         
-        Lx = Lz*aspect_ratio
+        Lx = Lz_cz*aspect_ratio
         
-        super(multi_layer_atmosphere, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz])
-
-        self.constant_diffusivities = False
+        super(multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz])
 
         self._set_atmosphere(**kwargs)
         
@@ -378,24 +380,22 @@ class multitrope(multi_layer_atmosphere):
         Lz_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
 
         Lz = Lz_cz + Lz_rz
+        logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
-    def _compute_kappa_profile(self, chi_top, kappa_ratio, tanh_center=None, tanh_width=0.1):
+    def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=0.1):
         if tanh_center is None:
             tanh_center = self.Lz_rz
-            
-        kappa_top = chi_top
+
+        # start with a simple profile, adjust amplitude later (in _set_diffusivities)
+        kappa_top = 1
     
         phi = (1/2*(1-np.tanh((self.z-tanh_center)/tanh_width)))
         inv_phi = 1-phi
         self.kappa = self._new_ncc() 
         self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
         
-    def _set_atmosphere(self,
-                        Rayleigh_top=1e8, Prandtl_top=1):
-        # inputs:
-        # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
-        # Prandtl_top = nu_top/chi_top
+    def _set_atmosphere(self):
         super(multi_layer_atmosphere, self)._set_atmosphere()
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
@@ -410,15 +410,13 @@ class multitrope(multi_layer_atmosphere):
         self.phi['g'] = -self.g*(self.z_cz - self.z)
 
         self.scale['g'] = (self.z_cz - self.z)
-        
-        self.chi_top = np.sqrt((self.g*self.delta_s*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
-        self.nu_top = self.chi_top*Prandtl_top
-        
-        self._compute_kappa_profile(self.chi_top, kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
-        
-        flux_top = -self.chi_top
+                
+        self._compute_kappa_profile(kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.1)
+
+        logger.info("Solving for T0")
+        # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
+        flux_top = -1
         self.del_T0['g'] = flux_top/self.kappa['g']
-    
         self.del_T0.antidifferentiate('z',('right',0), out=self.T0)
         self.T0['g'] += 1
         self.T0.set_scales(1, keep_data=True)
@@ -426,6 +424,7 @@ class multitrope(multi_layer_atmosphere):
         self.del_ln_P0 = self._new_ncc()
         self.ln_P0 = self._new_ncc()
 
+        logger.info("Solving for P0")
         # assumes ideal gas equation of state
         self.del_ln_P0['g'] = self.g/self.T0['g']
         self.del_ln_P0.antidifferentiate('z',('right',0),out=self.ln_P0)
@@ -442,15 +441,59 @@ class multitrope(multi_layer_atmosphere):
         self.del_ln_rho0.set_scales(1, keep_data=True)        
         self.del_s0['g'] = 1/self.gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
 
+        logger.info("multitrope atmosphere parameters:")
+        logger.info("   m_cz = {:g}, epsilon = {:g}, gamma = {:g}".format(self.m_cz, self.epsilon, self.gamma))
+        logger.info("   m_rz = {:g}, stiffness = {:g}".format(self.m_rz, self.stiffness))
+
+        logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
+
+        T0_max = self.domain.dist.comm_cart.allreduce(np.max(self.T0['g']))
+        T0_min = self.domain.dist.comm_cart.allreduce(np.min(self.T0['g']))
+        logger.info("   temperature: min {}  max {}".format(T0_min, T0_max))
+
+        P0_max = self.domain.dist.comm_cart.allreduce(np.max(self.P0['g']))
+        P0_min = self.domain.dist.comm_cart.allreduce(np.min(self.P0['g']))
+        logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
+
+        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']))
+        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']))
+        rho0_ratio = rho0_max/rho0_min
+        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+        logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
+        H_rho_top = (self.z_cz-self.Lz)/self.m_cz
+        H_rho_bottom = (self.z_cz)/self.m_cz
+        logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
+        logger.info("   H_rho/delta x = {:g} (top)  {:g} (bottom)".format(H_rho_top/self.delta_x,
+                                                                          H_rho_bottom/self.delta_x))
+
+        # min of global quantity
+        self.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
+        self.freefall_time = np.sqrt(self.Lz_cz/self.g)
         self.buoyancy_time = np.sqrt(self.Lz_cz/self.g/np.abs(self.epsilon))
-    
-    def _set_diffusivity(self, *args, **kwargs):
-        self.nu = self._new_ncc()
-        self.chi = self._new_ncc()
         
+        logger.info("atmospheric timescales:")
+        logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
+                                                                                               self.freefall_time,
+                                                                                               self.buoyancy_time))
+
+
+
+            
+    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
+        Rayleigh_top = Rayleigh
+        Prandtl_top = Prandtl
+        # inputs:
+        # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
+        # Prandtl_top = nu_top/chi_top
+        self.chi_top = np.sqrt((self.g*self.delta_s*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
+        self.nu_top = self.chi_top*Prandtl_top
+
+        self.constant_diffusivities = False
+
         self.nu['g'] = self.nu_top
+        # rescale kappa to correct values based on Rayleigh number derived chi
+        self.kappa['g'] *= self.chi_top
         self.chi['g'] = self.kappa['g']/self.rho0['g']
-        self.del_chi = self._new_ncc()
         self.chi.differentiate('z', out=self.del_chi)
         self.chi.set_scales(1, keep_data=True)
 
@@ -463,13 +506,10 @@ class polytrope_flux(polytrope):
         super(polytrope, self).__init__(*args, **kwargs)
         self.atmosphere_name = 'single polytrope'
         
-    def _set_diffusivity(self, Rayleigh, Prandtl):
+    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
-
-        self.nu = self._new_ncc()
-        self.chi = self._new_ncc()
 
         # take constant nu, chi
         nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
@@ -616,7 +656,7 @@ class FC_equations(equations):
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
         
     def set_equations(self, Rayleigh, Prandtl, include_background_flux=False):
-        self._set_diffusivity(Rayleigh, Prandtl)
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
         self._set_subs()
 
@@ -696,7 +736,7 @@ class FC_equations(equations):
             self.problem.add_bc( "left(T1) = 0")
             self.problem.add_bc("right(T1) = 0")            
         elif mixed_flux_temperature:
-            logger.info("Thermal BC: mixed flux/temperaure (T1_z/T1)")
+            logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
             self.problem.add_bc("left(Q_z) = 0")
             self.problem.add_bc("right(T1) = 0")
         else:
@@ -744,7 +784,7 @@ class AN_polytrope(polytrope):
         
         self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-10)
 
-        self._set_diffusivity(Rayleigh, Prandtl)
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
 
         self.problem.add_equation("dz(w) - w_z = 0")

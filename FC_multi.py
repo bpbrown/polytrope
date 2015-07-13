@@ -3,7 +3,7 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_nrho3.5.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
+    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
