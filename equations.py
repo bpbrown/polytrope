@@ -495,10 +495,10 @@ class multitrope(multi_layer_atmosphere):
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
-        H_rho_top = (self.z_cz-self.Lz)/self.m_cz
+        H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
         H_rho_bottom = (self.z_cz)/self.m_cz
-        logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
-        logger.info("   H_rho/delta x = {:g} (top)  {:g} (bottom)".format(H_rho_top/self.delta_x,
+        logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
+        logger.info("   H_rho/delta x = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top/self.delta_x,
                                                                           H_rho_bottom/self.delta_x))
 
         # min of global quantity
