@@ -54,11 +54,7 @@ z = atmosphere.domain.grid(1)
 u = solver.state['u']
 w = solver.state['w']
 T = solver.state['T1']
-#s = solver.state['s1']
 ln_rho = solver.state['ln_rho1']
-
-#solver.evaluator.vars['Lx'] = Lx
-#solver.evaluator.vars['Lz'] = Lz
 
 A0 = 1e-6
 np.random.seed(1+atmosphere.domain.distributor.rank)
@@ -79,7 +75,7 @@ report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
 solver.stop_sim_time = 0.25*atmosphere.thermal_time
 solver.stop_iteration= np.inf
-solver.stop_wall_time = 11.5*3600
+solver.stop_wall_time = 23.5*3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -92,7 +88,7 @@ if do_checkpointing:
 
 
     
-cfl_cadence = 1
+cfl_cadence = 5
 CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                      max_change=1.5, min_change=0.5, max_dt=max_dt)
 

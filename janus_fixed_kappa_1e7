@@ -4,4 +4,4 @@
 #SBATCH --nodes 11
 #SBATCH --output janus_fixed_kappa_1e7.%J
 
-mpirun -np 128 python3 FC_fixed_kappa_1e6.py
+mpirun -np 128 python3 FC_fixed_kappa_1e7.py
