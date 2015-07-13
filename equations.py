@@ -180,7 +180,7 @@ class polytrope(atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super(atmosphere, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        super(polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -196,7 +196,7 @@ class polytrope(atmosphere):
         return Lz_cz
         
     def _set_atmosphere(self):
-        super(atmosphere, self)._set_atmosphere()
+        super(polytrope, self)._set_atmosphere()
         
         # polytropic atmosphere characteristics
         self.poly_n = 1/(self.gamma-1) - self.epsilon
@@ -682,16 +682,42 @@ class FC_equations(equations):
         #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
 
                 
-    def set_BC(self, fixed_flux=False):
+    def set_BC(self,
+               fixed_flux=False, fixed_temperature=False, mixed_flux_temperature=True,
+               stress_free=True, no_slip=False):
+        
+        # thermal boundary conditions
         if fixed_flux:
+            logger.info("Thermal BC: fixed flux (T1_z)")
             self.problem.add_bc( "left(Q_z) = 0")
             self.problem.add_bc("right(Q_z) = 0")
-        else:
+        elif fixed_temperature:
+            logger.info("Thermal BC: fixed temperature (T1)")
+            self.problem.add_bc( "left(T1) = 0")
+            self.problem.add_bc("right(T1) = 0")            
+        elif mixed_flux_temperature:
+            logger.info("Thermal BC: mixed flux/temperaure (T1_z/T1)")
             self.problem.add_bc("left(Q_z) = 0")
             self.problem.add_bc("right(T1) = 0")
+        else:
+            logger.error("Incorrect thermal boundary conditions specified")
+            raise
             
-        self.problem.add_bc( "left(u) = 0")
-        self.problem.add_bc("right(u) = 0")
+        # horizontal velocity boundary conditions
+        if stress_free:
+            logger.info("Horizontal velocity BC: stress free")
+            self.problem.add_bc( "left(u_z) = 0")
+            self.problem.add_bc("right(u_z) = 0")
+        elif no_slip:
+            logger.info("Horizontal velocity BC: no slip")
+            self.problem.add_bc( "left(u) = 0")
+            self.problem.add_bc("right(u) = 0")
+        else:
+            logger.error("Incorrect horizontal velocity boundary conditions specified")
+            raise
+
+        # vertical velocity boundary conditions
+        logger.info("Vertical velocity BC: impenetrable")
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
 
