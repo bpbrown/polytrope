@@ -195,7 +195,8 @@ class polytrope(atmosphere):
                  Lx=None, aspect_ratio=4,
                  Lz=None, n_rho_cz = 3.5,
                  m_cz=None, epsilon=1e-4, gamma=5/3,
-                 constant_diffusivities=True, constant_kappa=False):
+                 constant_diffusivities=True, constant_kappa=False,
+                 **kwargs):
         
         self.atmosphere_name = 'single polytrope'
 
@@ -217,7 +218,7 @@ class polytrope(atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super(polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        super(polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -386,9 +387,9 @@ class multitrope(multi_layer_atmosphere):
         
         Lx = Lz_cz*aspect_ratio
         
-        super(multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz])
+        super(multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz], **kwargs)
 
-        self._set_atmosphere(**kwargs)
+        self._set_atmosphere()
         
     def _calculate_Lz(self, n_rho_cz, m_cz, n_rho_rz, m_rz):
         '''
