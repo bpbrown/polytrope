@@ -516,6 +516,8 @@ class multitrope(multi_layer_atmosphere):
 
             
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
+        logger.info("problem parameters:")
+        logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         Rayleigh_top = Rayleigh
         Prandtl_top = Prandtl
         # inputs:
@@ -535,7 +537,10 @@ class multitrope(multi_layer_atmosphere):
 
         self.top_thermal_time = 1/self.chi_top
         self.thermal_time = self.Lz_cz**2/self.chi_top
-            
+
+        logger.info("   nu_top = {:g}, chi_top = {:g}".format(self.nu_top, self.chi_top))            
+        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
+                                                                          self.top_thermal_time))
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
