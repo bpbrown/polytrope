@@ -2,6 +2,8 @@ import numpy as np
 import os
 from mpi4py import MPI
 
+from collections import OrderedDict
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -44,28 +46,42 @@ class atmosphere:
         return self.problem
 
     def _set_atmosphere(self):
+        self.necessary_quantities = OrderedDict()
+
         self.phi = self._new_ncc()
+        self.necessary_quantities['phi'] = self.phi
 
         self.del_ln_rho0 = self._new_ncc()
         self.rho0 = self._new_ncc()
+        self.necessary_quantities['del_ln_rho0'] = self.del_ln_rho0
+        self.necessary_quantities['rho0'] = self.rho0
 
         self.del_s0 = self._new_ncc()
+        self.necessary_quantities['del_s0'] = self.del_s0
         
         self.T0_zz = self._new_ncc()
         self.del_T0 = self._new_ncc()
         self.T0 = self._new_ncc()
+        self.necessary_quantities['T0_zz'] = self.T0_zz
+        self.necessary_quantities['del_T0'] = self.del_T0
+        self.necessary_quantities['T0'] = self.T0
 
         self.del_P0 = self._new_ncc()
         self.P0 = self._new_ncc()
+        self.necessary_quantities['del_P0'] = self.del_P0
+        self.necessary_quantities['P0'] = self.P0
 
         self.nu = self._new_ncc()
         self.chi = self._new_ncc()
         self.del_chi = self._new_ncc()
+        self.necessary_quantities['nu'] = self.nu
+        self.necessary_quantities['chi'] = self.chi
+        self.necessary_quantities['del_chi'] = self.del_chi
 
-                
         self.scale = self._new_ncc()
+        self.necessary_quantities['scale'] = self.scale
 
-    
+
     def _set_parameters(self):
         '''
         Basic parameters needed for any stratified atmosphere.
@@ -123,6 +139,11 @@ class atmosphere:
         
         axS.set_ylabel(r'$\nabla s0$')
         fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
+
+    def check_atmosphere(self):
+        for key in self.necessary_quantities:
+            quantity = self.necessary_quantities[key]['g']
+            logger.info("{} is non-zero {}".format(key, quantity.any()))
         
     def test_hydrostatic_balance(self, make_plots=False):
         # error in hydrostatic balance diagnostic
@@ -173,6 +194,8 @@ class multi_layer_atmosphere(atmosphere):
 
         z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
         
+        logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
+        logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
         
         self.x = self.domain.grid(0)
@@ -363,7 +386,7 @@ class multitrope(multi_layer_atmosphere):
     def __init__(self, nx=256, nz=[128, 128],
                  aspect_ratio=4,
                  gamma=5/3,
-                 n_rho_cz=3, n_rho_rz=2, 
+                 n_rho_cz=3.5, n_rho_rz=2, 
                  m_rz=3, stiffness=100,
                  **kwargs):
 
@@ -417,7 +440,7 @@ class multitrope(multi_layer_atmosphere):
         logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
-    def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=0.1):
+    def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=1):
         if tanh_center is None:
             tanh_center = self.Lz_rz
 
@@ -515,7 +538,7 @@ class multitrope(multi_layer_atmosphere):
 
         self.plot_atmosphere()
         self.test_hydrostatic_balance(make_plots=True)
-
+        self.check_atmosphere()
             
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         logger.info("problem parameters:")
@@ -543,6 +566,7 @@ class multitrope(multi_layer_atmosphere):
         logger.info("   nu_top = {:g}, chi_top = {:g}".format(self.nu_top, self.chi_top))            
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
+
 # need to implement flux-based Rayleigh number here.
 class polytrope_flux(polytrope):
     def __init__(self, *args, **kwargs):
@@ -816,7 +840,6 @@ class FC_multitrope(FC_equations, multitrope):
         super(FC_multitrope, self).__init__() 
         multitrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
-
                 
 # needs to be tested again and double-checked
 class AN_polytrope(polytrope):

@@ -36,10 +36,11 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
     nx = nz_cz*2
     nz_list = [nz_rz, nz_cz]
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list)
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=1e4, n_rho_rz=0.5)
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
+    atmosphere.check_atmosphere()
 
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
@@ -87,6 +88,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
 
+    max_dt = atmosphere.min_BV_time 
     max_dt = atmosphere.buoyancy_time*0.25
 
     report_cadence = 1
