@@ -136,7 +136,7 @@ class multi_layer_atmosphere(atmosphere):
             z_basis_list.append(z_basis)
             Lz_interface += Lz_top
 
-        z_basis = de.Compound('z', tuple(z_basis_list))
+        z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
         
         self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
         
