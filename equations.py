@@ -2,6 +2,8 @@ import numpy as np
 import os
 from mpi4py import MPI
 
+from collections import OrderedDict
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -384,6 +386,10 @@ class polytrope(atmosphere):
             
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
+        
+        #Allows for atmosphere reuse
+        self.chi.set_scales(1, keep_data=True)
+        
         self.nu['g'] = nu
         self.chi['g'] = chi
         if not self.constant_diffusivities:
@@ -861,7 +867,7 @@ class FC_polytrope(FC_equations, polytrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        FC_polytrope.set_equations(self,*args, **kwargs)
+        super(FC_polytrope, self).set_equations(*args, **kwargs)
         self.check_atmosphere()
         
 class FC_multitrope(FC_equations, multitrope):

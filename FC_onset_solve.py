@@ -183,7 +183,6 @@ class FC_onset_solver:
                     for j in range(len(unstables)):
                         if unstables[j][1].shape[1] > 0:
                             end = np.log10(ras[i])
-                            print(unstables)
                             break
                     if end != np.log10(ras[i]):
                         start = np.log10(ras[i])
@@ -193,7 +192,8 @@ class FC_onset_solver:
                 if end == np.log10(ras[i]):
                     break
         crit = (end+start)/2
-        print('Critical Ra of {0:.4g} found'.format(10**crit))
+        if CW.rank == 0:
+            print('Critical Ra of {0:.4g} found'.format(10**crit))
         return 10**crit
 
 
@@ -205,7 +205,7 @@ class FC_onset_solver:
 if __name__ == '__main__':
     eqs = 7
     nx = 16
-    nz = 128
+    nz = 32
     Lx = 100
 
     solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, comm=MPI.COMM_SELF)
