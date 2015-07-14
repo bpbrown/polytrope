@@ -40,7 +40,6 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
-    atmosphere.check_atmosphere()
 
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
