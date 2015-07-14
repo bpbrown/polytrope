@@ -363,7 +363,7 @@ class multitrope(multi_layer_atmosphere):
     def __init__(self, nx=256, nz=[128, 128],
                  aspect_ratio=4,
                  gamma=5/3,
-                 n_rho_cz=3, n_rho_rz=2, 
+                 n_rho_cz=3.5, n_rho_rz=2, 
                  m_rz=3, stiffness=100,
                  **kwargs):
 
