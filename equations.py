@@ -156,7 +156,7 @@ class atmosphere:
             quantity = self.necessary_quantities[key]['g']
             quantity_set = quantity.any()
             if not quantity_set:
-                logger.error("{} is all zeros".format(key))
+                logger.info("WARNING: atmosphere {} is all zeros".format(key))
         
     def test_hydrostatic_balance(self, make_plots=False):
         # error in hydrostatic balance diagnostic
@@ -181,8 +181,9 @@ class atmosphere:
         logger.info('max error in HS balance: {}'.format(max_rel_err))
 
     def check_atmosphere(self):
-        self.plot_atmosphere()
-        self.test_hydrostatic_balance(make_plots=True)
+        if self.make_plots:
+            self.plot_atmosphere()
+        self.test_hydrostatic_balance()
         self.check_that_atmosphere_is_set()
 
 
@@ -419,6 +420,9 @@ class multitrope(multi_layer_atmosphere):
         self.epsilon = (self.m_rz - self.m_ad)/stiffness
         self.m_cz = self.m_ad - self.epsilon
         self.stiffness = stiffness
+
+        self.n_rho_cz = n_rho_cz
+        self.n_rho_rz = n_rho_rz
         
         Lz_cz, Lz_rz, Lz = self._calculate_Lz(n_rho_cz, self.m_cz, n_rho_rz, self.m_rz)
         self.Lz_cz = Lz_cz
@@ -483,9 +487,12 @@ class multitrope(multi_layer_atmosphere):
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z_cz - self.z)
 
-        self.scale['g'] = (self.z_cz - self.z)
+        # this doesn't work: numerical instability blowup, and doesn't reduce bandwidth much at all
+        #self.scale['g'] = (self.z_cz - self.z)
+        # this seems to work fine; bandwidth only a few terms worse.
+        self.scale['g'] = 1.
                 
-        self._compute_kappa_profile(kappa_ratio, tanh_center=self.Lz_rz, tanh_width=1)
+        self._compute_kappa_profile(kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.25)
 
         logger.info("Solving for T0")
         # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
@@ -539,6 +546,8 @@ class multitrope(multi_layer_atmosphere):
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
+        logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
+        logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
         H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
         H_rho_bottom = (self.z_cz)/self.m_cz
         logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
@@ -737,7 +746,7 @@ class FC_equations(equations):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
         
-    def set_equations(self, Rayleigh, Prandtl, include_background_flux=False):
+    def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
         self._set_subs()
