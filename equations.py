@@ -21,10 +21,10 @@ class atmosphere:
         self.gamma = gamma
         self.make_plots = False
         
-    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64):
+    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -191,7 +191,7 @@ class multi_layer_atmosphere(atmosphere):
     def __init__(self, *args, **kwargs):
         super(multi_layer_atmosphere, self).__init__(*args, **kwargs)
         
-    def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64):
+    def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         '''
         Specify 2-D domain, with compund basis in z-direction.
 
@@ -213,10 +213,11 @@ class multi_layer_atmosphere(atmosphere):
             Lz_interface = Lz_top
 
         z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
-        
+
         logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
         logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
+       
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -383,6 +384,10 @@ class polytrope(atmosphere):
             
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
+        
+        #Allows for atmosphere reuse
+        self.chi.set_scales(1, keep_data=True)
+        
         self.nu['g'] = nu
         self.chi['g'] = chi
         if not self.constant_diffusivities:
@@ -860,7 +865,7 @@ class FC_polytrope(FC_equations, polytrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        FC_polytrope.set_equations(self,*args, **kwargs)
+        super(FC_polytrope, self).set_equations(*args, **kwargs)
         self.check_atmosphere()
         
 class FC_multitrope(FC_equations, multitrope):
