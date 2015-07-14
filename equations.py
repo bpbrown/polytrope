@@ -173,7 +173,7 @@ class atmosphere:
 
             ax2 = fig.add_subplot(2,1,2)
             ax2.semilogy(self.z[0,:], np.abs(relative_error[0,:]))
-            ax2.set_ylabel(r'$|\nabla P + \rho g |/|del P|$')
+            ax2.set_ylabel(r'$|\nabla P + \rho g |/|\nabla P|$')
             ax2.set_xlabel('z')
             fig.savefig("atmosphere_HS_balance_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
@@ -851,7 +851,7 @@ class FC_polytrope(FC_equations, polytrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        FC_polytrope.set_equations(self,*args, **kwargs)
+        super(FC_polytrope, self).set_equations(*args, **kwargs)
         self.check_atmosphere()
         
 class FC_multitrope(FC_equations, multitrope):
