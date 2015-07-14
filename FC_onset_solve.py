@@ -15,7 +15,8 @@ class FC_onset_solver:
     '''
     This class creates a polytropic atmosphere as defined by equations.py,
     then uses EVP solves on that atmosphere to determine the critical Ra of
-    convection at a given 
+    convection by searching for the first value of Ra at which an unstable
+    (e^[positive omega]) mode arises.
     '''
 
     def __init__(self, nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
@@ -202,18 +203,6 @@ class FC_onset_solver:
             
 
 if __name__ == '__main__':
-    '''
-    import matplotlib.pyplot as plt
-    import os
-
-    write_dir='./figures/'
-    if not os.path.exists(write_dir):
-        os.makedirs(write_dir)
-
-
-    plot_rows = 2
-    plot_cols = 3
-    '''
     eqs = 7
     nx = 16
     nz = 128

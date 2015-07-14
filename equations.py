@@ -346,7 +346,7 @@ class polytrope(atmosphere):
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
         self.nu['g'] = nu
-        self.chi.set_scales(1,keep_data=True)
+        self.chi.set_scales(1,keep_data=True) #for reuse of atmoshere
         self.chi['g'] = chi
         if not self.constant_diffusivities:
             self.chi.differentiate('z', out=self.del_chi)
