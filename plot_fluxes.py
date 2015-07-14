@@ -3,78 +3,84 @@ Plot energy fluxes from joint analysis files.
 
 Usage:
     plot_fluxes.py join <base_path>
-    plot_fluxes.py plot <files>... [--output=<dir>]
+    plot_fluxes.py plot <files>... [--output=<output>]
 
 Options:
-    --output=<dir>  Output directory [default: ./fluxes]
+    --output=<output>  Output directory [default: ./fluxes]
 
 """
 import numpy as np
 import h5py
 import os
 
+from collections import OrderedDict
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
+
 def main(files, output_path='./'):
-    fluxes, z = read_data(files)
+    flux_keys = ['enthalpy_flux_z', 'kappa_flux_z', 'kappa_flux_fluc_z', 'KE_flux_z']
+    fluxes, flux_std_dev, z = read_data(files, flux_keys)
     plot_fluxes(fluxes, z, output_path=output_path)
     
-def read_data(files, verbose=False):
+def read_data(files, data_keys, verbose=False):
     data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
     if verbose:
         f = h5py.File(data_files[0], flag='r')
-        print(10*'-'+' tasks '+10*'-')
+        logger.info(10*'-'+' tasks '+10*'-')
         for task in f['tasks']:
-            print(task)
-        print(10*'-'+' scales '+10*'-')
+            logger.info(task)
+        logger.info(10*'-'+' scales '+10*'-')
         for key in f['scales']:
-            print(key)
+            logger.info(key)
 
-    enthalpy = np.array([])
-    kappa = np.array([])
-    KE = np.array([])
-    z = np.array([])
+    data_set = OrderedDict()
+    for key in data_keys:
+        data_set[key] = np.array([])
+
     N = 1
     for filename in data_files:
         f = h5py.File(filename, flag='r')
         # clumsy
-        if N == 1:
-            enthalpy = f['tasks']['enthalpy_flux_z'][:]
-            kappa = f['tasks']['kappa_flux_fluc_z'][:]
-            KE = f['tasks']['KE_flux_z'][:]
-            print("KE shape {}".format(KE.shape))
-        else:
-            
-            enthalpy = np.append(enthalpy, f['tasks']['enthalpy_flux_z'][:], axis=0)
-            kappa = np.append(kappa, f['tasks']['kappa_flux_fluc_z'][:], axis=0)
-            KE = np.append(KE, f['tasks']['KE_flux_z'][:], axis=0)
+        for key in data_keys:
+            if N == 1:
+                data_set[key] = f['tasks'][key][:]
+                logger.debug("{} shape {}".format(key, data_set[key].shape))
+            else:
+                data_set[key] = np.append(data_set[key], f['tasks'][key][:], axis=0)
 
         N += 1
         # same z for all files
         z = f['scales']['z']['1.0'][:]
         f.close()
 
-    print("KE shape {}".format(KE.shape))
-    enthalpy = np.mean(enthalpy, axis=0)[0]
-    kappa = np.mean(kappa, axis=0)[0]
-    KE = np.mean(KE, axis=0)[0]
-    print("KE shape {}".format(KE.shape))
-    return [enthalpy, kappa, KE], z
+    for key in data_keys:
+        logger.debug("{} shape {}".format(key, data_set[key].shape))
+
+    time_avg = OrderedDict()
+    std_dev = OrderedDict()
+    for key in data_keys:
+        time_avg[key] = np.mean(data_set[key], axis=0)[0]
+        std_dev[key] = np.std(data_set[key], axis=0)[0]
+
+    for key in data_keys:
+        logger.debug("{} shape {} and {}".format(key, time_avg[key].shape, std_dev[key].shape))
+    return time_avg, std_dev, z
 
 def plot_fluxes(fluxes, z, output_path='./'):
-    [enthalpy, kappa, KE] = fluxes
-
     figs = {}
-    for flux in fluxes:
-        print(flux.shape)
+
     fig_fluxes = plt.figure(figsize=(16,8))
     ax1 = fig_fluxes.add_subplot(1,1,1)
-    ax1.plot(z, enthalpy, label="h flux")
-    ax1.plot(z, kappa, label=r"$\kappa\nabla T$")
-    ax1.plot(z, KE, label="KE flux")
-    ax1.plot(z, enthalpy+kappa+KE, color='black', linestyle='dashed', label='total')
+    ax1.plot(z, fluxes['enthalpy_flux_z'], label="h flux")
+    ax1.plot(z, fluxes['kappa_flux_z'], label=r"$\kappa\nabla T$")
+    ax1.plot(z, fluxes['KE_flux_z'], label="KE flux")
+    ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['kappa_flux_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
     ax1.legend()
     ax1.set_xlabel("z")
     ax1.set_ylabel("energy fluxes")
@@ -82,10 +88,10 @@ def plot_fluxes(fluxes, z, output_path='./'):
 
     fig_fluxes = plt.figure(figsize=(16,8))
     ax1 = fig_fluxes.add_subplot(1,1,1)
-    ax1.plot(z, enthalpy, label="h flux")
-    ax1.plot(z, kappa-kappa[0], label=r"$\kappa\nabla T$")
-    ax1.plot(z, KE, label="KE flux")
-    ax1.plot(z, enthalpy+kappa+KE-enthalpy[0]-kappa[0]-KE[0], color='black', linestyle='dashed', label='total')
+    ax1.plot(z, fluxes['enthalpy_flux_z'], label="h flux")
+    ax1.plot(z, fluxes['kappa_flux_fluc_z'], label=r"$\kappa\nabla T_1$")
+    ax1.plot(z, fluxes['KE_flux_z'], label="KE flux")
+    ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['kappa_flux_fluc_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
     ax1.legend()
     ax1.set_xlabel("z")
     ax1.set_ylabel("energy fluxes")
@@ -115,7 +121,7 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
-        print(output_path)
+        logger.info(output_path)
         main(args['<files>'], output_path=output_path)
 
 
