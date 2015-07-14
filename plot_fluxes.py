@@ -44,21 +44,23 @@ def read_data(files, verbose=False):
             enthalpy = f['tasks']['enthalpy_flux_z'][:]
             kappa = f['tasks']['kappa_flux_fluc_z'][:]
             KE = f['tasks']['KE_flux_z'][:]
+            print("KE shape {}".format(KE.shape))
         else:
-            enthalpy += f['tasks']['enthalpy_flux_z'][:]
-            kappa += f['tasks']['kappa_flux_fluc_z'][:]
-            KE += f['tasks']['KE_flux_z'][:]
+            
+            enthalpy = np.append(enthalpy, f['tasks']['enthalpy_flux_z'][:], axis=0)
+            kappa = np.append(kappa, f['tasks']['kappa_flux_fluc_z'][:], axis=0)
+            KE = np.append(KE, f['tasks']['KE_flux_z'][:], axis=0)
+
         N += 1
         # same z for all files
         z = f['scales']['z']['1.0'][:]
         f.close()
-    print(enthalpy.shape)
-    enthalpy = enthalpy/N
-    kappa = kappa/N
-    KE = KE/N
+
+    print("KE shape {}".format(KE.shape))
     enthalpy = np.mean(enthalpy, axis=0)[0]
     kappa = np.mean(kappa, axis=0)[0]
     KE = np.mean(KE, axis=0)[0]
+    print("KE shape {}".format(KE.shape))
     return [enthalpy, kappa, KE], z
 
 def plot_fluxes(fluxes, z, output_path='./'):
