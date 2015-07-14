@@ -88,6 +88,18 @@ def plot_energies(energies, t, output_path='./'):
     ax1.set_xlabel("time")
     ax1.set_ylabel("energy")
     figs["fluctating_energies"] = fig_KE
+
+    fig_KE_only = plt.figure(figsize=(16,8))
+    ax1 = fig_KE_only.add_subplot(2,1,1)
+    ax1.plot(t, KE, label="KE")
+    ax1.legend()
+    ax1.set_ylabel("energy")
+    ax2 = fig_KE_only.add_subplot(2,1,2)
+    ax2.semilogy(t, KE, label="KE")
+    ax2.legend()
+    ax2.set_xlabel("time")
+    ax2.set_ylabel("energy")
+    figs["KE"] = fig_KE_only
  
     fig_log = plt.figure(figsize=(16,8))
     ax1 = fig_log.add_subplot(1,1,1)

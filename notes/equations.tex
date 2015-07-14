@@ -1,0 +1,631 @@
+\documentclass[letterpaper,12pt]{paper}
+
+
+%% Graphics and math
+\usepackage{graphics,graphicx,subfigure}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[makeroom]{cancel}
+
+\newcommand{\lnrho}{\ensuremath{\ln \rho}}
+\newcommand{\fast}{\ensuremath{\epsilon_{ijk}}}
+\newcommand{\divu}{\ensuremath{\mathbf{\nabla \cdot u}}}
+\def\dbar{{\mathchar'26\mkern-12mu d}}
+
+\title{Notes on fully compressible, stratified convection}
+\author{Jeff Oishi}
+\begin{document}
+\maketitle
+\section{Basic Equations}
+\label{sec:equations}
+
+
+We want the fully compressible in a form suitable for describing
+low-Mach number convection in a stratified, static background
+atmosphere. This atmosphere could be a polytrope, but it could also be
+specified by a 1D stellar or planetary model.
+
+We begin with the basic equations of hydrodynamics: continuity,
+Navier-Stokes, energy conservation, and an equation of state. For now,
+we will limit ourselves to an ideal gas equation of state. These basic
+equations can be written in tensor notation, using the Einstein
+summation convetion as
+
+\begin{subequations}
+  \label{eq:basic_eqns}
+  \begin{equation}
+    \partial_t \rho + \partial_i (\rho u_i) = 0\\
+  \end{equation}
+  \begin{equation}
+    \partial_t u_i + u_k \partial_k u_i = -\frac{\partial_i p}{\rho} +
+    g_i + \frac{\partial_k \sigma_{ik}}{\rho}\\
+  \end{equation}
+  \begin{equation}
+    \partial_t T + u_i \partial_i T = - (\gamma - 1) T \partial_i u_i +
+    \frac{\sigma_{ik}}{c_v \rho} \partial_k u_i + \frac{\partial_i
+      (K \partial_i T)}{c_v \rho}
+  \end{equation}
+  \begin{equation}
+    P = R \rho T,
+  \end{equation}
+\end{subequations}
+where $R = c_p - c_v$, $\gamma = c_p/c_v$, $g_i = -g \delta_{iz}$ is the acceleration
+due to gravity, $K$ is the heat conductivity, and $\sigma_{ik}$ is the
+stress tensor, defined below.
+
+The vast majority of these derivations follows Landau \& Lifschitz.
+
+\subsection{Stress Tensor}
+\label{sec:stress}
+
+The stress tensor can be constructed from a few simple
+arguments. Viscosity can only act between parcels of fluid in
+\emph{relative} motion; thus the stress tensor must be first order in
+$\partial_k u_i$ with no $u_i$ terms. It must be symmetric
+(e.g. proportional to $\partial_i u_k + \partial_k u_i$) to avoid
+containing motions corresponding to solid body rotations,
+$u_i = \fast \Omega_j r_k$. The most general tensor that satisfies
+these constraints is
+\begin{equation}
+  \label{eq:general_tensor}
+  \sigma_{ik} = a (\partial_i u_k + \partial_k u_i) + b \delta_{ik} \partial_l u_l, 
+\end{equation}
+but we write it as 
+\begin{equation}
+  \label{eq:stress}
+  \sigma_{ik} = \mu \left(\partial_i u_k + \partial_k u_i - \frac{2}{3} \partial_l u_l \delta_{ik}\right) + \xi \delta_l u_l \delta_{ik},
+\end{equation}
+where $\mu$ is the dynamic shear viscosity, and $\xi$ is the bulk
+viscosity. This form is the sum of a traceless term proportional to
+$\mu$\footnote{remember that $\delta_{ii} = 3$, not 1!} and a purely
+diagonal term proportional to $\xi$. We will assume here that $\xi$.
+vanishes. We will sometimes use $\sigma^{'}_{ik}$, defined by
+$\sigma_{ik} = \mu \sigma^{'}_{ik}$.
+
+\subsection{Variables \& Parameters}
+\label{sec:variables}
+
+Our dynamical variables are $u_i = (u,v,w)$, $\lnrho$, $P$, and $T$,
+though we eliminate $P$ via the equation of state in the developed
+version. Typically, we parameterize dissipation by the kinematic
+viscosity $\nu = \mu /\rho$ and $K$. $K$ is the \emph{heat} diffusion
+coefficient, where $F_T = K \nabla T$ is the total heat flux in the
+absence of bulk motions. 
+
+$\nu$ is a dissipation coefficient with dimensions
+$\left[ L^2/T\right]$, while $[K] = \left[ L^2 E/ T \Theta\right]$,
+where $\Theta$ is a temperature unit and $E$ is an energy unit. We may
+also want to use the dynamic viscosity,
+$\mu = \rho \nu = \left[ M /L T\right]$. We may also want to
+parameterize thermal diffusion via the temperature dissipation
+coefficient, $\chi = K/c_p \rho = \left[ L^2/T\right]$.
+
+We will hold either $\chi$ or $K$ constant and either $\nu$ or $\mu$
+constant. How these choices affect the results of calculations is a
+secondary objective of our study.
+
+
+\subsection{Continuity}
+\label{sec:continuity}
+
+For the continuity equation expressing the conservation of mass, our
+only modification is to change the variable from $\rho$ to $\lnrho$.
+
+Using the fact that $\partial_t \lnrho = \partial_t \rho/\rho$, we can
+substitute the standard continuity equation for $\partial_t \rho =
+-\rho \partial_k u_k - u_k \partial_k \rho$ to arrive at 
+\begin{equation}
+  \label{eq:lnrho_continuity}
+  \partial_t \lnrho + u_k \partial_k \lnrho + \partial_k u_k = 0.
+\end{equation}
+
+\subsection{Navier-Stokes}
+\label{sec:ns}
+We modify the Navier-Stokes equation by explicitly substituting the
+$P$ term using the equation of state and converting $\rho$ to
+$\lnrho$. This has implications for the diffusion term, and we will
+see when we decompose the variables into their mean and fluctuating
+parts that this will introduce non-linear diffusion terms. There are
+two places where $\rho$ appears in the Navier-Stokes equation.
+
+First, we tackle the pressure term, $\partial_i P/\rho$. We note that
+$\partial_i P/\rho = \partial_i (P/\rho) + P \partial_i
+\rho/\rho^2$.
+Substituting in the ideal gas equation of state, $P = R \rho T$, we
+see that the first term is $R \partial_i T$ if we assume the
+composition of the gas (and thus $R$) is fixed. The second term can be
+rewritten as $P \partial_i \lnrho/\rho$, into which we can again
+substitute the equation of state, leaving $R T \partial_i
+\lnrho$. Thus, 
+\begin{equation}
+  \label{eq:press_term}
+  -\frac{\partial_i P}{\rho} = -R \partial_i T - R T \partial_i \lnrho.
+\end{equation}
+
+The other $\rho$ term is in the viscous term, $\partial_k
+\sigma_{ik}/\rho$. First, again we apply the chain rule, $\partial_k
+(\sigma_{ik}/\rho) = \partial_k \sigma_{ik}/\rho -
+\sigma_{ik} \partial_k \lnrho/\rho$. Next, we expand $\sigma_{ik} = \mu
+\sigma^{'}_{ik}$, and write $\sigma_{ik} \partial_k \lnrho/\rho = \nu
+\sigma^{'}_{ik} \partial_k \lnrho$. This leaves us with 
+\begin{equation}
+  \label{eq:visc_term}
+  \frac{\partial_k \sigma_{ik}}{\rho} = \partial_k (\nu
+  \sigma^{'}_{ik}) + \nu \sigma^{'}_{ik} \partial_k \lnrho
+\end{equation}
+\subsection{Temperature}
+\label{sec:temp}
+The temperature equation is really nothing other than equation of
+internal energy, which in turn comes from the total conservation of
+energy. We must account for the viscous heating and the diffusion of
+temperature, and this in turn requires us to understand the entropy
+gains from these processes. We also will arrive at a form in which we
+may want to specify the temperature diffusivity $\chi$, although the
+background state may be defined in terms of the \emph{heat flux} $F_{T,i} =
+K \partial_i T$. There are a number of curious points along this route
+which I will remark on. Again, this follows mostly from Landau \&
+Lifschitz, with a bit from Choudhuri thrown in.
+
+Let us begin at the beginning: the first law of thermodynamics, which
+tells us 
+\begin{equation}
+  \label{eq:1LOT}
+  \dbar q = d\epsilon + P d \left(\frac{1}{\rho}\right),
+\end{equation}
+where $q$ is the amount of heat entering per unit mass, $\epsilon$ is
+the internal energy per unit mass, $P$ is pressure, and $\rho$ is
+density. $1/\rho$ is sometimes referred to as the specific volume of
+the gas. We can put this in terms of state variables by
+$ds \equiv \dbar q/T$. 
+
+For an ideal gas, $\epsilon = c_v T$ and $P  = R \rho T$. Using
+equation~(\ref{eq:1LOT}), we can divide by $dt$ to form the Lagrangian
+derivative, $dX/dt = \partial_t X + u_k \partial_k X$. This gives
+\begin{equation}
+  \label{eq:heat}
+  \frac{dq}{dt} = \frac{d\epsilon}{dt} - \frac{P}{\rho^2} \frac{d\rho}{dt},
+\end{equation}
+which we can combine with the continuity
+equation. Equation~(\ref{eq:basic_eqns}a) can be written in terms of
+the Lagrangian derivative of $\rho$, giving $d\rho/dt =
+-\rho \partial_i u_i$. Substituting this, and rearranging we arrive at
+\begin{equation}
+  \label{eq:int_en}
+  \frac{d\epsilon}{dt} = - \frac{P}{\rho} \partial_i u_i + \frac{dq}{dt}.
+\end{equation}
+In this form it is easy to see that the internal energy $\epsilon$ of
+a given parcel of fluid only changes due to compression (that is,
+negative divergence) or from heat flowing into the fluid. 
+
+Each of these terms must come at the expense of some other part of the
+overall energy budget if the fluid is thermally isolated. Thermal
+isolation is, of course, a terrible approximation for much of
+astrophysical fluid dynamics: often the cooling rate
+$\mathcal{L} = - dq/dt$ is a dominant driver of dynamics, especially
+in the ISM. However, here we will assume that it is a good
+approximation. I believe, though I have not yet proved that this will
+be true whenever we are studying the dynamics well below the
+photosphere of an object. In such a case, we can probably assume that
+radiation carries energy like a conduction term.
+
+The first law (equation~(\ref{eq:1LOT})) is essentially a statement of
+conservation of \emph{thermal} energy. Of course, in a fluid, we need
+a stronger statement: the \emph{total} energy must be conserved. In
+the case of stratified fluids, there are three energy reservoirs whose
+sum must be constant: thermal, kinetic, and gravitational
+potential. While above we used the \emph{specific} (that is, per unit
+mass) formulation, now we will use the \emph{density} (that, per unit
+volume) formulation. Thus, we write the total energy density
+$E = \rho \epsilon + \rho u^2/2 + \rho g z$, which has dimension $\left[ M
+  L^2/T^2/L^3 \right] = \left[ M / L T^2 \right]$. We can write this in the form
+of a conservation law,
+\begin{equation}
+  \label{eq:energy_conservation}
+  \partial_t E  + \partial_i \mathcal{F}_{Ei} = 0,
+\end{equation}
+where $\mathcal{F}_{Ei}$ is the energy flux in the $i$
+direction. We can state without proof that the flux is 
+\begin{equation}
+  \label{eq:energy_flux}
+  \mathcal{F}_{Ei} = \rho u_i \left(\frac{u^2}{2} + h \right) -
+  K \partial_i T,
+\end{equation}
+where $h = \epsilon + P/\rho$ is the enthalpy. This is a somewhat
+curious equation. The second term in the heat flux is simply Fourier's
+law, where $K$ is the conductivity. One might reasonably suppose that
+the flux of \emph{total} energy might simply be the advection of that energy
+in the ideal limit $K \rightarrow 0$. However, when the enthalpy is
+added in, there is an additional term in the flux: $u_i P$. This is
+easy to understand if we integrate both sides of the equation over
+volume, to see the evolution of the total energy:
+\begin{equation}
+  \label{eq:total_energy}
+  \partial_t \int \left(\frac{\rho u^2}{2} + \rho \epsilon \right) dV =
+  - \int \partial_i \left[ \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  \right] dV.
+\end{equation}
+Using divergence theorem, we can change the flux integral on the right
+hand side to 
+\begin{equation}
+  \label{eq:flux_int}
+  - \int \partial_i \left[ \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  \right] dV  = - \oint \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  df_i,
+\end{equation}
+where $df_i$ is the area normal to $x_i$. This surface integral can be
+further split into two terms:
+\begin{equation}
+  \label{eq:surf_int}
+    - \oint \left[ \rho u_i \left( \frac{u^2}{2} + \epsilon + \frac{P}{\rho} \right)
+  \right] df_i = -\oint \rho u_i \left( \frac{u^2}{2} + \epsilon
+  \right) df_i - \oint P u_i df_i.
+\end{equation}
+The first term is simply the advection of energy by the velocity field
+$u_i$. Recalling that work is $W = \int F_i dx_i$ (where $F_i$ is a
+force vector), the second term is clearly the work done on the surface
+of the fluid by the pressure. This justifies the inclusion of enthalpy
+$h$, rather than simply internal energy density $\rho \epsilon$, in
+the energy flux $\mathcal{F}_{Ei}$.
+
+Using equation~(\ref{eq:int_en}) and the ideal gas internal energy
+relation, $\epsilon = c_v T$, we can write the temperature form of the
+internal energy equation,
+\begin{equation}
+  \label{eq:temp_eq}
+  c_v (\partial_t T + u_k \partial_k T)  = -\frac{P \partial_i
+    u_i}{\rho} + \frac{dq}{dt}.
+\end{equation}
+For an adiabatic fluid, $dq/dt = 0$, and the temperature equation is
+complete. However, a viscous fluid cannot be adiabatic, as the
+dissipation of kinetic energy by viscosity is irreversible and thus
+must raise the temperature $T$ and the entropy per unit mass $s$ of
+the fluid.
+
+In order to develop the terms corresponding to irreversible,
+non-adiabatic processes, we make use of the total energy equation, and
+the definition of entropy. In short, what we will do is construct a
+kinetic energy equation, an entropy equation, and then show that the
+losses from kinetic energy show up in the \emph{adiabatic} internal
+energy by reversible processes and in the entropy equation by
+irreversible processes. The right hand side of the entropy equation is
+simply $T^{-1} dq/dt$. With that in hand, we can complete
+equation~(\ref{eq:temp_eq}).
+
+The first step is to note that kinetic energy density
+$E_{kin} = \rho u^2/2$. We can then construct an equation for its time
+evolution using the Navier-Stokes equation, continutity, and yet
+another application of the chain rule:
+$\partial_t (\rho u^2)/2 = \rho u_i \partial_t u_i + u \partial_t
+\rho/2$. Substituting from the continuity equation and the Navier-Stokes equations, 
+\begin{equation}
+  \label{eq:kin_en}
+  \partial_t E_{kin} = -u_i \partial_i P - \rho u_i u_k \partial_k u_i + \rho g_i u_i + u_i \partial_k \sigma_{ik} - \frac{u^2}{2} \partial_k ( \rho u_k).
+\end{equation}
+Next, we want to write this in conservation form
+$\partial_t E_{kin} = - \nabla \cdot \mathcal{F}_{E_{kin}} +
+\mathcal{L}_{E_{kin}}$.
+We'll call terms that contribute to $\mathcal{F}_{E_{kin}}$ ``flux
+terms,'' and terms contributing to $\mathcal{L}_{E_{kin}}$ ``loss
+terms,'' regardless of their sign. First, we need to rewrite the
+second and fifth terms on the right hand side of
+equation~(\ref{eq:kin_en}) as
+\begin{equation}
+  \label{eq:kin_en_term2}
+  - \rho u_i u_k \partial_k u_i = -\frac{\partial_k (\rho u_k u^2)}{2} + \frac{\rho u^2 \partial_k u_k}{2} + \frac{u_k u^2 \partial_k \rho}{2}, 
+\end{equation}
+and
+\begin{equation}
+  \label{eq:kin_en_term3}
+  -\frac{u^2}{2} \partial_k(\rho u_k) = -\frac{\rho u^2 \partial_k u_k }{2} -\frac{u^2 u_k \partial_k \rho}{2}.
+\end{equation}
+Both terms from equation~(\ref{eq:kin_en_term3}) cancel with the
+latter two in equation~(\ref{eq:kin_en_term2}), leaving the first term, which is in flux form. Next, we expand the pressure and viscous terms,
+\begin{equation}
+  \label{eq:kin_en_pressure}
+  -u_i \partial_i P  = - \partial_i (P u_i)+ P \partial_i u_i,
+\end{equation}
+and
+\begin{equation}
+  \label{eq:kin_en_viscous}
+u_i \partial_k \sigma_{ik} = \partial_k (u_i \sigma_{ik}) - \sigma_{ik} \partial_k u_i.
+\end{equation}
+Again, there are flux terms and loss terms. Combining all of these expansions and cancellations, we arrive at a final form for the kinetic energy density evolution,
+\begin{equation}
+  \label{eq:final_kin_en}
+  \partial_t E_{kin} = - \partial_k \left[ u_k P + \frac{\rho u^2 u_k}{2} - u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k u_i - \rho g u_z,
+\end{equation}
+so the loss term is
+$\mathcal{L}_{E_{kin}} = p \partial_i u_i - \sigma_{ik} \partial_k u_i
++ \rho g_i u_i$.
+These terms must appear in other forms of energy. The first two appear
+as thermal energy; the latter will appear in the gravitational potential energy budget.
+
+In a constant gravitational field with acceleration
+$g_i = -g \delta_{iz}$, we can define the gravitational energy density
+just like we would in high school, $E_g = \rho g z$. Thus, the
+evolution equation is 
+\begin{equation}
+  \label{eq:grav_en}
+  \partial_t E_g = \partial_t (\rho g z) = g z \partial_t \rho.
+\end{equation}
+Substituting from the continuity equation, and noting that $\partial_k
+z = \delta_{iz}$, we end up with
+\begin{equation}
+  \label{eq:grav_en_final}
+  \partial_t E_g = \rho g u_z - \partial_k (\rho g u_k z).
+\end{equation}
+
+To complete our argument, we formulate a total energy equation,
+\begin{equation}
+  \label{eq:total_energy}
+  \partial_t E = - \partial_i \mathcal{F}_{tot,i},
+\end{equation}
+where $E = \rho u^2/2 + \rho \epsilon + \rho g z$.
+
+Because we neglect radiative losses from the bulk of the fluid, there
+are no source nor sink terms, though the boundary conditions will
+allow for energy fluxes into and out of the box. We can write the
+total energy flux as 
+\begin{equation}
+  \label{eq:total_flux}
+  \mathcal{F}_{tot,i} = \rho u_i \left( \frac{u^2}{2} + h + gz\right) - u_k \sigma_{ki} - K \partial_i T,
+\end{equation}
+where again the enthalpy $h = \epsilon + \frac{P}{\rho}$. 
+
+We expand the left hand side of equation~(\ref{eq:total_energy}) as
+$\partial_t (\rho \epsilon) + \partial_t (\rho u^2/2) + \partial_t
+(\rho g z)$, and use the results from our previous decompositions of
+$E_{kin}$ (equation~\ref{eq:final_kin_en}) and $E_{g}$
+(equation~(\ref{eq:grav_en_final}) to arrive at
+\begin{equation}
+  \label{eq:total_thermal}
+\partial_t E = \partial_t (\rho \epsilon) - \partial_k \left[ u_k P + \frac{\rho u^2 u_k}{2} -
+  u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k
+u_i - \rho g u_z + \rho g u_z - \partial_k (\rho g u_k z).
+\end{equation}
+Now, we use the chain rule on $\partial_t (\rho \epsilon) =
+\rho \partial_t \epsilon + \epsilon \partial_t \rho$ and then use
+continuity to get 
+\begin{equation}
+  \label{eq:thermal_terms}
+  \rho \partial_t \epsilon - \epsilon \partial_i (\rho u_i) =
+  \rho \partial_t \epsilon + \rho u_i \partial_i \epsilon - \partial_i
+  (\rho u_i \epsilon) = \rho d_t \epsilon - \partial_i (\rho u_i \epsilon),
+\end{equation}
+where $d_t \epsilon$ is the Lagrangian derivative of the internal
+energy. Substituting equation~(\ref{eq:thermal_terms}) into
+equation~(\ref{eq:total_thermal}) and collecting flux terms, we arrive
+at
+\begin{equation}
+  \label{eq:nearly_final_energy}
+\partial_t E = \rho d_t \epsilon - \partial_k \left[ \rho u_k
+  \epsilon u_k +  P + \frac{\rho u^2 u_k}{2} \rho g u_k z -
+  u_i \sigma_{ik} \right] + p \partial_i u_i - \sigma_{ik} \partial_k
+u_i.
+\end{equation}
+To complete our task, we simply add and subtract $\partial_i
+(K \partial_i T)$ to the right hand side. Then the $\partial_t E$ on the
+left and the $\partial_k [\ldots ]$ term on the right sum to zero,
+leaving a residual equation for $\epsilon$:
+\begin{equation}
+  \label{eq:residual_eps}
+  \rho d_t \epsilon + p \partial_i u_i = \partial_k u_i \sigma_{ik}
+  + \partial_i (K \partial_i T).
+\end{equation}
+Once again, we invoke the first law (equation~(\ref{eq:1LOT})) in
+entropy form, and we arrive at 
+\begin{equation}
+  \label{eq:final_entropy}
+  \rho T d_t s = \partial_k u_i \sigma_{ik}
+  + \partial_i (K \partial_i T).
+\end{equation}
+A simple reshuffling, plus the identity $T ds = \dbar q$ gives us 
+\begin{equation}
+  \label{eq:heat_dt}
+  \partial_t q = \frac{\partial_k u_i \sigma_{ik}}{\rho}
+  + \frac{\partial_i (K \partial_i T)}{\rho},
+\end{equation}
+which can be substitued into equation~(\ref{eq:temp_eq}) to arrive at
+our final temperature equation,
+\begin{equation}
+  \label{eq:final_temperature}
+    \partial_t T + u_i \partial_i T  = -(\gamma - 1) T \partial_i
+    u_i + \frac{\partial_k u_i \sigma_{ik}}{c_v \rho}
+  + \frac{\partial_i (K \partial_i T)}{c_v \rho}.
+\end{equation}
+We also note that we can write
+\begin{equation}
+  \label{eq:square_sigma}
+  \partial_k u_i \sigma_{ik} = \frac{\mu}{2} \left(\partial_k u_i
+    + \partial_i u_k - \frac{2}{3} \delta_{ik} \partial_l u_l
+  \right)^2,
+\end{equation}
+and in the next section, we will use this form to write out the
+actual, as-implemented version.
+
+\section{Mean-field decomposition}
+\label{sec:meanfield}
+Because of our interest in convection and g-modes, all of which occurs
+on timescales much shorter than the secular evolution of the stellar
+or planetary structure, it is advantageous to split the background
+into a mean radial structure and a 3D fluctuation. Note that there is
+no approximation here; we make no assuption that the fluctuation is
+small. We will denote the pressure, for example, as
+$P = P_0(z) + P_1(x,y,z,t)$. $P_0$ is really a function of spherical
+radius, which in our cartesian boxes corresponds to $z$. We write the
+velocity in terms of its components as
+$\mathbf{u} = u \hat{x} + v \hat{y} + w \hat{z}$. The density is
+decomposed \emph{after} taking its natural log:
+$\lnrho = (\lnrho)_0 + (\lnrho)_1$; we will write this without
+the parentheses.
+
+We will write all of our equations Dedalus-style: with linear terms on
+the left hand side, non-linear terms on the right, and all in terms of
+first derivatives. In order to construct the first-order formulation,
+we first provide some auxiliary variables:
+\begin{equation}
+  \label{eq:aux_u}
+  \partial_z u + u_z = 0
+\end{equation}
+
+\begin{equation}
+  \label{eq:aux_v}
+  \partial_z v + v_z = 0
+\end{equation}
+
+\begin{equation}
+  \label{eq:aux_w}
+  \partial_z w + w_z = 0
+\end{equation}
+
+\begin{equation}
+  \label{eq:aux_u}
+  \partial_z T_1 + T_{1z} = 0
+\end{equation}
+
+\subsection{Continuity}
+\label{sec:continuity_mfd}
+
+We begin the mean field decomposition with continuity, which is straightforward:
+\begin{equation}
+  \label{eq:continuity_mfd}
+  \partial_t \lnrho_1 + u_z \partial_z \lnrho_0 + \partial_x u
+  + \partial_y v + w_z =
+  - u_x \partial_x \lnrho_1   - v \partial_y \lnrho_1   - w \partial_z \lnrho_1.
+\end{equation}
+
+\subsection{Navier-Stokes}
+\label{sec:ns_mfd}
+
+The Navier-Stokes equation comes in two forms, with constant $\nu$ and
+constant $\mu$. First we consider constant $\mu$. Here, we write each
+component separately.
+\begin{equation}
+  \begin{aligned}
+    \label{eq:ns_x_mfd}
+    \partial_t u & + R \partial_x T_1 + R T_0 \partial_x \lnrho_1 - \nu
+    \left[ \partial_x^2 u + \partial_y^2 u + \partial_z u_z +
+      \frac{1}{3}\partial_x \nabla \cdot u \right] \\
+& - \nu \partial_z \lnrho_0 \left(\partial_x w + u_z \right)  \\
+    & = - u \partial_x u - v \partial_y u - w v_z - R T_1 \partial_x \lnrho_1 \\
+    & + \nu \left[ \left( 2 \partial_x u - \frac{2}{3} \nabla \cdot
+        u\right) \partial_x \lnrho_1 + (\partial_x v + \partial_y
+      u)\partial_y \lnrho_1 + (\partial_x w + \partial_x u) \partial_z \lnrho_1 \right]\\
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+  \begin{aligned}
+    \label{eq:ns_y_mfd}
+    \partial_t v & + R \partial_y T_1 + R T_0 \partial_y \lnrho_1 - \nu
+    \left[ \partial_x^2 v + \partial_y^2 v + \partial_z v_z +
+      \frac{1}{3} \partial_y \nabla \cdot u \right] \\
+& - \nu \partial_z \lnrho_0 \left(\partial_y w + v_z \right)  \\
+    & = - u \partial_x v - v \partial_y v - w v_z - R T_1 \partial_y \lnrho_1 \\
+    & + \nu \left[ (\partial_y u + \partial_x
+      v)\partial_x \lnrho_1 + \left( 2 \partial_y v - \frac{2}{3} \nabla \cdot
+        u\right) \partial_y \lnrho_1 + (\partial_y w + v_z) \partial_z \lnrho_1 \right]\\
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+  \begin{aligned}
+    \label{eq:ns_z_mfd}
+    \partial_t w & + R \partial_z T_0 + R \partial_z T_1 + R
+    T_0 \partial_z \lnrho_0 + R T_0 \partial_z \lnrho_1 + R
+    T_1 \partial_z \lnrho_0 + g \\
+&- \nu
+    \left[ \partial_x^2 w + \partial_y^2 w + \partial_z w_z +
+      \frac{1}{3} \partial_z \nabla \cdot u \right] - \nu \partial_z \lnrho_0 \left(2 w_z - \frac{2}{3} \nabla \cdot u  \right)  \\
+    & = - u \partial_x w - v \partial_y w - w w_z - R T_1 \partial_z \lnrho_1 \\
+    & + \nu \left[ (\partial_z u + \partial_x
+      w)\partial_x \lnrho_1 + (\partial_z v + \partial_y w) \partial_y \lnrho_1  + \left( 2 w_z - \frac{2}{3} \nabla \cdot
+        u\right) \partial_z \lnrho_1\right]\\
+\end{aligned}
+\end{equation}
+
+\subsection{Temperature}
+\label{sec:temp_mfd}
+
+First, we use constant $K$. In order to do this, I've made a single
+approximation. This may not be necessary, but I'm not sure how to
+avoid it. From equation~(\ref{eq:final_temperature}), we see that the
+temperature equation has a heat flux term $\partial_i (K \partial_i
+T)/\rho c_v$. If we take $K$ constant, we have 
+\begin{equation}
+  \label{eq:const_K}
+  \frac{K}{\rho c_v} \partial_i^2 T = \frac{\chi}{c_v} \partial_i^2 T.
+\end{equation}
+However, $\rho$ is not constant, and I don't see an easy way to put it
+into $\lnrho$ form. So, instead, we can linearize $\rho$ in the
+denominator of $\chi$:
+\begin{equation}
+  \label{eq:chi_expansion}
+  \chi = \frac{K}{\rho_0 + \rho_1} = \frac{K}{\rho_0 (1 + \epsilon)}
+  \simeq \frac{K}{\rho_0} + \mathcal{O}(\epsilon),
+\end{equation}
+where $\epsilon = \rho_1/\rho_0$, and should be small in the low
+Mach-number flows we are interested in. With this approximation,
+$\chi$ is simply a function of $\rho_0$, which is specified by the
+background state. We just need to be careful to use $\rho_0$ and not
+$\lnrho_0$ in constructing $\chi$. In what follows, we will call this approximate
+diffusion coefficient $\chi_0 = K/\rho_0$.
+
+Using this approximation, the mean field decomposed temperature
+equation is 
+\begin{equation}
+  \label{eq:temp_mfd}
+  \begin{aligned}
+  \partial_t T_1 & + u_z \partial_z T_0 + (\gamma - 1) T_0 \divu  -
+  \frac{\chi_0}{c_v} (\partial_x^2 T_0 -
+  \partial_x^2 T_1 -
+  \partial_y^2 T_1 -
+  \partial_z^2 T_1)\\
+  & = -u \partial_x T_1 - v \partial_y T_1 - w T_{1z} - (\gamma - 1)
+  T_1 \divu\\
+&+ \frac{\nu}{c_v}\left[ (\partial_x v)^2 + (\partial_x w)^2 + (\partial_y
+u)^2 + (\partial_y w)^2 + u_z^2 + v_z^2 + 2 (\partial_x u)^2 + 2
+(\partial_y v)^2 + 2 w_z^2\right] \\
+& + \frac{\nu}{c_v}\left[2 \partial_y u \partial_x v + 2 u_z \partial_x w + 2 v_z \partial_y
+w - \frac{2}{3} (\divu)^2 \right]
+\end{aligned}
+\end{equation}
+
+We may also want to use a constant $\chi$ instead of a constant
+$K$. In this case, 
+\begin{equation}
+  \label{eq:constant_chi}
+  \frac{1}{\rho c_v} \partial_i (K \partial_i T) = \frac{1}{\rho
+    c_v} \partial_i (\chi \rho \partial_i T) = \frac{\chi}{c_v}
+  \left( \partial_i \lnrho \partial_i T + \partial_i^2 T \right).
+\end{equation}
+Once we expand this in terms of the mean and fluctuating variables and
+replace all terms proportional to $\chi_0$ in
+equation~(\ref{eq:temp_mfd}), we end up with
+\begin{equation}
+  \label{eq:temp_const_chi_mfd}
+  \begin{aligned}
+  \partial_t T_1 & + u_z \partial_z T_0 + (\gamma - 1) T_0 \divu  \\
+  &-\frac{\chi}{c_v}\left[ \partial_z \lnrho_0 \partial_z T_0 +
+    \partial_z \lnrho_0 \partial_z T_1 + \partial_z T_0 \partial_z
+    \lnrho_1 + \partial_z^2 T_0 + \partial_x^2 T_1 + \partial_y^2 T_1
+    + \partial_z T_{1z}\right]\\
+  & = -u \partial_x T_1 - v \partial_y T_1 - w T_{1z} - (\gamma - 1)
+  T_1 \divu\\
+&+ \frac{\nu}{c_v}\left[ (\partial_x v)^2 + (\partial_x w)^2 + (\partial_y
+u)^2 + (\partial_y w)^2 + u_z^2 + v_z^2 + 2 (\partial_x u)^2 + 2
+(\partial_y v)^2 + 2 w_z^2\right] \\
+& + \frac{\nu}{c_v}\left[2 \partial_y u \partial_x v + 2 u_z \partial_x w + 2 v_z \partial_y
+w - \frac{2}{3} (\divu)^2 \right]\\
+& + \frac{\chi}{c_v} \left[ \partial_x \lnrho_1 \partial_x T_1
+  + \partial_y \lnrho_1 \partial_y T_1 + \partial_z \lnrho_1 \partial_z T_1\right].
+\end{aligned}
+\end{equation}
+In this case, there is a non-linear temperature diffusion as well as
+the non-linear viscous dissipation.
+
+In both versions of the temperature equation, there are terms
+proportional to $\partial_z^2 T_0$. Typically, we will assume a linear
+background temperature gradient, and thus these will vanish. I've left
+them in here for completeness.
+\end{document}
