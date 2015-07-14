@@ -24,8 +24,7 @@ class atmosphere:
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype,
-                                    comm=comm)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -218,8 +217,7 @@ class multi_layer_atmosphere(atmosphere):
         logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
         logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
        
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype,
-                        comm=comm)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
