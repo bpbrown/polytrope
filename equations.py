@@ -456,7 +456,7 @@ class multitrope(multi_layer_atmosphere):
         logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
-    def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=0.1):
+    def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=1):
         if tanh_center is None:
             tanh_center = self.Lz_rz
 
@@ -554,7 +554,7 @@ class multitrope(multi_layer_atmosphere):
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
                                                                                                self.freefall_time,
                                                                                                self.buoyancy_time))
-                                                                                                           
+
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
