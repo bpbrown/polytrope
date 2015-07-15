@@ -24,20 +24,28 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 
 def main(files, output_path='./'):
-    flux_keys = ['enthalpy_flux_z', 'kappa_flux_z', 'kappa_flux_fluc_z', 'KE_flux_z']
-    fluxes, flux_std_dev, z = read_data(files, flux_keys)
-    plot_fluxes(fluxes, z, output_path=output_path)
+    averages, std_devs, z = read_data(files)
+    plot_fluxes(averages, z, output_path=output_path)
     
-def read_data(files, data_keys, verbose=False):
+def read_data(files, verbose=False, data_keys=None):
     data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
+
+    if data_keys is None:
+        f = h5py.File(data_files[0], flag='r')
+        data_keys = np.copy(f['tasks'])
+        f.close()
+        logger.debug("tasks = {}".format(data_keys))
+
     if verbose:
         f = h5py.File(data_files[0], flag='r')
         logger.info(10*'-'+' tasks '+10*'-')
         for task in f['tasks']:
             logger.info(task)
+        
         logger.info(10*'-'+' scales '+10*'-')
         for key in f['scales']:
             logger.info(key)
+        f.close()
 
     data_set = OrderedDict()
     for key in data_keys:
@@ -73,6 +81,9 @@ def read_data(files, data_keys, verbose=False):
     return time_avg, std_dev, z
 
 def plot_fluxes(fluxes, z, output_path='./'):
+
+    #flux_keys = ['enthalpy_flux_z', 'kappa_flux_z', 'kappa_flux_fluc_z', 'KE_flux_z']
+
     figs = {}
 
     fig_fluxes = plt.figure(figsize=(16,8))
