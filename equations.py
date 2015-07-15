@@ -860,7 +860,7 @@ class FC_polytrope(FC_equations, Polytrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        FC_polytrope.set_equations(self,*args, **kwargs)
+        super(FC_polytrope,self).set_equations(*args, **kwargs)
         self.check_atmosphere()
         
 class FC_multitrope(FC_equations, Multitrope):
