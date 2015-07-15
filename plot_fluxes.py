@@ -23,10 +23,6 @@ import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
 
-def main(files, output_path='./'):
-    averages, std_devs, z = read_data(files)
-    plot_fluxes(averages, z, output_path=output_path)
-    
 def read_data(files, verbose=False, data_keys=None):
     data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
 
@@ -51,6 +47,8 @@ def read_data(files, verbose=False, data_keys=None):
     for key in data_keys:
         data_set[key] = np.array([])
 
+    times = np.array([])
+
     N = 1
     for filename in data_files:
         f = h5py.File(filename, flag='r')
@@ -65,20 +63,56 @@ def read_data(files, verbose=False, data_keys=None):
         N += 1
         # same z for all files
         z = f['scales']['z']['1.0'][:]
+        times = np.append(times, f['scales']['sim_time'][:])
         f.close()
 
     for key in data_keys:
         logger.debug("{} shape {}".format(key, data_set[key].shape))
 
     time_avg = OrderedDict()
-    std_dev = OrderedDict()
+    std_dev  = OrderedDict()
     for key in data_keys:
         time_avg[key] = np.mean(data_set[key], axis=0)[0]
-        std_dev[key] = np.std(data_set[key], axis=0)[0]
+        std_dev[key]  = np.std(data_set[key], axis=0)[0]
 
     for key in data_keys:
         logger.debug("{} shape {} and {}".format(key, time_avg[key].shape, std_dev[key].shape))
-    return time_avg, std_dev, z
+
+    return time_avg, std_dev, z, times
+
+def plot_flows(averages, z, output_path='./'):
+    figs = {}
+
+    fig_flow = plt.figure(figsize=(16,8))
+    ax1 = fig_flow.add_subplot(1,1,1)
+    ax1.plot(z, averages['Re_rms'], label="Re")
+    ax1.plot(z, averages['Pe_rms'], label="Pe")
+    ax1.legend()
+    ax1.set_xlabel("z")
+    ax1.set_ylabel("Re and Pe")
+    figs["Re_Pe"]=fig_flow
+
+    fig = plt.figure(figsize=(16,8))
+    ax1 = fig.add_subplot(1,1,1)
+    ax1.semilogy(z, averages['Rayleigh_global'], label="global Ra")
+    ax1.semilogy(z, averages['Rayleigh_local'],  label=" local Ra")
+    ax1.legend()
+    ax1.set_xlabel("z")
+    ax1.set_ylabel("Ra")
+    figs["Ra"]=fig
+
+    fig = plt.figure(figsize=(16,8))
+    ax1 = fig.add_subplot(1,1,1)
+    ax1.semilogy(z, averages['enstrophy'], label="enstrophy")
+    ax1.semilogy(z, averages['KE'],  label="KE")
+    ax1.legend(loc="upper left")
+    ax1.set_xlabel("z")
+    ax1.set_ylabel("penetration diags")
+    figs["pen"]=fig
+
+    for key in figs.keys():
+        figs[key].savefig(output_path+'flows_{}.png'.format(key))
+
 
 def plot_fluxes(fluxes, z, output_path='./'):
 
@@ -109,7 +143,15 @@ def plot_fluxes(fluxes, z, output_path='./'):
     figs["relative_fluxes"]=fig_fluxes
 
     for key in figs.keys():
-        figs[key].savefig('./'+'energy_{}.png'.format(key))
+        figs[key].savefig(output_path+'energy_{}.png'.format(key))
+    
+
+def main(files, output_path='./'):
+    averages, std_devs, z, times = read_data(files)
+    delta_t = times[-1]-times[0]
+    logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
+    plot_fluxes(averages, z, output_path=output_path)
+    plot_flows(averages, z, output_path=output_path)
     
 
 
@@ -133,6 +175,6 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         logger.info(output_path)
-        main(args['<files>'], output_path=output_path)
+        main(args['<files>'], output_path=str(output_path)+'/')
 
 
