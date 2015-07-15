@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__.split('.')[-1])
 from dedalus import public as de
 
 
-class atmosphere:
+class Atmosphere:
     def __init__(self, gamma=5/3, **kwargs):
         self._set_domain(**kwargs)
         
@@ -187,9 +187,9 @@ class atmosphere:
         self.check_that_atmosphere_is_set()
 
 
-class multi_layer_atmosphere(atmosphere):
+class MultiLayerAtmosphere(Atmosphere):
     def __init__(self, *args, **kwargs):
-        super(multi_layer_atmosphere, self).__init__(*args, **kwargs)
+        super(MultiLayerAtmosphere, self).__init__(*args, **kwargs)
         
     def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64):
         '''
@@ -229,7 +229,7 @@ class multi_layer_atmosphere(atmosphere):
 
         self.z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
 
-class polytrope(atmosphere):
+class Polytrope(Atmosphere):
     '''
     Single polytrope, stable or unstable.
     '''
@@ -261,7 +261,7 @@ class polytrope(atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super(polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
+        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -277,7 +277,7 @@ class polytrope(atmosphere):
         return Lz_cz
         
     def _set_atmosphere(self):
-        super(polytrope, self)._set_atmosphere()
+        super(Polytrope, self)._set_atmosphere()
         
         # polytropic atmosphere characteristics
         self.poly_n = 1/(self.gamma-1) - self.epsilon
@@ -390,7 +390,7 @@ class polytrope(atmosphere):
             self.chi.set_scales(1, keep_data=True)
             
 
-class multitrope(multi_layer_atmosphere):
+class Multitrope(MultiLayerAtmosphere):
     '''
     Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.
 
@@ -430,7 +430,7 @@ class multitrope(multi_layer_atmosphere):
         
         Lx = Lz_cz*aspect_ratio
         
-        super(multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz], **kwargs)
+        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz], **kwargs)
 
         self._set_atmosphere()
         
@@ -474,7 +474,7 @@ class multitrope(multi_layer_atmosphere):
         self.necessary_quantities['kappa'] = self.kappa
         
     def _set_atmosphere(self):
-        super(multi_layer_atmosphere, self)._set_atmosphere()
+        super(MultiLayerAtmosphere, self)._set_atmosphere()
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
         
@@ -592,10 +592,10 @@ class multitrope(multi_layer_atmosphere):
                                                                           self.top_thermal_time))
 
 # need to implement flux-based Rayleigh number here.
-class polytrope_flux(polytrope):
+class PolytropeFlux(Polytrope):
     def __init__(self, *args, **kwargs):
-        super(polytrope, self).__init__(*args, **kwargs)
-        self.atmosphere_name = 'single polytrope'
+        super(Polytrope, self).__init__(*args, **kwargs)
+        self.atmosphere_name = 'single Polytrope'
         
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         
@@ -633,7 +633,7 @@ class polytrope_flux(polytrope):
         self.problem.add_bc("right(w) = 0")
 
 
-class equations():
+class Equations():
     def __init__(self):
         pass
     
@@ -741,7 +741,7 @@ class equations():
 
         return self.analysis_tasks
     
-class FC_equations(equations):
+class FC_equations(Equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
@@ -853,20 +853,20 @@ class FC_equations(equations):
         self.problem.add_bc("right(w) = 0")
 
 
-class FC_polytrope(FC_equations, polytrope):
+class FC_polytrope(FC_equations, Polytrope):
     def __init__(self, *args, **kwargs):
         super(FC_polytrope, self).__init__() 
-        polytrope.__init__(self, *args, **kwargs)
+        Polytrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
         FC_polytrope.set_equations(self,*args, **kwargs)
         self.check_atmosphere()
         
-class FC_multitrope(FC_equations, multitrope):
+class FC_multitrope(FC_equations, Multitrope):
     def __init__(self, *args, **kwargs):
         super(FC_multitrope, self).__init__() 
-        multitrope.__init__(self, *args, **kwargs)
+        Multitrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
@@ -875,7 +875,7 @@ class FC_multitrope(FC_equations, multitrope):
 
                         
 # needs to be tested again and double-checked
-class AN_polytrope(polytrope):
+class AN_polytrope(Polytrope):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
