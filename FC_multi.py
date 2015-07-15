@@ -78,7 +78,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
         T['g'] = A0*np.sin(np.pi*z_dealias/atmosphere.Lz)*noise*atmosphere.T0['g']
 
         logger.info("A0 = {:g}".format(A0))
-        logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
+        #logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
         
     else:
         logger.info("restarting from {}".format(restart))
