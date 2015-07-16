@@ -3,11 +3,12 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
+    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
+    --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 1e4]
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            vertical z (chebyshev) resolution in unstable region [default: 128]
@@ -21,7 +22,7 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 from dedalus.extras.checkpointing import Checkpoint
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=128, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_cz=128, nz_rz=128, data_dir='./'):
     import numpy as np
     import time
     import equations
@@ -185,11 +186,12 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_{}/".format(args['--Rayleigh'])
+    data_dir += "_Ra{}_S{}/".format(args['--Rayleigh'], args['--stiffness'])
     logger.info("saving run in: {}".format(data_dir))
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
+                      stiffness=float(args['--stiffness']),
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
                       restart=(args['--restart']),

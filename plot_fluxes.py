@@ -23,6 +23,17 @@ import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
 
+def semilogy_posneg(ax, x, y, **kwargs):
+    pos_mask = np.logical_not(y>0)
+    neg_mask = np.logical_not(y<0)
+    pos_line = np.ma.MaskedArray(y, pos_mask)
+    neg_line = np.ma.MaskedArray(y, neg_mask)
+
+    color = next(ax._get_lines.color_cycle)
+    ax.semilogy(x, pos_line, color=color, **kwargs)
+    ax.semilogy(x, np.abs(neg_line), color=color, linestyle='dashed')
+
+
 def read_data(files, verbose=False, data_keys=None):
     data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
 
@@ -103,11 +114,14 @@ def plot_flows(averages, z, output_path='./'):
 
     fig = plt.figure(figsize=(16,8))
     ax1 = fig.add_subplot(1,1,1)
-    ax1.semilogy(z, averages['enstrophy'], label="enstrophy")
-    ax1.semilogy(z, averages['KE'],  label="KE")
+    ax1.semilogy(z, averages['enstrophy']/np.max(averages['enstrophy']), label="enstrophy")
+    ax1.semilogy(z, averages['KE']/np.max(averages['KE']),  label="KE")
+    semilogy_posneg(ax1, z, averages['KE_flux_z']/np.max(averages['KE_flux_z']),  label="KE_flux")
+    ax1.axhline(y=1e-2, color='black', linestyle='dashed')
+    ax1.axhline(y=1e-4, color='black', linestyle='dashed')
     ax1.legend(loc="upper left")
     ax1.set_xlabel("z")
-    ax1.set_ylabel("penetration diags")
+    ax1.set_ylabel("penetration diags, normalized by max")
     figs["pen"]=fig
 
     for key in figs.keys():
