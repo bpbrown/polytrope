@@ -684,7 +684,8 @@ class equations():
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
         
         self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
-        
+        self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
+
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
@@ -698,6 +699,7 @@ class equations():
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
+        analysis_slice.add_task("vorticity", name="vorticity")
         analysis_tasks.append(analysis_slice)
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)

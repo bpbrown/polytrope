@@ -1,0 +1,19 @@
+#PBS -S /bin/bash
+#PBS -N Ra_1e8_multi
+#PBS -l select=13:ncpus=20:mpiprocs=20:model=ivy
+#PBS -l walltime=24:00:00
+#PBS -j oe
+#PBS -q long
+
+export dedalus_script=FC_multi
+export dedalus_dir=FC_multi_1e8
+
+cd $PBS_O_WORKDIR
+
+mkdir $dedalus_script
+mkdir $dedalus_dir
+
+date
+mpiexec -np 256 python3 $dedalus_script.py --Rayleigh=1e8 --nz_cz=512 --nz_rz=256 \
+	--restart=FC_multi_1e8/checkpoint/checkpoint_s25.h5 > $dedalus_dir/out.$PBS_JOBID
+date
