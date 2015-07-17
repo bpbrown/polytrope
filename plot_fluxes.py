@@ -22,14 +22,71 @@ import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
+class APJSingleColumnFigure():
+    def __init__(self, aspect_ratio=None, lineplot=True, fontsize=8):
+        import scipy.constants as scpconst
+        if aspect_ratio is None:
+            self.aspect_ratio = scpconst.golden
+        else:
+            self.aspect_ratio = aspect_ratio
 
-def semilogy_posneg(ax, x, y, **kwargs):
+        if lineplot:
+            self.dpi = 600
+        else:
+            self.dpi = 300
+        
+        self.fontsize=fontsize
+
+        self.figure()
+        self.add_subplot()
+        self.set_fontsize(fontsize=fontsize)
+
+    def figure(self):
+            
+        x_size = 3.5 # width of single column in inches
+        y_size = x_size/self.aspect_ratio
+
+        self.fig = plt.figure(figsize=(x_size, y_size))
+
+    def add_subplot(self):
+        self.ax = self.fig.add_subplot(1,1,1)
+
+    def savefig(self, filename, dpi=None, **kwargs):
+        if dpi is None:
+            dpi = self.dpi
+
+        plt.tight_layout(pad=0.25)
+        self.fig.savefig(filename, dpi=dpi, **kwargs)
+
+    def set_fontsize(self, fontsize=None):
+        if fontsize is None:
+            fontsize = self.fontsize
+
+        for item in ([self.ax.title, self.ax.xaxis.label, self.ax.yaxis.label] +
+             self.ax.get_xticklabels() + self.ax.get_yticklabels()):
+            item.set_fontsize(fontsize)
+
+    def legend(self, title=None, fontsize=None, **kwargs):
+        if fontsize is None:
+            self.legend_fontsize = apjfig.fontsize
+        else:
+            self.legend_fontsize = fontsize
+
+        self.legend_object = self.ax.legend(prop={'size':self.legend_fontsize}, **kwargs)
+        if title is not None:
+            self.legend_object.set_title(title=title, prop={'size':self.legend_fontsize})
+
+        return self.legend_object
+
+def semilogy_posneg(ax, x, y, color=None, **kwargs):
     pos_mask = np.logical_not(y>0)
     neg_mask = np.logical_not(y<0)
     pos_line = np.ma.MaskedArray(y, pos_mask)
     neg_line = np.ma.MaskedArray(y, neg_mask)
 
-    color = next(ax._get_lines.color_cycle)
+    if color is None:
+        color = next(ax._get_lines.color_cycle)
+
     ax.semilogy(x, pos_line, color=color, **kwargs)
     ax.semilogy(x, np.abs(neg_line), color=color, linestyle='dashed')
 
@@ -112,20 +169,57 @@ def plot_flows(averages, z, output_path='./'):
     ax1.set_ylabel("Ra")
     figs["Ra"]=fig
 
-    fig = plt.figure(figsize=(16,8))
-    ax1 = fig.add_subplot(1,1,1)
-    ax1.semilogy(z, averages['enstrophy']/np.max(averages['enstrophy']), label="enstrophy")
-    ax1.semilogy(z, averages['KE']/np.max(averages['KE']),  label="KE")
-    semilogy_posneg(ax1, z, averages['KE_flux_z']/np.max(averages['KE_flux_z']),  label="KE_flux")
-    ax1.axhline(y=1e-2, color='black', linestyle='dashed')
-    ax1.axhline(y=1e-4, color='black', linestyle='dashed')
-    ax1.legend(loc="upper left")
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("penetration diags, normalized by max")
-    figs["pen"]=fig
-
     for key in figs.keys():
         figs[key].savefig(output_path+'flows_{}.png'.format(key))
+
+
+def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
+    import scipy.optimize as scpop
+    figs = {}
+    apjfig = APJSingleColumnFigure()
+    norm_diag = OrderedDict()
+    norm_diag['enstrophy'] = ('enstrophy', averages['enstrophy']/np.max(averages['enstrophy']))
+    norm_diag['KE'] = ('KE', averages['KE']/np.max(averages['KE']))
+    norm_diag['KE_flux'] = ('KE_flux', averages['KE_flux_z']/np.max(np.abs(averages['KE_flux_z'])))
+    min_plot = 1
+    max_plot = np.log(5) # half a log-space unit above 1
+    for key in norm_diag:
+        if key=='KE_flux':
+            semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0])
+        else:
+            apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0])
+            print(np.max(norm_diag[key][1]))
+        min_plot = min(min_plot, np.min(np.abs(norm_diag[key][1])))
+        
+    apjfig.ax.axhline(y=1e-2, color='black', linestyle='dashed')
+    apjfig.ax.axhline(y=1e-4, color='black', linestyle='dashed')
+    if boundary is not None:
+        apjfig.ax.axvline(x=boundary, color='black', linestyle='dotted')
+    apjfig.legend(loc="lower right", title="normalized by max", fontsize=6)
+    apjfig.ax.set_xlabel("z")
+    apjfig.ax.set_ylabel("overshoot diags")#, \n normalized by max")
+    apjfig.ax.set_ylim(min_plot, max_plot)
+    padding = 0.1*np.max(z)
+    xmin = np.min(z) - padding
+    xmax = np.max(z) + padding
+    apjfig.ax.set_xlim(xmin, xmax)
+    figs["overshoot"]=apjfig
+
+    # estimate penetration depths
+    penetration_depths = OrderedDict()
+    if boundary is None:
+        # start in the middle
+        start_search = np.max(z)-0.5*np.min(z)
+    else:
+        # otherwise, start at the interface between CZ and RZ
+        start_search = boundary
+
+    for key in norm_diag:
+        if key=='KE_flux':
+            #scpop.newton(start_search
+
+    for key in figs.keys():
+        figs[key].savefig(output_path+'diag_{}.png'.format(key))
 
 
 def plot_fluxes(fluxes, z, output_path='./'):
@@ -166,6 +260,7 @@ def main(files, output_path='./'):
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
     plot_fluxes(averages, z, output_path=output_path)
     plot_flows(averages, z, output_path=output_path)
+    diagnose_overshoot(averages, z, output_path=output_path)
     
 
 
