@@ -41,11 +41,15 @@ class FC_onset_solver:
                 gamma=gamma, grid_dtype=grid_dtype,
                 constant_diffusivities=constant_diffusivities,
                 constant_kappa=constant_kappa,
-                comm=comm)
+                comm=comm, epsilon=epsilon)
 
         self.x = self.atmosphere.x
         self.z = self.atmosphere.z
         self.crit_ras = []
+
+        self.out_dir = './FC_onset_solve/'
+        if not os.path.exists(self.out_dir):
+            os.makedirs(self.out_dir)
 
     def build_solver(self, ra, pr=1):
         '''
@@ -73,9 +77,9 @@ class FC_onset_solver:
         Filters real and imaginary parts of eigenvalues and stores the
         finite, positive parts of these arrays plus their indices
         '''
-        indices_i = np.where(self._eigenvalues_i > 0)
+        indices_i = np.where(self._eigenvalues_i > 1e-10)
         indices_i_new = np.where(self._eigenvalues_i[indices_i] != np.inf)
-        indices_r = np.where(self._eigenvalues_r > 0)
+        indices_r = np.where(self._eigenvalues_r > 1e-10)
         indices_r_new = np.where(self._eigenvalues_r[indices_r] != np.inf)
         indices_i_new = np.asarray(indices_i)[0,indices_i_new]
         indices_r_new = np.asarray(indices_r)[0,indices_r_new]
@@ -137,8 +141,8 @@ class FC_onset_solver:
         Solves the EVP at all horizontal wavenumbers for the specified value of
         ra and collects all unstable modes at that ra.
         '''
-        kxs = nx-2
-        kxs_global = np.arange(kxs)+1
+        kxs = int(nx/2)
+        kxs_global = np.arange(kxs)
         kxs_local = kxs_global[CW.rank::CW.size]
 
         returns_local = [self.get_unstable_modes(ra, kx, profile='w') for kx in kxs_local]
@@ -160,6 +164,51 @@ class FC_onset_solver:
         else:
             return True
 
+    def plot_onsets(self, ra_range):
+        if CW.rank == 0:
+            import matplotlib.pyplot as plt
+        evals = dict()
+        for ra in ra_range:
+            returned = self.solve_unstable_modes_parallel(ra)
+            if CW.rank == 0:
+                for i in range(len(returned)):
+                    item = returned[i]
+                    if np.asarray(item[0]).shape[0] > 0:
+                        eigval_array = np.asarray(item[1])
+                        eigvals = []
+                        for j in range(eigval_array.shape[1]):
+                            eigval = eigval_array[:,j][1]
+                            eigvals.append((ra, eigval))
+                        if str(i) not in evals.keys():
+                            evals[str(i)] = eigvals
+                        else:
+                            for pack in eigvals:
+                                evals[str(i)].append(pack)
+        if CW.rank == 0:
+            import h5py
+            f = h5py.File(self.out_dir+'evals_output_text_{0}-{1}.h5'.format(ra_range[0], ra_range[-1]), 'w')
+
+            plt.figure(figsize=(15,10))
+            for key in evals.keys():
+                ras = []
+                evals_local = []
+                for pack in evals[key]:
+                    ras.append(pack[0])
+                    evals_local.append(pack[1])
+                plt.plot(ras, evals_local, label='wavenum='+key)
+                print('wavenum {0} has {1} at {2}'.format(int(key), ras, evals_local))
+                dict_key_ra = '{0}_ras'.format(int(key))
+                dict_key_eval = '{0}_evals'.format(int(key))
+                f[dict_key_ra] = ras
+                f[dict_key_eval] = evals_local
+            plt.axhline(self.epsilon, linestyle='dashed', color='black', label=r'$\epsilon$')
+            plt.legend(loc='upper left')
+            plt.xlabel('Ra')
+            plt.ylabel(r'$Re(\omega)$')
+            plt.yscale('log')
+            plt.savefig(self.out_dir+'evals_onset_fig_{0}-{1}.png'.format(ra_range[0], ra_range[-1]), dpi=200)
+
+            
     def find_onset_ra(self, start=1, end=4, tol=1e-2):
         '''
         Steps in log space (specified by start (10**start) and end (10**end))
@@ -204,9 +253,27 @@ class FC_onset_solver:
 
 if __name__ == '__main__':
     eqs = 7
-    nx = 16
+    nx = 32
     nz = 32
     Lx = 100
 
+
+    start_ra = 60
+    stop_ra = 70
+    steps = 101
     solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, comm=MPI.COMM_SELF)
-    returned = solver.find_onset_ra(start=1, end=3)
+    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps))
+if False:
+    returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
+    if CW.rank == 0:
+        for i in range(len(returned)):
+            item = returned[i]
+            zs, xs = np.meshgrid(solver.z, solver.x)
+            if np.asarray(item[0]).shape[0] > 0:
+                eigenvalue = np.asarray(item[1])
+                string = 'w field; '
+                for j in range(eigenvalue.shape[1]):
+                    array = eigenvalue[:,j]
+                    string += 'Eval: {0:.4g} at index {1}'.format(array[1], array[0])
+                    string += '; wavenumber {0}'.format(i)
+                print(string)
