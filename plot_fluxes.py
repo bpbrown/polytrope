@@ -209,15 +209,31 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     penetration_depths = OrderedDict()
     if boundary is None:
         # start in the middle
-        start_search = np.max(z)-0.5*np.min(z)
+        start_search = 0.5*(np.max(z)+np.min(z))
     else:
         # otherwise, start at the interface between CZ and RZ
         start_search = boundary
 
-    for key in norm_diag:
-        if key=='KE_flux':
-            #scpop.newton(start_search
+    logger.info("searching for roots starting from z={}".format(start_search))
+    Lz = np.max(z)-np.min(z) 
+    x = 2/Lz*z-1 # convert back to [-1,1]
+    x_start_search = 2/Lz*start_search-1
 
+    for key in norm_diag:
+        degree = 512
+
+        cheb_coeffs = np.polynomial.chebyshev.chebfit(x, norm_diag[key][1], degree)
+        cheb_interp = np.polynomial.chebyshev.Chebyshev(cheb_coeffs)
+        if key=='KE_flux':
+            #print(cheb_interp.roots())
+            def newton_func(x_newton):
+                return np.polynomial.chebyshev.chebval(x_newton, cheb_coeffs)
+
+            x_root = scpop.newton(newton_func, x_start_search)
+            z_root = (x_root+1)*Lz/2
+            logger.info("{} : found root z={} (x:{} -> {})".format(key, z_root, x_start_search, x_root))  
+            #print(np.polynomial.chebyshev.chebroots(cheb_coeffs))
+            apjfig.ax.semilogy(z,np.polynomial.chebyshev.chebval(x, cheb_coeffs), label='fit')
     for key in figs.keys():
         figs[key].savefig(output_path+'diag_{}.png'.format(key))
 
