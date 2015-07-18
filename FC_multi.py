@@ -37,7 +37,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_c
     nx = nz_cz*2
     nz_list = [nz_rz, nz_cz]
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=1e4, n_rho_rz=0.5)
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, n_rho_rz=1)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
