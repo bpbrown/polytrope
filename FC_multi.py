@@ -3,16 +3,16 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
+    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz> --verbose] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
     --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 1e4]
     --restart=<restart_file>   Restart from checkpoint
-    --nz_rz=<nz_rz>            vertical z (chebyshev) resolution in stable region   [default: 128]
-    --nz_cz=<nz_cz>            vertical z (chebyshev) resolution in unstable region [default: 128]
-
+    --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
+    --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
+    --verbose                  Produce diagnostic plots
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 from dedalus.extras.checkpointing import Checkpoint
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_cz=128, nz_rz=128, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_cz=128, nz_rz=128, data_dir='./', verbose=False):
     import numpy as np
     import time
     import equations
@@ -37,7 +37,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_c
     nx = nz_cz*2
     nz_list = [nz_rz, nz_cz]
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, n_rho_rz=1)
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, n_rho_rz=1, verbose=verbose)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -156,7 +156,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_c
             logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
-            N_TOTAL_CPU = atmosphere.domain.distributor.comm_world.size
+            N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
 
             # Print statistics
             print('-' * 40)
@@ -195,4 +195,5 @@ if __name__ == "__main__":
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
                       restart=(args['--restart']),
-                      data_dir=data_dir)
+                      data_dir=data_dir,
+                      verbose=args['--verbose'])

@@ -229,7 +229,11 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
             def newton_func(x_newton):
                 return np.polynomial.chebyshev.chebval(x_newton, cheb_coeffs)
 
-            x_root = scpop.newton(newton_func, x_start_search)
+            try:
+                x_root = scpop.newton(newton_func, x_start_search)
+            except:
+                logger.info("root find failed to converge")
+                x_root = x_start_search
             z_root = (x_root+1)*Lz/2
             logger.info("{} : found root z={} (x:{} -> {})".format(key, z_root, x_start_search, x_root))  
             #print(np.polynomial.chebyshev.chebroots(cheb_coeffs))

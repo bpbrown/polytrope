@@ -15,11 +15,11 @@ from dedalus import public as de
 
 
 class atmosphere:
-    def __init__(self, gamma=5/3, **kwargs):
+    def __init__(self, gamma=5/3, verbose=False, **kwargs):
         self._set_domain(**kwargs)
         
         self.gamma = gamma
-        self.make_plots = False
+        self.make_plots = verbose
         
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
