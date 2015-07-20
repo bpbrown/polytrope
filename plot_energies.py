@@ -3,10 +3,10 @@ Plot energies from joint analysis files.
 
 Usage:
     plot_energies.py join <base_path>
-    plot_energies.py plot <files>... [--output=<dir>]
+    plot_energies.py plot <files>... [--output=<output>]
 
 Options:
-    --output=<dir>  Output directory [default: ./scalar]
+    --output=<output>  Output directory [default: ./scalar]
 
 """
 import numpy as np
@@ -113,7 +113,7 @@ def plot_energies(energies, t, output_path='./'):
     figs["log_fluctuating_energies"] = fig_log
 
     for key in figs.keys():
-        figs[key].savefig('./'+'scalar_{}.png'.format(key))
+        figs[key].savefig(output_path+'scalar_{}.png'.format(key))
     
 
 
@@ -137,6 +137,6 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         print(output_path)
-        main(args['<files>'], output_path=output_path)
+        main(args['<files>'], output_path=str(output_path)+'/')
 
 

@@ -15,16 +15,16 @@ from dedalus import public as de
 
 
 class atmosphere:
-    def __init__(self, gamma=5/3, **kwargs):
+    def __init__(self, gamma=5/3, verbose=False, **kwargs):
         self._set_domain(**kwargs)
         
         self.gamma = gamma
-        self.make_plots = False
+        self.make_plots = verbose
         
-    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64):
+    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -191,7 +191,7 @@ class multi_layer_atmosphere(atmosphere):
     def __init__(self, *args, **kwargs):
         super(multi_layer_atmosphere, self).__init__(*args, **kwargs)
         
-    def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64):
+    def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         '''
         Specify 2-D domain, with compund basis in z-direction.
 
@@ -213,10 +213,11 @@ class multi_layer_atmosphere(atmosphere):
             Lz_interface = Lz_top
 
         z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
-        
+
         logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
         logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype)
+       
+        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
         
         self.x = self.domain.grid(0)
         self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
@@ -383,6 +384,10 @@ class polytrope(atmosphere):
             
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
+        
+        #Allows for atmosphere reuse
+        self.chi.set_scales(1, keep_data=True)
+        
         self.nu['g'] = nu
         self.chi['g'] = chi
         if not self.constant_diffusivities:
@@ -417,9 +422,10 @@ class multitrope(multi_layer_atmosphere):
 
         self.m_ad = 1/(gamma-1)
         self.m_rz = m_rz
-        self.epsilon = (self.m_rz - self.m_ad)/stiffness
-        self.m_cz = self.m_ad - self.epsilon
         self.stiffness = stiffness
+        self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
+        self.m_cz = self.m_ad - self.epsilon
+
 
         self.n_rho_cz = n_rho_cz
         self.n_rho_rz = n_rho_rz
@@ -481,7 +487,8 @@ class multitrope(multi_layer_atmosphere):
         self.z_cz =self.Lz_cz + 1
 
         self.delta_s = self.epsilon*(self.gamma-1)/self.gamma*np.log(self.z_cz)
-        
+        logger.info("Atmosphere delta s is {}".format(self.delta_s))
+
         self.g = (self.m_cz + 1)
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
@@ -679,7 +686,8 @@ class equations():
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
         
         self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
-        
+        self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
+
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
@@ -693,6 +701,7 @@ class equations():
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
+        analysis_slice.add_task("vorticity", name="vorticity")
         analysis_tasks.append(analysis_slice)
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)

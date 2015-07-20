@@ -3,15 +3,22 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz>] 
+    FC_multi.py [ --Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> ]
+                [ --n_rho_cz=<n_rho_cz> --nz_cz=<nz_cz> ]
+                [ --n_rho_rz=<n_rho_rz> --nz_rz=<nz_rz> ]
+                [ --restart=<restart_file>]
+                [ --verbose] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
+    --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 1e4]
     --restart=<restart_file>   Restart from checkpoint
-    --nz_rz=<nz_rz>            vertical z (chebyshev) resolution in stable region   [default: 128]
-    --nz_cz=<nz_cz>            vertical z (chebyshev) resolution in unstable region [default: 128]
-
+    --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
+    --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
+    --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
+    --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
+    --verbose                  Produce diagnostic plots
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -21,7 +28,10 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 from dedalus.extras.checkpointing import Checkpoint
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=128, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
+                      n_rho_cz=3.5, n_rho_rz=1, 
+                      nz_cz=128, nz_rz=128,
+                      restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
     import equations
@@ -36,7 +46,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
     nx = nz_cz*2
     nz_list = [nz_rz, nz_cz]
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=1e4, n_rho_rz=0.5)
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+                                         n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
+                                         verbose=verbose)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -78,7 +90,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
         T['g'] = A0*np.sin(np.pi*z_dealias/atmosphere.Lz)*noise*atmosphere.T0['g']
 
         logger.info("A0 = {:g}".format(A0))
-        logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
+        #logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
         
     else:
         logger.info("restarting from {}".format(restart))
@@ -155,7 +167,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz_cz=128, nz_rz=12
             logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
-            N_TOTAL_CPU = atmosphere.domain.distributor.comm_world.size
+            N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
 
             # Print statistics
             print('-' * 40)
@@ -185,12 +197,16 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_{}/".format(args['--Rayleigh'])
+    data_dir += "_Ra{}_S{}/".format(args['--Rayleigh'], args['--stiffness'])
     logger.info("saving run in: {}".format(data_dir))
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
+                      stiffness=float(args['--stiffness']),
+                      n_rho_cz=float(args['--n_rho_cz']),
+                      n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
                       restart=(args['--restart']),
-                      data_dir=data_dir)
+                      data_dir=data_dir,
+                      verbose=args['--verbose'])
