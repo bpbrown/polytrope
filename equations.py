@@ -726,7 +726,9 @@ class Equations():
         analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
         analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
         analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
-        
+        analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
+        analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
+        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")        
         analysis_tasks.append(analysis_profile)
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
