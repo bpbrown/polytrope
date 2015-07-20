@@ -3,7 +3,11 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_multi.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> --restart=<restart_file> --nz_rz=<nz_rz> --nz_cz=<nz_cz> --verbose] 
+    FC_multi.py [ --Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> ]
+                [ --n_rho_cz=<n_rho_cz> --nz_cz=<nz_cz> ]
+                [ --n_rho_rz=<n_rho_rz> --nz_rz=<nz_rz> ]
+                [ --restart=<restart_file>]
+                [ --verbose] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
@@ -12,6 +16,8 @@ Options:
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
+    --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
+    --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
     --verbose                  Produce diagnostic plots
 """
 import logging
@@ -22,7 +28,10 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 from dedalus.extras.checkpointing import Checkpoint
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_cz=128, nz_rz=128, data_dir='./', verbose=False):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
+                      n_rho_cz=3.5, n_rho_rz=1, 
+                      nz_cz=128, nz_rz=128,
+                      restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
     import equations
@@ -37,7 +46,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, restart=None, nz_c
     nx = nz_cz*2
     nz_list = [nz_rz, nz_cz]
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, n_rho_rz=1, verbose=verbose)
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+                                         n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
+                                         verbose=verbose)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -192,6 +203,8 @@ if __name__ == "__main__":
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
+                      n_rho_cz=float(args['--n_rho_cz']),
+                      n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
                       restart=(args['--restart']),

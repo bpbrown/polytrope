@@ -422,9 +422,10 @@ class multitrope(multi_layer_atmosphere):
 
         self.m_ad = 1/(gamma-1)
         self.m_rz = m_rz
-        self.epsilon = (self.m_rz - self.m_ad)/stiffness
-        self.m_cz = self.m_ad - self.epsilon
         self.stiffness = stiffness
+        self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
+        self.m_cz = self.m_ad - self.epsilon
+
 
         self.n_rho_cz = n_rho_cz
         self.n_rho_rz = n_rho_rz
@@ -486,7 +487,8 @@ class multitrope(multi_layer_atmosphere):
         self.z_cz =self.Lz_cz + 1
 
         self.delta_s = self.epsilon*(self.gamma-1)/self.gamma*np.log(self.z_cz)
-        
+        logger.info("Atmosphere delta s is {}".format(self.delta_s))
+
         self.g = (self.m_cz + 1)
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
