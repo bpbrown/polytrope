@@ -10,7 +10,6 @@ Options:
 
 """
 import numpy as np
-import os
 
 from collections import OrderedDict
 
@@ -151,11 +150,11 @@ def plot_fluxes(fluxes, z, output_path='./'):
     
 
 def main(files, output_path='./'):
-    profile = analysis.Profile(files)
-    averages = profile.average
-    std_devs = profile.std_dev
-    times = profile.times
-    z = profile.z
+    data = analysis.Profile(files)
+    averages = data.average
+    std_devs = data.std_dev
+    times = data.times
+    z = data.z
     delta_t = times[-1]-times[0]
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
     plot_fluxes(averages, z, output_path=output_path)
@@ -183,7 +182,7 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
-        logger.info(output_path)
+        logger.info("output to {}".format(output_path))
         main(args['<files>'], output_path=str(output_path)+'/')
 
 

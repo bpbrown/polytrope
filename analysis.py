@@ -6,8 +6,6 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 from collections import OrderedDict
 
-import matplotlib.pyplot as plt
-
 class DedalusData():
     def __init__(self,  files, *args,
                  keys=None, verbose=False, **kwargs):
@@ -15,7 +13,8 @@ class DedalusData():
         self.verbose = verbose
 
         self.files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
-
+        logger.debug("opening: {}".format(self.files))
+        
         if keys is None:
             self.get_keys(self.files[0], keys=keys)
         else:
@@ -49,14 +48,15 @@ class DedalusData():
 class Scalar(DedalusData):
     def __init__(self, files, *args, keys=None, **kwargs):
         super(Scalar, self).__init__(files, *args,
-                                      keys=keys, **kwargs)
+                                     keys=keys, **kwargs)
         self.read_data()
-
+            
     def read_data(self):
         self.times = np.array([])
-
+        
         N = 1
         for filename in self.files:
+            logger.debug("opening {}".format(filename))
             f = h5py.File(filename, flag='r')
             # clumsy
             for key in self.keys:
@@ -69,6 +69,10 @@ class Scalar(DedalusData):
             N += 1
             self.times = np.append(self.times, f['scales']['sim_time'][:])
             f.close()
+            
+        for key in self.keys:
+            self.data[key] = self.data[key][:,0,0]
+            logger.debug("{} shape {}".format(key, self.data[key].shape))
             
 class Profile(DedalusData):
     def __init__(self, files, *args, keys=None, **kwargs):
@@ -115,6 +119,10 @@ class Profile(DedalusData):
 class APJSingleColumnFigure():
     def __init__(self, aspect_ratio=None, lineplot=True, fontsize=8):
         import scipy.constants as scpconst
+        import matplotlib.pyplot as plt
+
+        self.plt = plt
+        
         if aspect_ratio is None:
             self.aspect_ratio = scpconst.golden
         else:
@@ -136,7 +144,7 @@ class APJSingleColumnFigure():
         x_size = 3.5 # width of single column in inches
         y_size = x_size/self.aspect_ratio
 
-        self.fig = plt.figure(figsize=(x_size, y_size))
+        self.fig = self.plt.figure(figsize=(x_size, y_size))
 
     def add_subplot(self):
         self.ax = self.fig.add_subplot(1,1,1)
@@ -145,7 +153,7 @@ class APJSingleColumnFigure():
         if dpi is None:
             dpi = self.dpi
 
-        plt.tight_layout(pad=0.25)
+        self.plt.tight_layout(pad=0.25)
         self.fig.savefig(filename, dpi=dpi, **kwargs)
 
     def set_fontsize(self, fontsize=None):
