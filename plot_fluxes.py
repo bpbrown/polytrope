@@ -10,7 +10,6 @@ Options:
 
 """
 import numpy as np
-import h5py
 import os
 
 from collections import OrderedDict
@@ -22,69 +21,8 @@ import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
+import analysis
 
-class profile():
-    def __init__(self, *args, **kwargs):
-        self.read_data(*args, **kwargs)
-        self.average_data()
-        
-    def read_data(self, files, verbose=False, data_keys=None):
-        data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
-
-        if data_keys is None:
-            f = h5py.File(data_files[0], flag='r')
-            self.keys = np.copy(f['tasks'])
-            f.close()
-            logger.debug("tasks = {}".format(data_keys))
-        else:
-            self.keys = data_keys
-            
-        if verbose:
-            f = h5py.File(data_files[0], flag='r')
-            logger.info(10*'-'+' tasks '+10*'-')
-            for task in f['tasks']:
-                logger.info(task)
-        
-            logger.info(10*'-'+' scales '+10*'-')
-            for key in f['scales']:
-                logger.info(key)
-            f.close()
-
-        self.data = OrderedDict()
-        for key in self.keys:
-            self.data[key] = np.array([])
-
-        self.times = np.array([])
-
-        N = 1
-        for filename in data_files:
-            f = h5py.File(filename, flag='r')
-            # clumsy
-            for key in data_keys:
-                if N == 1:
-                    self.data[key] = f['tasks'][key][:]
-                    logger.debug("{} shape {}".format(key, self.data[key].shape))
-                else:
-                    self.data[key] = np.append(self.data[key], f['tasks'][key][:], axis=0)
-
-            N += 1
-            # same z for all files
-            self.z = f['scales']['z']['1.0'][:]
-            self.times = np.append(self.times, f['scales']['sim_time'][:])
-            f.close()
-
-        for key in self.keys:
-            logger.debug("{} shape {}".format(key, self.data[key].shape))
-
-    def average_data(self):
-        self.average = OrderedDict()
-        self.std_dev = OrderedDict()
-        for key in self.keys:
-            self.average[key] = np.mean(self.data[key], axis=0)[0]
-            self.std_dev[key] = np.std( self.data[key], axis=0)[0]
-
-        for key in self.keys:
-            logger.debug("{} shape {} and {}".format(key, time_avg[key].shape, std_dev[key].shape))
 
 def plot_flows(averages, z, output_path='./'):
     figs = {}
@@ -114,7 +52,7 @@ def plot_flows(averages, z, output_path='./'):
 def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     import scipy.optimize as scpop
     figs = {}
-    apjfig = APJSingleColumnFigure()
+    apjfig = analysis.APJSingleColumnFigure()
     norm_diag = OrderedDict()
     norm_diag['enstrophy'] = ('enstrophy', averages['enstrophy']/np.max(averages['enstrophy']))
     norm_diag['KE'] = ('KE', averages['KE']/np.max(averages['KE']))
@@ -123,7 +61,7 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     max_plot = np.log(5) # half a log-space unit above 1
     for key in norm_diag:
         if key=='KE_flux':
-            semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0])
+            analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0])
         else:
             apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0])
             print(np.max(norm_diag[key][1]))
@@ -213,7 +151,11 @@ def plot_fluxes(fluxes, z, output_path='./'):
     
 
 def main(files, output_path='./'):
-    averages, std_devs, z, times = read_data(files)
+    profile = analysis.Profile(files)
+    averages = profile.average
+    std_devs = profile.std_dev
+    times = profile.times
+    z = profile.z
     delta_t = times[-1]-times[0]
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
     plot_fluxes(averages, z, output_path=output_path)

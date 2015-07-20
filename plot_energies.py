@@ -13,6 +13,8 @@ import numpy as np
 import h5py
 import os
 
+import analysis
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -21,34 +23,7 @@ def main(files, output_path='./'):
     [KE, PE, IE, TE], t = read_data(files)
     plot_energies([KE, PE, IE, TE], t, output_path=output_path)
     
-def read_data(files, verbose=False):
-    data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
-    if verbose:
-        f = h5py.File(data_files[0], flag='r')
-        print(10*'-'+' tasks '+10*'-')
-        for task in f['tasks']:
-            print(task)
-        print(10*'-'+' scales '+10*'-')
-        for key in f['scales']:
-            print(key)
 
-    KE = np.array([])
-    PE = np.array([])
-    IE = np.array([])
-    TE = np.array([])
-    t = np.array([])
-
-    for filename in data_files:
-        f = h5py.File(filename, flag='r')
-        KE = np.append(KE, f['tasks']['KE'][:])
-        PE = np.append(PE, f['tasks']['PE'][:])
-        IE = np.append(IE, f['tasks']['IE'][:])
-        TE = np.append(TE, f['tasks']['TE'][:])
-
-        t = np.append(t,f['scales']['sim_time'][:])
-        f.close()
-
-    return [KE, PE, IE, TE], t
 
 def plot_energies(energies, t, output_path='./'):
     [KE, PE, IE, TE] = energies
