@@ -26,7 +26,12 @@ logger = logging.getLogger(__name__)
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
-from dedalus.extras.checkpointing import Checkpoint
+try:
+    from dedalus.extras.checkpointing import Checkpoint
+    do_checkpointing=True
+except:
+    logger.info("No checkpointing available; disabling capability")
+    do_checkpointing=False
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
                       n_rho_cz=3.5, n_rho_rz=1, 
@@ -63,7 +68,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     # Build solver
     solver = problem.build_solver(ts)
 
-    do_checkpointing=True
+
     if do_checkpointing:
         checkpoint = Checkpoint(data_dir)
         checkpoint.set_checkpoint(solver, wall_dt=1800)
@@ -93,8 +98,12 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         #logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
         
     else:
-        logger.info("restarting from {}".format(restart))
-        checkpoint.restart(restart, solver)
+        if do_checkpointing:
+            logger.info("restarting from {}".format(restart))
+            checkpoint.restart(restart, solver)
+        else:
+            logger.error("No checkpointing capability in this branch of Dedalus.  Aborting.")
+            raise
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
