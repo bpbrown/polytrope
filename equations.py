@@ -8,6 +8,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import analysis
+
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
@@ -121,26 +123,9 @@ class Atmosphere:
             self.problem.parameters['del_chi'] = self.del_chi
 
     def plot_atmosphere(self):
-        fig_atm = plt.figure()
-        axT = fig_atm.add_subplot(2,2,1)
-        axT.plot(self.z[0,:], self.T0['g'][0,:])
-        axT.set_ylabel('T0')
-        axP = fig_atm.add_subplot(2,2,2)
-        axP.plot(self.z[0,:], self.P0['g'][0,:])
-        axP.set_ylabel('P0')
-        axR = fig_atm.add_subplot(2,2,3)
-        axR.plot(self.z[0,:], self.rho0['g'][0,:])
-        axR.set_ylabel(r'$\rho0$')
-        axS = fig_atm.add_subplot(2,2,4)
-        mask = (self.del_s0['g'][0,:]>0)
-        axS.semilogy(self.z[0,mask], self.del_s0['g'][0,mask])
-        mask = (self.del_s0['g'][0,:]<0)
-        axS.semilogy(self.z[0,mask], np.abs(self.del_s0['g'][0,mask]), linestyle='dashed', color='red')
-        
-        axS.set_ylabel(r'$\nabla s0$')
-        fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
         for key in self.necessary_quantities:
+            logger.debug("plotting atmosphereic quantity {}".format(key))
             fig_q = plt.figure()
             ax = fig_q.add_subplot(1,1,1)
             quantity = self.necessary_quantities[key]
@@ -150,7 +135,23 @@ class Atmosphere:
             ax.set_ylabel(key)
             fig_q.savefig("atmosphere_{}_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
             plt.close(fig_q)
-            
+
+        fig_atm = plt.figure()
+        axT = fig_atm.add_subplot(2,2,1)
+        axT.plot(self.z[0,:], self.T0['g'][0,:])
+        axT.set_ylabel('T0')
+        axP = fig_atm.add_subplot(2,2,2)
+        axP.semilogy(self.z[0,:], self.P0['g'][0,:]) 
+        axP.set_ylabel('P0')
+        axR = fig_atm.add_subplot(2,2,3)
+        axR.semilogy(self.z[0,:], self.rho0['g'][0,:])
+        axR.set_ylabel(r'$\rho0$')
+        axS = fig_atm.add_subplot(2,2,4)
+        analysis.semilogy_posneg(axS, self.z[0,:], self.del_s0['g'][0,:], color_neg='red')
+        
+        axS.set_ylabel(r'$\nabla s0$')
+        fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
+                
     def check_that_atmosphere_is_set(self):
         for key in self.necessary_quantities:
             quantity = self.necessary_quantities[key]['g']
@@ -410,6 +411,8 @@ class Multitrope(MultiLayerAtmosphere):
                  gamma=5/3,
                  n_rho_cz=3.5, n_rho_rz=2, 
                  m_rz=3, stiffness=100,
+                 stable_bottom=True,
+                 stable_top=False,
                  **kwargs):
 
         self.atmosphere_name = 'multitrope'
@@ -426,6 +429,10 @@ class Multitrope(MultiLayerAtmosphere):
         self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
         self.m_cz = self.m_ad - self.epsilon
 
+        if stable_top:
+            stable_bottom = False
+            
+        self.stable_bottom = stable_bottom
 
         self.n_rho_cz = n_rho_cz
         self.n_rho_rz = n_rho_rz
@@ -456,27 +463,41 @@ class Multitrope(MultiLayerAtmosphere):
         # 
         # z_interface = (T_interface/(-del_T))*(np.exp(n_rho/m)-1)
 
-        Lz_cz = np.exp(n_rho_cz/m_cz)-1
-
+        if self.stable_bottom:
+            Lz_cz = np.exp(n_rho_cz/m_cz)-1
+        else:
+            Lz_rz = np.exp(n_rho_rz/m_rz)-1
+            
         del_T_rz = -(m_cz+1)/(m_rz+1)
-        T_interface = (Lz_cz+1) # T at bottom of CZ
-        Lz_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
 
+        if self.stable_bottom:
+            T_interface = (Lz_cz+1) # T at bottom of CZ
+            Lz_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
+        else:
+            T_interface = (Lz_rz+1) # T at bottom of CZ
+            Lz_cz = T_interface/(-del_T_rz)*(np.exp(n_rho_cz/m_cz)-1)
+            
         Lz = Lz_cz + Lz_rz
         logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
     def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=1):
         if tanh_center is None:
-            tanh_center = self.Lz_rz
-
+            if self.stable_bottom:
+                tanh_center = self.Lz_rz
+            else:
+                tanh_center = self.Lz_cz
+                                
         # start with a simple profile, adjust amplitude later (in _set_diffusivities)
         kappa_top = 1
     
         phi = (1/2*(1-np.tanh((self.z-tanh_center)/tanh_width)))
         inv_phi = 1-phi
-        self.kappa = self._new_ncc() 
-        self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
+        self.kappa = self._new_ncc()
+        if self.stable_bottom:
+            self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
+        else:
+            self.kappa['g'] = (phi+inv_phi*kappa_ratio)*kappa_top
         self.necessary_quantities['kappa'] = self.kappa
         
     def _set_atmosphere(self):
