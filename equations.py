@@ -607,7 +607,7 @@ class Multitrope(MultiLayerAtmosphere):
             # Rayleigh number is set at the top of the CZ
             # to the desired value by removing the density
             # scaling from the rz.  This is a guess.
-            self.chi_top = np.exp(-self.n_rho_rz)*self.chi_top
+            self.chi_top = np.exp(self.n_rho_rz)*self.chi_top
             
         self.nu_top = self.chi_top*Prandtl_top
 
