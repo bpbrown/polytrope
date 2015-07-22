@@ -760,7 +760,11 @@ class Equations():
         analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
         analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
         analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
-        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")        
+        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
+        analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
+        analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
+        analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")        
+
         analysis_tasks.append(analysis_profile)
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
