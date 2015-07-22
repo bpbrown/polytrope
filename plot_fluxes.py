@@ -56,10 +56,12 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     norm_diag['enstrophy'] = ('enstrophy', averages['enstrophy']/np.max(averages['enstrophy']))
     norm_diag['KE'] = ('KE', averages['KE']/np.max(averages['KE']))
     norm_diag['KE_flux'] = ('KE_flux', averages['KE_flux_z']/np.max(np.abs(averages['KE_flux_z'])))
+    dz = np.gradient(z)
+    norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', np.gradient(averages['s_tot']/np.max(np.abs(averages['s_tot'])),dz))
     min_plot = 1
     max_plot = np.log(5) # half a log-space unit above 1
     for key in norm_diag:
-        if key=='KE_flux':
+        if key=='KE_flux' or key=="grad_s":
             analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0])
         else:
             apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0])
