@@ -112,7 +112,7 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
             z_root = (x_root+1)*Lz/2
             logger.info("{} : found root z={} (x:{} -> {})".format(key, z_root, x_start_search, x_root))  
             #print(np.polynomial.chebyshev.chebroots(cheb_coeffs))
-            apjfig.ax.semilogy(z,np.polynomial.chebyshev.chebval(x, cheb_coeffs), label='fit')
+            #apjfig.ax.semilogy(z,np.polynomial.chebyshev.chebval(x, cheb_coeffs), label='fit')
     for key in figs.keys():
         figs[key].savefig(output_path+'diag_{}.png'.format(key))
 

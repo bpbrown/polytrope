@@ -84,7 +84,7 @@ print()
 
 #plt.ion()
 # Options
-fnames = ["s","enstrophy"]
+fnames = ["s'","enstrophy"]
 xstr = 'x/H'
 ystr = 'z/H'
 cmapname = 'Spectral_r'
@@ -386,7 +386,7 @@ for j, (fname, field) in enumerate(zip(fnames, fields)):
 first_iteration = iteration        
 # plot images        
 print(x.shape)  
-dpi_png = max(96, len(x)/(w_total*scale))
+dpi_png = max(150, len(x)/(w_total*scale))
 
 
 print("dpi:", dpi_png, " -> ", w_total*scale*dpi_png, "x",h_total*scale*dpi_png)

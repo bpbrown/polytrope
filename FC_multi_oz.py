@@ -1,13 +1,10 @@
 """
-Dedalus script for 2D compressible convection in a polytrope,
-with 3.5 density scale heights of stratification.
+Dedalus script for 2D compressible convection in a multitrope,
+here with convection below and stable region above.
+
 
 Usage:
-    FC_multi.py [ --Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> ]
-                [ --n_rho_cz=<n_rho_cz> --nz_cz=<nz_cz> ]
-                [ --n_rho_rz=<n_rho_rz> --nz_rz=<nz_rz> ]
-                [ --restart=<restart_file>]
-                [ --verbose] 
+    FC_multi.py [options]
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
@@ -18,6 +15,7 @@ Options:
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 1]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 4.5]
+    --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
 """
 import logging
@@ -55,7 +53,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          stable_top=True, verbose=verbose)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
-    atmosphere.set_BC()
+    atmosphere.set_BC(mixed_temperature_flux=True)
     problem = atmosphere.get_problem()
 
     if atmosphere.domain.distributor.rank == 0:
@@ -206,7 +204,11 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_Ra{}_S{}/".format(args['--Rayleigh'], args['--stiffness'])
+    data_dir += "_Ra{}_S{}".format(args['--Rayleigh'], args['--stiffness'])
+    if args['--label'] is not None:
+        data_dir += "_{}".format(args['--label'])
+    data_dir += '/'
+
     logger.info("saving run in: {}".format(data_dir))
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),

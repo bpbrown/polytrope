@@ -183,7 +183,10 @@ class Atmosphere:
 
     def check_atmosphere(self):
         if self.make_plots:
-            self.plot_atmosphere()
+            try:
+                self.plot_atmosphere()
+            except:
+                logger.info("Problems in plot_atmosphere: atm full of NaNs?")
         self.test_hydrostatic_balance()
         self.check_that_atmosphere_is_set()
 
@@ -854,9 +857,14 @@ class FC_equations(Equations):
 
                 
     def set_BC(self,
-               fixed_flux=False, fixed_temperature=False, mixed_flux_temperature=True,
-               stress_free=True, no_slip=False):
+               fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
+               stress_free=None, no_slip=None):
         
+        if fixed_flux is None and fixed_temperature is None and mixed_temperature_flux is None:
+            mixed_flux_temperature = True
+        if stress_free is None and no_slip is None:
+            stress_free = True
+
         # thermal boundary conditions
         if fixed_flux:
             logger.info("Thermal BC: fixed flux (T1_z)")
@@ -870,6 +878,10 @@ class FC_equations(Equations):
             logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
             self.problem.add_bc("left(Q_z) = 0")
             self.problem.add_bc("right(T1) = 0")
+        elif mixed_temperature_flux:
+            logger.info("Thermal BC: mixed temperature/flux (T1/T1_z)")
+            self.problem.add_bc("left(T1) = 0")
+            self.problem.add_bc("right(Q_z) = 0")
         else:
             logger.error("Incorrect thermal boundary conditions specified")
             raise
