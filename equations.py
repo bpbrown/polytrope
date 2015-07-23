@@ -15,11 +15,11 @@ from dedalus import public as de
 
 
 class Atmosphere:
-    def __init__(self, gamma=5/3, **kwargs):
+    def __init__(self, gamma=5/3, verbose=False, **kwargs):
         self._set_domain(**kwargs)
         
         self.gamma = gamma
-        self.make_plots = False
+        self.make_plots = verbose
         
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
@@ -173,7 +173,7 @@ class Atmosphere:
 
             ax2 = fig.add_subplot(2,1,2)
             ax2.semilogy(self.z[0,:], np.abs(relative_error[0,:]))
-            ax2.set_ylabel(r'$|\nabla P + \rho g |/|del P|$')
+            ax2.set_ylabel(r'$|\nabla P + \rho g |/|\nabla P|$')
             ax2.set_xlabel('z')
             fig.savefig("atmosphere_HS_balance_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
@@ -422,9 +422,10 @@ class Multitrope(MultiLayerAtmosphere):
 
         self.m_ad = 1/(gamma-1)
         self.m_rz = m_rz
-        self.epsilon = (self.m_rz - self.m_ad)/stiffness
-        self.m_cz = self.m_ad - self.epsilon
         self.stiffness = stiffness
+        self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
+        self.m_cz = self.m_ad - self.epsilon
+
 
         self.n_rho_cz = n_rho_cz
         self.n_rho_rz = n_rho_rz
@@ -486,7 +487,8 @@ class Multitrope(MultiLayerAtmosphere):
         self.z_cz =self.Lz_cz + 1
 
         self.delta_s = self.epsilon*(self.gamma-1)/self.gamma*np.log(self.z_cz)
-        
+        logger.info("Atmosphere delta s is {}".format(self.delta_s))
+
         self.g = (self.m_cz + 1)
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
@@ -684,7 +686,8 @@ class Equations():
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
         
         self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
-        
+        self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
+
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
@@ -698,6 +701,7 @@ class Equations():
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
+        analysis_slice.add_task("vorticity", name="vorticity")
         analysis_tasks.append(analysis_slice)
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
@@ -722,7 +726,9 @@ class Equations():
         analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
         analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
         analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
-        
+        analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
+        analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
+        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")        
         analysis_tasks.append(analysis_profile)
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
