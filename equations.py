@@ -446,7 +446,16 @@ class Multitrope(MultiLayerAtmosphere):
         
         Lx = Lz_cz*aspect_ratio
         
-        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz], **kwargs)
+        
+        overshoot_pad = 0.2*Lz_cz 
+        if self.stable_bottom:
+            Lz_bottom = Lz_rz - overshoot_pad
+            Lz_top = Lz_cz + overshoot_pad
+        else:
+            Lz_bottom = Lz_cz + overshoot_pad
+            Lz_top = Lz_rz - overshoot_pad
+
+        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
 
         self._set_atmosphere()
         
