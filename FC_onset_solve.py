@@ -186,7 +186,7 @@ class FC_onset_solver:
                                 evals[str(i)].append(pack)
         if CW.rank == 0:
             import h5py
-            f = h5py.File(self.out_dir+'evals_output_text_{0}-{1}.h5'.format(ra_range[0], ra_range[-1]), 'w')
+            f = h5py.File(self.out_dir+'evals_output_text_eps_{0:.0e}_ras_{1:04g}-{2:04g}.h5'.format(self.epsilon, ra_range[0], ra_range[-1]), 'w')
 
             plt.figure(figsize=(15,10))
             for key in evals.keys():
@@ -206,7 +206,7 @@ class FC_onset_solver:
             plt.xlabel('Ra')
             plt.ylabel(r'$Re(\omega)$')
             plt.yscale('log')
-            plt.savefig(self.out_dir+'evals_onset_fig_{0}-{1}.png'.format(ra_range[0], ra_range[-1]), dpi=200)
+            plt.savefig(self.out_dir+'evals_onset_fig_eps_{0:.0e}_ras_{1:04g}-{2:04g}.png'.format(self.epsilon, ra_range[0], ra_range[-1]), dpi=200)
 
             
     def find_onset_ra(self, start=1, end=4, tol=1e-2):
@@ -256,12 +256,13 @@ if __name__ == '__main__':
     nx = 32
     nz = 32
     Lx = 100
+    epsilon=1e-3
 
 
     start_ra = 60
-    stop_ra = 70
-    steps = 101
-    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, comm=MPI.COMM_SELF)
+    stop_ra  = 70
+    steps = 31
+    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, epsilon=epsilon, comm=MPI.COMM_SELF)
     solver.plot_onsets(np.linspace(start_ra, stop_ra, steps))
 if False:
     returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
