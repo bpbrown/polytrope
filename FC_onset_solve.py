@@ -46,8 +46,9 @@ class FC_onset_solver:
         self.x = self.atmosphere.x
         self.z = self.atmosphere.z
 
-        out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0]
+        out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0] + '/'
         self.out_dir = out_dir + out_dir_base
+        print(self.out_dir)
         if not os.path.exists(self.out_dir) and CW.rank == 0:
             os.makedirs(self.out_dir)
 
@@ -191,6 +192,7 @@ class FC_onset_solver:
 
             outstring = self.out_dir+'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}'.format(self.epsilon, ra_range[0], ra_range[-1])
             f = h5py.File(outstring +'.h5', 'w')
+            file_keys = []
 
             plt.figure(figsize=(15,10))
             for key in evals.keys():
@@ -200,11 +202,16 @@ class FC_onset_solver:
                     ras.append(pack[0])
                     evals_local.append(pack[1])
                 plt.plot(ras, evals_local, label='wavenum='+key)
-                print('wavenum {0} has {1} at {2}'.format(int(key), ras, evals_local))
+#                print('wavenum {0} has {1} at {2}'.format(int(key), ras, evals_local))
                 dict_key_ra = '{0}_ras'.format(int(key))
                 dict_key_eval = '{0}_evals'.format(int(key))
                 f[dict_key_ra] = ras
                 f[dict_key_eval] = evals_local
+                file_keys.append(dict_key_ra)
+                file_keys.append(dict_key_eval)
+            #Storing string list from http://stackoverflow.com/questions/23220513/storing-a-list-of-strings-to-a-hdf5-dataset-from-python
+            asciiList = [n.encode('ascii', 'ignore') for n in file_keys]
+            f.create_dataset('keys', (len(asciiList),1), 'S10', asciiList)
             plt.axhline(self.epsilon, linestyle='dashed', color='black', label=r'$\epsilon$')
             plt.legend(loc='upper left')
             plt.xlabel('Ra')
@@ -260,13 +267,15 @@ if __name__ == '__main__':
     nx = 32
     nz = 32
     Lx = 100
-    epsilon=1e-3
+    epsilon=5e-2
     out_dir = '/regulus/exoweather/evan/'
 
 
     start_ra = 60
-    stop_ra  = 70
-    steps = 31
+    stop_ra  = 90
+    steps = 301
+
+
     solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
     solver.plot_onsets(np.linspace(start_ra, stop_ra, steps))
 if False:

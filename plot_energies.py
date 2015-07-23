@@ -22,7 +22,7 @@ def main(files, output_path='./'):
     plot_energies([KE, PE, IE, TE], t, output_path=output_path)
     
 def read_data(files, verbose=False):
-    data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
+    data_files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[-1]))
     if verbose:
         f = h5py.File(data_files[0], flag='r')
         print(10*'-'+' tasks '+10*'-')
@@ -112,8 +112,12 @@ def plot_energies(energies, t, output_path='./'):
     ax1.legend()
     figs["log_fluctuating_energies"] = fig_log
 
+    output_path = str(output_path)
+    if output_path[-1] != '/':
+        output_path += '/'
+
     for key in figs.keys():
-        figs[key].savefig('./'+'scalar_{}.png'.format(key))
+        figs[key].savefig(output_path+'scalar_{}.png'.format(key))
     
 
 
