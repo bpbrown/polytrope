@@ -21,13 +21,13 @@ class FC_onset_solver:
 
     def __init__(self, nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
         constant_diffusivities=True, constant_kappa=True,
-        grid_dtype=np.complex128, comm=MPI.COMM_SELF):
+        grid_dtype=np.complex128, comm=MPI.COMM_SELF,
+	out_dir=''):
         '''
         Initializes the atmosphere, sets up basic variables.
 
         NOTE: To run in parallel, set comm=MPI.COMM_SELF.
         '''
-
         self.nx = nx
         self.nz = nz
         self.Lx = Lx
@@ -45,10 +45,10 @@ class FC_onset_solver:
 
         self.x = self.atmosphere.x
         self.z = self.atmosphere.z
-        self.crit_ras = []
 
-        self.out_dir = './FC_onset_solve/'
-        if not os.path.exists(self.out_dir):
+        out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0]
+        self.out_dir = out_dir + out_dir_base
+        if not os.path.exists(self.out_dir) and CW.rank == 0:
             os.makedirs(self.out_dir)
 
     def build_solver(self, ra, pr=1):
@@ -149,13 +149,14 @@ class FC_onset_solver:
         if CW.rank == 0:
             returns_global = [0]*kxs
             returns_global[CW.rank::CW.size] = returns_local
-
+        
+        CW.Barrier()
         for i in range(CW.size):
-            if i == CW.rank and i != 0:
+            if i == 0:
+                continue
+            if i == CW.rank:
                 CW.send(returns_local, dest=0, tag=i)
-            else:
-                if i == 0:
-                    continue
+            elif CW.rank == 0:
                 vals = CW.recv(source=i, tag=i)
                 returns_global[i::CW.size] = vals
         CW.Barrier()
@@ -185,8 +186,11 @@ class FC_onset_solver:
                             for pack in eigvals:
                                 evals[str(i)].append(pack)
         if CW.rank == 0:
+            print('saving output')
             import h5py
-            f = h5py.File(self.out_dir+'evals_output_text_eps_{0:.0e}_ras_{1:04g}-{2:04g}.h5'.format(self.epsilon, ra_range[0], ra_range[-1]), 'w')
+
+            outstring = self.out_dir+'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}'.format(self.epsilon, ra_range[0], ra_range[-1])
+            f = h5py.File(outstring +'.h5', 'w')
 
             plt.figure(figsize=(15,10))
             for key in evals.keys():
@@ -206,7 +210,7 @@ class FC_onset_solver:
             plt.xlabel('Ra')
             plt.ylabel(r'$Re(\omega)$')
             plt.yscale('log')
-            plt.savefig(self.out_dir+'evals_onset_fig_eps_{0:.0e}_ras_{1:04g}-{2:04g}.png'.format(self.epsilon, ra_range[0], ra_range[-1]), dpi=200)
+            plt.savefig(outstring + '.png', dpi=200)
 
             
     def find_onset_ra(self, start=1, end=4, tol=1e-2):
@@ -257,12 +261,13 @@ if __name__ == '__main__':
     nz = 32
     Lx = 100
     epsilon=1e-3
+    out_dir = '/regulus/exoweather/evan/'
 
 
     start_ra = 60
     stop_ra  = 70
     steps = 31
-    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, epsilon=epsilon, comm=MPI.COMM_SELF)
+    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
     solver.plot_onsets(np.linspace(start_ra, stop_ra, steps))
 if False:
     returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
