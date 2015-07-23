@@ -52,16 +52,30 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     import scipy.optimize as scpop
     figs = {}
     apjfig = analysis.APJSingleColumnFigure()
+
+    def norm(f):
+        return f/np.max(np.abs(f))
+
     norm_diag = OrderedDict()
-    norm_diag['enstrophy'] = ('enstrophy', averages['enstrophy']/np.max(averages['enstrophy']))
-    norm_diag['KE'] = ('KE', averages['KE']/np.max(averages['KE']))
-    norm_diag['KE_flux'] = ('KE_flux', averages['KE_flux_z']/np.max(np.abs(averages['KE_flux_z'])))
+    norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
+    norm_diag['KE'] = ('KE', norm(averages['KE']))
+    norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
     dz = np.gradient(z)
-    norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', np.gradient(averages['s_tot']/np.max(np.abs(averages['s_tot'])),dz))
+    try:
+        norm_diag['grad_s_post'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
+    except:
+        logger.info("Missing s_tot from outputs")
+
+    try:
+        norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
+        norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
+    except:
+        logger.info("Missing grad_s from outputs")
+
     min_plot = 1
     max_plot = np.log(5) # half a log-space unit above 1
     for key in norm_diag:
-        if key=='KE_flux' or key=="grad_s":
+        if key=='KE_flux' or key=="grad_s" or key=="grad_s_mean" or key=="grad_s_post":
             analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0])
         else:
             apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0])
@@ -96,12 +110,25 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     x = 2/Lz*z-1 # convert back to [-1,1]
     x_start_search = 2/Lz*start_search-1
 
-    for key in norm_diag:
-        degree = 512
+    def poor_mans_root(f, z):
+        i_near = (np.abs(f)).argmin()
+        return z[i_near], f[i_near], i_near
 
-        cheb_coeffs = np.polynomial.chebyshev.chebfit(x, norm_diag[key][1], degree)
-        cheb_interp = np.polynomial.chebyshev.Chebyshev(cheb_coeffs)
-        if key=='KE_flux':
+
+
+    for key in norm_diag:
+        if key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot':
+            threshold = 0
+            root_color = 'blue'
+        else:
+            threshold = 1e-2
+            root_color = 'red'
+
+        if key=='enstrophy':
+            degree = 512    
+            cheb_coeffs = np.polynomial.chebyshev.chebfit(x, norm_diag[key][1]-threshold, degree)
+            cheb_interp = np.polynomial.chebyshev.Chebyshev(cheb_coeffs)
+
             #print(cheb_interp.roots())
             def newton_func(x_newton):
                 return np.polynomial.chebyshev.chebval(x_newton, cheb_coeffs)
@@ -112,9 +139,15 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
                 logger.info("root find failed to converge")
                 x_root = x_start_search
             z_root = (x_root+1)*Lz/2
-            logger.info("{} : found root z={} (x:{} -> {})".format(key, z_root, x_start_search, x_root))  
+
+            logger.info("newton: {} : found root z={} (x:{} -> {})".format(key, z_root, x_start_search, x_root))  
             #print(np.polynomial.chebyshev.chebroots(cheb_coeffs))
             #apjfig.ax.semilogy(z,np.polynomial.chebyshev.chebval(x, cheb_coeffs), label='fit')
+
+        z_root_poor, f, i = poor_mans_root(norm_diag[key][1]-threshold, z)
+        logger.info("poor man: {} found root z={}".format(key, z_root_poor))
+        apjfig.ax.axvline(x=z_root_poor, linestyle='dotted', color=root_color)
+
     for key in figs.keys():
         figs[key].savefig(output_path+'diag_{}.png'.format(key))
 

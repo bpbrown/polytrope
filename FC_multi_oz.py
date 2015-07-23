@@ -46,7 +46,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     
     # Set domain
     nz = nz_rz+nz_cz
-    nx = nz_cz*2
+    nx = nz_cz*4
     nz_list = [nz_rz, nz_cz]
     
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 

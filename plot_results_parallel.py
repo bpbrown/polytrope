@@ -106,7 +106,7 @@ vertical_stack = True
 scale_late = True
 add_background_s0 = False
 
-log_list = []#['enstrophy'] #fnames[1]
+log_list = ['enstrophy']#['enstrophy'] #fnames[1]
 
 single = False
 
