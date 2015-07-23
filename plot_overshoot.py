@@ -2,10 +2,10 @@
 Plot overshoot from joint analysis files.
 
 Usage:
-    plot_fluxes.py <files> ... [--output=<output>]
+    plot_overshoot.py [--output=<output>]
 
 Options:
-    --output=<output>  Output directory [default: ./fluxes]
+    --output=<output>  Output directory [default: ./]
 
 """
 import numpy as np
@@ -77,7 +77,7 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
             logger.info("Missing s_tot from outputs")
 
     # estimate penetration depths
-   overshoot_depths = OrderedDict()
+    overshoot_depths = OrderedDict()
 
     def poor_mans_root(f, z):
         i_near = (np.abs(f)).argmin()
@@ -97,7 +97,8 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
         
     return overshoot_depths
     
-def main(files, output_path='./'):
+def analyze_case(files):
+    logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
     std_devs = data.std_dev
@@ -108,8 +109,57 @@ def main(files, output_path='./'):
     overshoot_depths = diagnose_overshoot(averages, z, output_path=output_path)
     for key in overshoot_depths:
         print("{} --> z={}".format(key, overshoot_depths[key]))
+    return overshoot_depths
 
+def analyze_all_cases(stiffness_file_list):
+    overshoot = OrderedDict()
+    first_run = True
+    
+    for stiffness, files in stiffness_file_list:
+        overshoot_one_case = analyze_case(files)
+        for key in overshoot_one_case:
+            if first_run:
+                overshoot[key] = np.array(overshoot_one_case[key])
+            else:
+                overshoot[key] = np.append(overshoot[key], overshoot_one_case[key])
+                
+        if first_run:
+            stiffness_array = np.array(stiffness)
+            first_run = False
+        else:
+            stiffness_array = np.append(stiffness_array, stiffness)
+            
+    return stiffness_array, overshoot
 
+def plot_overshoot(stiffness, overshoot, output_path='./'):
+    apjfig = analysis.APJSingleColumnFigure()
+    ref = 'grad_s_mean'
+    ref_depth = overshoot[ref]
+    min_z = 100
+    max_z = 0
+    for key in overshoot:
+        if key!=ref and key!='grad_s':
+            logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
+            q = np.abs(overshoot[key]-ref_depth)
+            apjfig.ax.loglog(stiffness, q, label=key, marker='o')
+        min_z = min(min_z, np.min(q))
+        max_z = max(max_z, np.max(q))
+        
+    apjfig.ax.set_ylim(0.9*min_z, 1.1*max_z)
+    apjfig.legend(loc="upper left", title="diagnostics", fontsize=6)
+    apjfig.ax.set_xlabel("Stiffness S")
+    apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
+    apjfig.savefig(output_path+"overshoot.png", dpi=600)
+    
+def main(output_path='./'):
+    file_list = [(1e2, ['FC_multi_Ra1e7_S1e2_high/profiles/profiles_s7.h5']),
+                 (1e3, ['FC_multi_Ra1e7_S1e3_high/profiles/profiles_s7.h5']),
+                 (1e4, ['FC_multi_Ra1e7_S1e4_high/profiles/profiles_s7.h5']),
+                 (1e5, ['FC_multi_Ra1e7_S1e5_high/profiles/profiles_s7.h5'])]
+                 
+    stiffness, overshoot = analyze_all_cases(file_list)
+    plot_overshoot(stiffness, overshoot, output_path=output_path)
+     
 if __name__ == "__main__":
 
     import pathlib
@@ -127,6 +177,6 @@ if __name__ == "__main__":
             if not output_path.exists():
                 output_path.mkdir()
     logger.info("output to {}".format(output_path))
-    main(args['<files>'], output_path=str(output_path)+'/')
+    main(output_path=str(output_path)+'/')
 
 
