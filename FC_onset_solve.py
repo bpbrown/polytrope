@@ -179,7 +179,6 @@ class FC_onset_solver:
             if CW.rank == 0:
                 for i in range(len(returned)):
                     item = returned[i]
-                    print(item)
                     if np.asarray(item[0]).shape[0] > 0:
                         eigval_array = np.asarray(item[1])
                         eigvals = []
@@ -196,7 +195,6 @@ class FC_onset_solver:
                             count = 0
                             for key in profiles:
                                 new_key = "{0}_".format(i) + key
-                                print(new_key)
                                 if new_key not in prof_returns.keys():
                                     prof_returns[new_key] = [profiles_returned[count,:]]
                                 else:
