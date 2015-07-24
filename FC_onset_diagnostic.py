@@ -21,6 +21,7 @@ def plot_flow_profiles(file_name, profiles=['w', 'T1']):
     keys = []
     for raw_key in f['keys'][:]:
         keys.append(str(raw_key[0])[2:-1])
+    print(keys)
     
 
     prof_keys = []
@@ -37,12 +38,17 @@ def plot_flow_profiles(file_name, profiles=['w', 'T1']):
     z = f['z'][0]
     zs, xs = np.meshgrid(z, x)
 
-    print(x)
-    print(xs, zs)
-
     #loop through each wavenumber
     fig = plt.figure(figsize=(20,10))
     for i in range(len(prof_keys[0])):
+        w_key = prof_keys[0][i]
+        t_key = prof_keys[1][i]
+        wavenum = t_key.split('_')[0]
+        ra_key = wavenum + '_ras'
+        eval_key = wavenum + '_evals'
+        ras = f[ra_key][:]
+        evals = f[eval_key][:]
+        print('Plotting wavenum {0}'.format(wavenum))
         count = 1
         for j in range(f[prof_keys[0][i]][:].shape[0]):
             w_key = prof_keys[0][i]
@@ -78,8 +84,8 @@ def plot_flow_profiles(file_name, profiles=['w', 'T1']):
 
 
             plt.subplots_adjust(top=0.88, wspace=0.5, hspace=0.4)
-            fig.suptitle('Wavenumber {0}; Ra'.format(w_key.split('_')[0]), fontsize=16)
-            plt.savefig(out_dir+'wavenum{0}_{1:04d}'.format(w_key.split('_')[0], count), dpi=100)
+            fig.suptitle('Wavenumber {0}; Ra {1:.4g}; eval {2:.4g}'.format(wavenum, ras[j], evals[j]), fontsize=16)
+            plt.savefig(out_dir+'wavenum{0}_{1:04d}'.format(wavenum, count), dpi=100)
             count +=1
 
 print(file_name[:-3])
