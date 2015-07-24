@@ -118,7 +118,7 @@ class FC_onset_solver:
             print('Error: Unknown field key')
             return
         
-    def get_unstable_modes(self, ra, wavenumber, profile='w'):
+    def get_unstable_modes(self, ra, wavenumber, profiles=['w', 'T1']):
         '''
         Solves the system at the specified ra and horizontal wavenumber,
         gets all positive eigenvalues, and returns the specified profile,
@@ -127,17 +127,18 @@ class FC_onset_solver:
         self.solve(wavenumber, ra)
         self.get_positive_eigenvalues()
 
-        sample_profile = self.get_profile(0, key=profile)
-        shape = [self._positive_eigenvalues_r.shape[1], sample_profile['g'].shape[0], sample_profile['g'].shape[1]]
+        sample_profile = self.get_profile(0, key=profiles[0])
+        shape = [self._positive_eigenvalues_r.shape[1], len(profiles), sample_profile['g'].shape[0], sample_profile['g'].shape[1]]
         unstables = np.zeros(shape, dtype=np.complex128)
         #Substitution is omega*f.
         for i in range(shape[0]):
             index = self._positive_eigenvalues_r[0,i]
-            unstables[i,:] = self.get_profile(index, key=profile)['g']
+            for j in range(len(profiles)):
+                unstables[i,j,:] = self.get_profile(index, key=profiles[j])['g']
 
         return (unstables, self._positive_eigenvalues_r)
     
-    def solve_unstable_modes_parallel(self, ra):
+    def solve_unstable_modes_parallel(self, ra, **kwargs):
         '''
         Solves the EVP at all horizontal wavenumbers for the specified value of
         ra and collects all unstable modes at that ra.
@@ -146,7 +147,7 @@ class FC_onset_solver:
         kxs_global = np.arange(kxs)
         kxs_local = kxs_global[CW.rank::CW.size]
 
-        returns_local = [self.get_unstable_modes(ra, kx, profile='w') for kx in kxs_local]
+        returns_local = [self.get_unstable_modes(ra, kx, **kwargs) for kx in kxs_local]
         if CW.rank == 0:
             returns_global = [0]*kxs
             returns_global[CW.rank::CW.size] = returns_local
@@ -166,15 +167,19 @@ class FC_onset_solver:
         else:
             return True
 
-    def plot_onsets(self, ra_range):
+    def plot_onsets(self, ra_range, **kwargs):
         if CW.rank == 0:
             import matplotlib.pyplot as plt
         evals = dict()
+        prof_returns = dict()
+        if 'profiles' in kwargs.keys():
+            profiles = kwargs['profiles']
         for ra in ra_range:
-            returned = self.solve_unstable_modes_parallel(ra)
+            returned = self.solve_unstable_modes_parallel(ra, **kwargs)
             if CW.rank == 0:
                 for i in range(len(returned)):
                     item = returned[i]
+                    print(item)
                     if np.asarray(item[0]).shape[0] > 0:
                         eigval_array = np.asarray(item[1])
                         eigvals = []
@@ -186,6 +191,18 @@ class FC_onset_solver:
                         else:
                             for pack in eigvals:
                                 evals[str(i)].append(pack)
+                        for j in range(np.asarray(item[0]).shape[0]):
+                            profiles_returned = np.asarray(item[0])[j,:]
+                            count = 0
+                            for key in profiles:
+                                new_key = "{0}_".format(i) + key
+                                print(new_key)
+                                if new_key not in prof_returns.keys():
+                                    prof_returns[new_key] = [profiles_returned[count,:]]
+                                else:
+                                    prof_returns[new_key].append(profiles_returned[count,:])
+                                count += 1
+                            
         if CW.rank == 0:
             print('saving output')
             import h5py
@@ -209,7 +226,19 @@ class FC_onset_solver:
                 f[dict_key_eval] = evals_local
                 file_keys.append(dict_key_ra)
                 file_keys.append(dict_key_eval)
-            #Storing string list from http://stackoverflow.com/questions/23220513/storing-a-list-of-strings-to-a-hdf5-dataset-from-python
+                for p_key in profiles:
+                    my_key = "{0}_".format(int(key))+p_key
+                    f[my_key] = np.asarray(prof_returns[my_key])
+                    file_keys.append(my_key)
+
+            file_keys.append('x')
+            file_keys.append('z')
+            f['x'] = self.x
+            f['z'] = self.z
+            print(file_keys)
+                    
+
+           #Storing string list from http://stackoverflow.com/questions/23220513/storing-a-list-of-strings-to-a-hdf5-dataset-from-python
             asciiList = [n.encode('ascii', 'ignore') for n in file_keys]
             f.create_dataset('keys', (len(asciiList),1), 'S10', asciiList)
             plt.axhline(self.epsilon, linestyle='dashed', color='black', label=r'$\epsilon$')
@@ -268,16 +297,16 @@ if __name__ == '__main__':
     nz = 32
     Lx = 100
     epsilon=5e-2
-    out_dir = '/regulus/exoweather/evan/'
+    out_dir = './'#'/regulus/exoweather/evan/'
 
 
     start_ra = 60
     stop_ra  = 90
-    steps = 301
+    steps = 5
 
 
     solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
-    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps))
+    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
 if False:
     returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
     if CW.rank == 0:
