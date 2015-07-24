@@ -20,9 +20,9 @@ class FC_onset_solver:
     '''
 
     def __init__(self, nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
-        constant_diffusivities=True, constant_kappa=True,
+        n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=True,
         grid_dtype=np.complex128, comm=MPI.COMM_SELF,
-	out_dir=''):
+	    out_dir=''):
         '''
         Initializes the atmosphere, sets up basic variables.
 
@@ -34,11 +34,12 @@ class FC_onset_solver:
         self.Lz = Lz
         self.epsilon = epsilon
         self.gamma = gamma
+        self.n_rho_cz = n_rho_cz
         self.constant_diffusivities=constant_diffusivities
         self.constant_Kappa=constant_kappa
 
         self.atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz,
-                gamma=gamma, grid_dtype=grid_dtype,
+                gamma=gamma, grid_dtype=grid_dtype, n_rho_cz=n_rho_cz,
                 constant_diffusivities=constant_diffusivities,
                 constant_kappa=constant_kappa,
                 comm=comm, epsilon=epsilon)
@@ -48,7 +49,6 @@ class FC_onset_solver:
 
         out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0] + '/'
         self.out_dir = out_dir + out_dir_base
-        print(self.out_dir)
         if not os.path.exists(self.out_dir) and CW.rank == 0:
             os.makedirs(self.out_dir)
 
@@ -207,7 +207,7 @@ class FC_onset_solver:
             print('saving output')
             import h5py
 
-            outstring = self.out_dir+'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}'.format(self.epsilon, ra_range[0], ra_range[-1])
+            outstring = self.out_dir+'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}'.format(self.epsilon, ra_range[0], ra_range[-1], self.n_rho_cz)
             f = h5py.File(outstring +'.h5', 'w')
             file_keys = []
 
@@ -238,11 +238,11 @@ class FC_onset_solver:
             print(file_keys)
                     
 
-           #Storing string list from http://stackoverflow.com/questions/23220513/storing-a-list-of-strings-to-a-hdf5-dataset-from-python
+            #Storing string list from http://stackoverflow.com/questions/23220513/storing-a-list-of-strings-to-a-hdf5-dataset-from-python
             asciiList = [n.encode('ascii', 'ignore') for n in file_keys]
             f.create_dataset('keys', (len(asciiList),1), 'S10', asciiList)
-            plt.axhline(self.epsilon, linestyle='dashed', color='black', label=r'$\epsilon$')
-            plt.legend(loc='upper left')
+            #plt.axhline(self.epsilon, linestyle='dashed', color='black', label=r'$\epsilon$')
+            plt.legend(loc='lower left')
             plt.xlabel('Ra')
             plt.ylabel(r'$Re(\omega)$')
             plt.yscale('log')
@@ -296,16 +296,17 @@ if __name__ == '__main__':
     nx = 32
     nz = 32
     Lx = 100
-    epsilon=5e-2
-    out_dir = './'#'/regulus/exoweather/evan/'
+    epsilon=1e-1
+    out_dir = '/regulus/exoweather/evan/'
+    n_rho_cz = 20
 
 
-    start_ra = 60
-    stop_ra  = 90
-    steps = 5
+    start_ra = 70
+    stop_ra  = 80
+    steps = 101
 
 
-    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
+    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
     solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
 if False:
     returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
