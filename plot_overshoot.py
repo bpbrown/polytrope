@@ -54,6 +54,39 @@ def make_plots(norm_diag):
     for key in figs.keys():
         figs[key].savefig(output_path+'diag_{}.png'.format(key))
 
+
+def cheby_newton_root(z, f, z0=None, degree=512):
+    import numpy.polynomial.chebyshev as npcheb
+    import scipy.optimize as scpop
+    
+    Lz = np.max(z)-np.min(z) 
+    if z0 is None:
+        z0 = Lz/2
+
+    def to_x(z, Lz=None):
+        # convert back to [-1,1]
+        if Lz is None:
+            Lz = np.max(z)-np.min(z) 
+        return (2/Lz)*z-1
+
+    def to_z(x, Lz):
+        # convert back to [-1,1]
+        return (x+1)*Lz/2 
+    
+    logger.info("searching for roots starting from z={}".format(z0))
+    x  = to_x(z, Lz=Lz) 
+    x0 = to_x(z0, Lz=Lz)
+    cheb_coeffs = npcheb.chebfit(x, f, degree)
+    cheb_interp = npcheb.Chebyshev(cheb_coeffs)
+
+    def newton_func(x_newton):
+        return npcheb.chebval(x_newton, cheb_coeffs)
+
+    x_root = scpop.newton(newton_func, x0)
+    z_root = to_z(x_root, Lz)
+    logger.info("newton: found root z={} (x0:{} -> {})".format(z_root, x0, x_root))
+    return z_root
+
 def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     import scipy.optimize as scpop
 
@@ -79,22 +112,29 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     # estimate penetration depths
     overshoot_depths = OrderedDict()
 
-    def poor_mans_root(f, z):
+    def poor_mans_root(z, f):
         i_near = (np.abs(f)).argmin()
         return z[i_near], f[i_near], i_near
     
     for key in norm_diag:
-        if key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot':
+        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot':
             threshold = 0
             root_color = 'blue'
+            criteria = norm_diag[key][1] - threshold
+            if key=="KE_flux":
+                color = 'darkgreen'
         else:
             threshold = 1e-2
             root_color = 'red'
-
-        z_root_poor, f, i = poor_mans_root(norm_diag[key][1]-threshold, z)
-        overshoot_depths[key] = z_root_poor
-        logger.info("poor man: {} found root z={}".format(key, z_root_poor))
+            criteria = np.log(norm_diag[key][1])-np.log(threshold)
+        logger.info("key {}".format(key))
         
+        z_root_poor, f, i = poor_mans_root(z, criteria)
+        z_root = cheby_newton_root(z, criteria, z0=None)
+
+        overshoot_depths[key] = z_root_poor
+        logger.info("poor man: {:>10s} : found root z={}".format(key, z_root_poor))
+        logger.info("  newton: {:>10s} : found root z={}".format(key, z_root))
     return overshoot_depths
     
 def analyze_case(files):
@@ -137,6 +177,8 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
     ref_depth = overshoot[ref]
     min_z = 100
     max_z = 0
+    logger.info("reference depth:")
+    logger.info("{} -- {}".format(ref, ref_depth))
     for key in overshoot:
         if key!=ref and key!='grad_s':
             logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
@@ -152,10 +194,10 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
     apjfig.savefig(output_path+"overshoot.png", dpi=600)
     
 def main(output_path='./'):
-    file_list = [(1e2, ['FC_multi_Ra1e7_S1e2_high/profiles/profiles_s7.h5']),
-                 (1e3, ['FC_multi_Ra1e7_S1e3_high/profiles/profiles_s7.h5']),
-                 (1e4, ['FC_multi_Ra1e7_S1e4_high/profiles/profiles_s7.h5']),
-                 (1e5, ['FC_multi_Ra1e7_S1e5_high/profiles/profiles_s7.h5'])]
+    file_list = [(1e2, ['FC_multi_Ra1e7_S1e2_high/profiles/profiles_s9.h5']),
+                 (1e3, ['FC_multi_Ra1e7_S1e3_high/profiles/profiles_s9.h5']),
+                 (1e4, ['FC_multi_Ra1e7_S1e4_high/profiles/profiles_s9.h5'])]#,
+                 #(1e5, ['FC_multi_Ra1e7_S1e5_high/profiles/profiles_s9.h5'])]
                  
     stiffness, overshoot = analyze_all_cases(file_list)
     plot_overshoot(stiffness, overshoot, output_path=output_path)
