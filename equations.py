@@ -325,8 +325,13 @@ class Polytrope(Atmosphere):
         logger.info("polytropic atmosphere parameters:")
         logger.info("   poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
         logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
-        
-        logger.info("   density scale heights = {:g}".format(np.log(self.Lz**self.poly_n)))
+
+        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
+        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
+        rho0_ratio = rho0_max/rho0_min
+        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+        logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
+        logger.info("   density scale heights = {:g} (target)x".format(np.log((self.z0)**self.poly_n)))
         H_rho_top = (self.z0-self.Lz)/self.poly_n
         H_rho_bottom = (self.z0)/self.poly_n
         logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
