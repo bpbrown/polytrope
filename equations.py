@@ -331,7 +331,7 @@ class Polytrope(Atmosphere):
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
-        logger.info("   density scale heights = {:g} (target)x".format(np.log((self.z0)**self.poly_n)))
+        logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_n)))
         H_rho_top = (self.z0-self.Lz)/self.poly_n
         H_rho_bottom = (self.z0)/self.poly_n
         logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
@@ -421,12 +421,12 @@ class Polytrope_adiabatic(Polytrope):
                  **kwargs):
 
         logger.info("************* entering polytrope_adiabatic")
-        self.full_atm = Polytrope(Lz=Lz, n_rho_cz=n_rho_cz,
-                                  gamma=gamma,nx=nx,nz=nz, Lx=Lx, aspect_ratio=aspect_ratio,
-                                  **kwargs)
+        full_atm = Polytrope(Lz=Lz, n_rho_cz=n_rho_cz,
+                             gamma=gamma,nx=nx,nz=nz, Lx=Lx, aspect_ratio=aspect_ratio,
+                             **kwargs)
         
         self.atmosphere_name = 'single adiabatic polytrope'
-        m_cz = self.full_atm.m_ad
+        m_cz = full_atm.m_ad
         self.epsilon = 0
         
         if Lz is None:
@@ -441,22 +441,28 @@ class Polytrope_adiabatic(Polytrope):
         logger.info("************* Doing polytrope_adiabatic super.__init__")
         super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
                 
-        self.constant_diffusivities = self.full_atm.constant_diffusivities
+        self.constant_diffusivities = full_atm.constant_diffusivities
 
         logger.info("************* Doing polytrope_adiabatic _set_atmosphere()")
             
         self._set_atmosphere()
-        self.full_atm._set_timescales(atmosphere=self)
+        full_atm._set_timescales(atmosphere=self)
 
-        self.T0_IC = self.full_atm.T0['g'] - self.T0['g']
-        self.rho0_IC = self.full_atm.rho0['g'] - self.rho0['g']
-        self.ln_rho0_IC = np.log(self.full_atm.rho0['g']) - np.log(self.rho0['g'])
+        self.T0_IC = self._new_ncc()
+        self.rho0_IC = self._new_ncc()
+        self.ln_rho0_IC = self._new_ncc()
 
-    def _set_diffusivities(self, **kwargs):
-        self.full_atm._set_diffusivities(**kwargs)
-        self.nu = self.full_atm.nu
-        self.chi = self.full_atm.chi
-        self.del_chi = self.full_atm.del_chi
+        self.T0_IC['g'] = full_atm.T0['g'] - self.T0['g']
+        self.rho0_IC['g'] = full_atm.rho0['g'] - self.rho0['g']
+        self.ln_rho0_IC['g'] = np.log(full_atm.rho0['g']) - np.log(self.rho0['g'])
+        
+        self.delta_s = full_atm.delta_s
+        
+    ## def _set_diffusivities(self, **kwargs):
+    ##     self.full_atm._set_diffusivities(**kwargs)
+    ##     self.nu = self.full_atm.nu
+    ##     self.chi = self.full_atm.chi
+    ##     self.del_chi = self.full_atm.del_chi
               
 class Multitrope(MultiLayerAtmosphere):
     '''
@@ -1016,11 +1022,12 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
     def set_IC(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).set_IC(*args, **kwargs)
         # update initial conditions to include super-adiabatic component
+        logger.info("shapes: {} and {}".format(self.T_IC['g'].shape, self.T0_IC['g'].shape))
+        self.T0_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC['g'] += self.T0_IC['g']
-        self.ln_rho_IC['g'] += self.ln_rho0_IC['g']
         
-        logger.info("adding in nonadiabatic background")
-        logger.info("T0_super: {}".format(self.T0_IC['g']))
+        self.ln_rho_IC['g'] += self.ln_rho0_IC['g']        
+        logger.info("adding in nonadiabatic background to T1 and ln_rho1")
 
 class FC_multitrope(FC_equations, Multitrope):
     def __init__(self, *args, **kwargs):
