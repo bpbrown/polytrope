@@ -3,7 +3,7 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_nrho3.5.py [--Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --restart=<restart_file> --nz=<nz>] 
+    FC_poly.py [options] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
@@ -29,10 +29,6 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-    # Set domain
-    #Lz = 10
-    #Lx = 4*Lz
-
     nx = nz*2
     
     atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True)
@@ -55,35 +51,14 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
         checkpoint = Checkpoint(data_dir)
         checkpoint.set_checkpoint(solver, wall_dt=1800)
 
-    x = atmosphere.domain.grid(0)
-    z = atmosphere.domain.grid(1)
-
-
-    # initial conditions
-    T = solver.state['T1']
-    ln_rho = solver.state['ln_rho1']
-
     if restart is None:
-         # Random perturbations, initialized globally for same results in parallel
-        gshape = atmosphere.domain.dist.grid_layout.global_shape(scales=atmosphere.domain.dealias)
-        slices = atmosphere.domain.dist.grid_layout.slices(scales=atmosphere.domain.dealias)
-        rand = np.random.RandomState(seed=42)
-        noise = rand.standard_normal(gshape)[slices]
-
-        A0 = 1e-6
-        
-        T.set_scales(atmosphere.domain.dealias, keep_data=True)
-        z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-        T['g'] = A0*np.sin(np.pi*z_dealias/atmosphere.Lz)*noise*atmosphere.T0['g']
-
-        logger.info("A0 = {:g}".format(A0))
-        logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
-        
+        atmosphere.set_IC(solver)        
     else:
         logger.info("restarting from {}".format(restart))
         checkpoint.restart(restart, solver)
 
-    logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
+    logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time,
+                                                                      atmosphere.top_thermal_time))
 
 
     max_dt = atmosphere.buoyancy_time*0.25
@@ -153,7 +128,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
             logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
-            N_TOTAL_CPU = atmosphere.domain.distributor.comm_world.size
+            N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
 
             # Print statistics
             print('-' * 40)
@@ -164,8 +139,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
             print('  startup time:', startup_time)
             print('main loop time:', main_loop_time)
             print('    total time:', total_time)
-            print('Iterations:', solver.iteration)
-            print('Average timestep:', solver.sim_time / n_steps)
+            print('    iterations:', solver.iteration)
+            print(' loop sec/iter:', main_loop_time/solver.iteration)
+            print('    average dt:', solver.sim_time / n_steps)
             print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
             print('scaling:',
                   ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
@@ -183,7 +159,7 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_{}/".format(args['--Rayleigh'])
+    data_dir += "_Ra{}/".format(args['--Rayleigh'])
     logger.info("saving run in: {}".format(data_dir))
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
