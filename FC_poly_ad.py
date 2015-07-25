@@ -3,7 +3,7 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_poly.py [options] 
+    FC_poly_ad.py [options] 
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
@@ -31,7 +31,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     nx = nz*2
     
-    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True)
+    atmosphere = equations.FC_polytrope_adiabatic(nx=nx, nz=nz, constant_kappa=True)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()

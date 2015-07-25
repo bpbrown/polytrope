@@ -185,7 +185,6 @@ def plot_fluxes(fluxes, z, output_path='./'):
     
 
 def main(files, output_path='./'):
-    logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
     std_devs = data.std_dev
