@@ -62,10 +62,10 @@ class Atmosphere:
         self.necessary_quantities['del_s0'] = self.del_s0
         
         self.T0_zz = self._new_ncc()
-        self.del_T0 = self._new_ncc()
+        self.T0_z = self._new_ncc()
         self.T0 = self._new_ncc()
         self.necessary_quantities['T0_zz'] = self.T0_zz
-        self.necessary_quantities['del_T0'] = self.del_T0
+        self.necessary_quantities['T0_z'] = self.T0_z
         self.necessary_quantities['T0'] = self.T0
 
         self.del_P0 = self._new_ncc()
@@ -100,7 +100,7 @@ class Atmosphere:
 
         # thermodynamic quantities
         self.problem.parameters['T0'] = self.T0
-        self.problem.parameters['del_T0'] = self.del_T0
+        self.problem.parameters['T0_z'] = self.T0_z
         self.problem.parameters['T0_zz'] = self.T0_zz
         
         self.problem.parameters['rho0'] = self.rho0
@@ -310,7 +310,7 @@ class Polytrope(Atmosphere):
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
  
         self.T0_zz['g'] = 0        
-        self.del_T0['g'] = -1
+        self.T0_z['g'] = -1
         self.T0['g'] = self.z0 - self.z       
 
         self.P0['g'] = (self.z0 - self.z)**(self.poly_n+1)
@@ -609,8 +609,8 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("Solving for T0")
         # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
         flux_top = -1
-        self.del_T0['g'] = flux_top/self.kappa['g']
-        self.del_T0.antidifferentiate('z',('right',0), out=self.T0)
+        self.T0_z['g'] = flux_top/self.kappa['g']
+        self.T0_z.antidifferentiate('z',('right',0), out=self.T0)
         self.T0['g'] += 1
         self.T0.set_scales(1, keep_data=True)
     
@@ -906,20 +906,13 @@ class FC_equations(Equations):
 
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.thermal_diff           = " Cv_inv*chi*(Lap(T1, T1_z)      + T1_z*del_ln_rho0)"
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source = ""
-        if include_background_flux:
-            self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
-        else:
-            self.source += " +0 "
-        if not self.constant_diffusivities:
-            self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
-            if include_background_flux:
-                self.source += " + Cv_inv*del_chi*del_T0"
+        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z)     + T1_z*del_ln_rho0 "
+                                       "              + T0_z*dz(ln_rho1)) + del_chi*dz(T1)) ")
+        self.nonlinear_thermal_diff =  " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.source =                  " Cv_inv*(chi*(T0_zz             + T0_z*del_ln_rho0) + del_chi*T0_z)"
                 
-        self.problem.substitutions['L_thermal'] = self.thermal_diff 
-        self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
+        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
+        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
         
         self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
@@ -938,13 +931,12 @@ class FC_equations(Equations):
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
-        # here we have assumed chi = constant in both rho and radius
-        self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u -  L_thermal) = "
+        self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
         
         logger.info("using nonlinear EOS for entropy, via substitution")
         # non-linear EOS for s, where we've subtracted off
-        # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
+        # Cv_inv*∇s0 =  T0_z/(T0 + T1) - (gamma-1)*del_ln_rho0
         # move entropy to a substitution; no need to solve for it.
         #self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
         #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
@@ -1070,7 +1062,7 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
         self.T0_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC['g'] += self.T0_IC['g']
         
-        self.ln_rho_IC['g'] += self.ln_rho0_IC['g']        
+        #self.ln_rho_IC['g'] += self.ln_rho0_IC['g']        
         logger.info("adding in nonadiabatic background to T1 and ln_rho1")
 
 class FC_multitrope(FC_equations, Multitrope):
