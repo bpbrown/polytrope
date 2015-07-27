@@ -296,16 +296,16 @@ if __name__ == '__main__':
     Lx = 100
     epsilon=1e-4
     out_dir = '/regulus/exoweather/evan/'
-    n_rho_cz = 20
+    n_rho_cz = 32
 
 
-    start_ra = 39
-    stop_ra  = 100
-    res = 1
+    start_ra = 40
+    stop_ra  = 200
+    res = 10
     steps = (stop_ra - start_ra)/res + 1
 
 
-    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
+    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
     solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
 if False:
     returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
