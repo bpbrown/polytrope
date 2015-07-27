@@ -20,7 +20,7 @@ class FC_onset_solver:
     '''
 
     def __init__(self, nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
-        n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=True,
+        n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=False,
         grid_dtype=np.complex128, comm=MPI.COMM_SELF,
 	    out_dir=''):
         '''
@@ -294,14 +294,15 @@ if __name__ == '__main__':
     nx = 32
     nz = 32
     Lx = 100
-    epsilon=1e-1
+    epsilon=1e-4
     out_dir = '/regulus/exoweather/evan/'
     n_rho_cz = 20
 
 
-    start_ra = 70
-    stop_ra  = 80
-    steps = 101
+    start_ra = 39
+    stop_ra  = 100
+    res = 1
+    steps = (stop_ra - start_ra)/res + 1
 
 
     solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir)
