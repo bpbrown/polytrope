@@ -10,6 +10,8 @@ Options:
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
     --restart=<restart_file>   Restart from checkpoint
     --nz=<nz>                  vertical z (chebyshev) resolution [default: 128]
+    --label=<label>            Additional label for run output directory
+
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -29,7 +31,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-    nx = nz*2
+    nx = nz*4
     
     atmosphere = equations.FC_polytrope_adiabatic(nx=nx, nz=nz, constant_kappa=True)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
@@ -67,7 +69,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = 0.25*atmosphere.thermal_time
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.5*3600
+    solver.stop_wall_time = 11.5*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -159,7 +161,11 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_Ra{}/".format(args['--Rayleigh'])
+    data_dir += "_Ra{}".format(args['--Rayleigh'])
+    if args['--label'] is not None:
+        data_dir += "_{}".format(args['--label'])
+    data_dir += '/'
+
     logger.info("saving run in: {}".format(data_dir))
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),

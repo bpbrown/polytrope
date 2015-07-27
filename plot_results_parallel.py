@@ -84,7 +84,7 @@ print()
 
 #plt.ion()
 # Options
-fnames = ["s'","enstrophy"]
+fnames = ["s","enstrophy"]
 xstr = 'x/H'
 ystr = 'z/H'
 cmapname = 'Spectral_r'
@@ -106,7 +106,7 @@ vertical_stack = True
 scale_late = True
 add_background_s0 = False
 
-log_list = ['enstrophy']#['enstrophy'] #fnames[1]
+log_list = [] #['enstrophy'] #fnames[1]
 
 single = False
 

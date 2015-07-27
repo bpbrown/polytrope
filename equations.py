@@ -120,6 +120,13 @@ class Atmosphere:
         self.problem.parameters['chi'] = self.chi
         self.problem.parameters['del_chi'] = self.del_chi
 
+        # thermal boundary conditions
+        self.problem.parameters['T1_left']  = self.T1_left
+        self.problem.parameters['T1_right'] = self.T1_right
+        self.problem.parameters['T1_z_left']  = self.T1_z_left
+        self.problem.parameters['T1_z_right'] = self.T1_z_right
+
+
     def copy_atmosphere(self, atmosphere):
         '''
         Copies values from a target atmosphere into the current atmosphere.
@@ -278,7 +285,7 @@ class Polytrope(Atmosphere):
             
         self._set_atmosphere()
         self._set_timescales()
-        
+
     def _calculate_Lz_cz(self, n_rho_cz, m_cz):
         '''
         Calculate Lz based on the number of density scale heights and the initial polytrope.
@@ -862,11 +869,20 @@ class Equations():
 
         return self.analysis_tasks
     
+    def evaluate_at_point(self, f, z=0):
+        return f.interpolate(z=z)
+
 class FC_equations(Equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-        
+
+        # possible boundary condition values for a normal system
+        self.T1_left  = 0
+        self.T1_right = 0
+        self.T1_z_left  = 0
+        self.T1_z_right = 0
+
     def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
@@ -937,7 +953,7 @@ class FC_equations(Equations):
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
                stress_free=None, no_slip=None):
-        
+
         if fixed_flux is None and fixed_temperature is None and mixed_temperature_flux is None:
             mixed_flux_temperature = True
         if stress_free is None and no_slip is None:
@@ -946,20 +962,20 @@ class FC_equations(Equations):
         # thermal boundary conditions
         if fixed_flux:
             logger.info("Thermal BC: fixed flux (T1_z)")
-            self.problem.add_bc( "left(Q_z) = 0")
-            self.problem.add_bc("right(Q_z) = 0")
+            self.problem.add_bc( "left(T1_z) = T1_z_left")
+            self.problem.add_bc("right(T1_z) = T1_z_right")
         elif fixed_temperature:
             logger.info("Thermal BC: fixed temperature (T1)")
-            self.problem.add_bc( "left(T1) = 0")
-            self.problem.add_bc("right(T1) = 0")            
+            self.problem.add_bc( "left(T1) = T1_left")
+            self.problem.add_bc("right(T1) = T1_right")
         elif mixed_flux_temperature:
             logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
-            self.problem.add_bc("left(Q_z) = 0")
-            self.problem.add_bc("right(T1) = 0")
+            self.problem.add_bc("left(T1_z) = T1_z_left")
+            self.problem.add_bc("right(T1)  = T1_right")
         elif mixed_temperature_flux:
             logger.info("Thermal BC: mixed temperature/flux (T1/T1_z)")
-            self.problem.add_bc("left(T1) = 0")
-            self.problem.add_bc("right(Q_z) = 0")
+            self.problem.add_bc("left(T1)    = T1_left")
+            self.problem.add_bc("right(T1_z) = T1_z_right")
         else:
             logger.error("Incorrect thermal boundary conditions specified")
             raise
@@ -1015,9 +1031,37 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
         Polytrope_adiabatic.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
+        self.T1_left  = self.at_boundary(self.T0_IC, z=0,       BC_text='T1')
+        self.T1_right = self.at_boundary(self.T0_IC, z=self.Lz, BC_text='T1')
+        self.T1_z_left  = self.at_boundary(self.T0_IC, z=0,       dz=True, BC_text='T1')
+        self.T1_z_right = self.at_boundary(self.T0_IC, z=self.Lz, dz=True, BC_text='T1')
+
     def set_equations(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).set_equations(*args, **kwargs)
         self.check_atmosphere()
+
+    def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
+        if derivative or dz:
+            f_bc=self._new_ncc()
+            f.differentiate('z', out=f_bc)
+            BC_text += "_z"
+        else:
+            f_bc = f
+
+        BC_field = self.evaluate_at_point(f_bc, z=z)
+
+        try:
+            BC = BC_field['g'][0][0]
+        except:
+            BC = BC_field['g']
+            logger.error("shape of BC_field {}".format(BC_field['g'].shape))
+            logger.error("BC = {}".format(BC))
+
+        if np.abs(BC) < tol:
+            BC = 0
+        logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
+        return BC
+
 
     def set_IC(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).set_IC(*args, **kwargs)
