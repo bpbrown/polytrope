@@ -3,11 +3,7 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
-    FC_multi.py [ --Rayleigh=<Rayleigh> --Prandtl=<Prandtl> --stiffness=<stiffness> ]
-                [ --n_rho_cz=<n_rho_cz> --nz_cz=<nz_cz> ]
-                [ --n_rho_rz=<n_rho_rz> --nz_rz=<nz_rz> ]
-                [ --restart=<restart_file>]
-                [ --verbose] 
+    FC_multi.py [options]
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
@@ -18,6 +14,7 @@ Options:
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
+    --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
 """
 import logging
@@ -26,7 +23,12 @@ logger = logging.getLogger(__name__)
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
-from dedalus.extras.checkpointing import Checkpoint
+try:
+    from dedalus.extras.checkpointing import Checkpoint
+    do_checkpointing=True
+except:
+    logger.info("No checkpointing available; disabling capability")
+    do_checkpointing=False
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
                       n_rho_cz=3.5, n_rho_rz=1, 
@@ -43,7 +45,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     
     # Set domain
     nz = nz_rz+nz_cz
-    nx = nz_cz*2
+    nx = nz_cz*4
     nz_list = [nz_rz, nz_cz]
     
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
@@ -63,7 +65,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     # Build solver
     solver = problem.build_solver(ts)
 
-    do_checkpointing=True
+
     if do_checkpointing:
         checkpoint = Checkpoint(data_dir)
         checkpoint.set_checkpoint(solver, wall_dt=1800)
@@ -93,8 +95,12 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         #logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
         
     else:
-        logger.info("restarting from {}".format(restart))
-        checkpoint.restart(restart, solver)
+        if do_checkpointing:
+            logger.info("restarting from {}".format(restart))
+            checkpoint.restart(restart, solver)
+        else:
+            logger.error("No checkpointing capability in this branch of Dedalus.  Aborting.")
+            raise
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
@@ -197,7 +203,10 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_Ra{}_S{}/".format(args['--Rayleigh'], args['--stiffness'])
+    data_dir += "_Ra{}_S{}".format(args['--Rayleigh'], args['--stiffness'])
+    if args['--label'] is not None:
+        data_dir += "_{}".format(args['--label'])
+    data_dir += '/'
     logger.info("saving run in: {}".format(data_dir))
     
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),

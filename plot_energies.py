@@ -15,6 +15,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
 import analysis
 
 def plot_energies(data, times, output_path='./'):

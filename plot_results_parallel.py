@@ -106,7 +106,7 @@ vertical_stack = True
 scale_late = True
 add_background_s0 = False
 
-log_list = []#['enstrophy'] #fnames[1]
+log_list = [] #['enstrophy'] #fnames[1]
 
 single = False
 
@@ -386,7 +386,7 @@ for j, (fname, field) in enumerate(zip(fnames, fields)):
 first_iteration = iteration        
 # plot images        
 print(x.shape)  
-dpi_png = max(96, len(x)/(w_total*scale))
+dpi_png = max(150, len(x)/(w_total*scale))
 
 
 print("dpi:", dpi_png, " -> ", w_total*scale*dpi_png, "x",h_total*scale*dpi_png)

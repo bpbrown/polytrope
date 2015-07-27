@@ -37,14 +37,8 @@ def plot_flows(averages, z, output_path='./'):
 
     fig = plt.figure(figsize=(16,8))
     ax1 = fig.add_subplot(1,1,1)
-    try:
-        ax1.semilogy(z, averages['Rayleigh_global'], label="global Ra")
-    except:
-        pass
-    try:
-        ax1.semilogy(z, np.abs(averages['Rayleigh_local']),  label=" local Ra")
-    except:
-        pass
+    ax1.semilogy(z, averages['Rayleigh_global'], label="global Ra")
+    ax1.semilogy(z, np.abs(averages['Rayleigh_local']),  label=" local Ra")
     ax1.legend()
     ax1.set_xlabel("z")
     ax1.set_ylabel("Ra")
@@ -191,7 +185,6 @@ def plot_fluxes(fluxes, z, output_path='./'):
     
 
 def main(files, output_path='./'):
-    logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
     std_devs = data.std_dev

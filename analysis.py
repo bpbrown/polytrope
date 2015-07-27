@@ -176,7 +176,7 @@ class APJSingleColumnFigure():
 
         return self.legend_object
 
-def semilogy_posneg(ax, x, y, color=None, **kwargs):
+def semilogy_posneg(ax, x, y, color=None,  color_pos=None, color_neg=None, **kwargs):
     pos_mask = np.logical_not(y>0)
     neg_mask = np.logical_not(y<0)
     pos_line = np.ma.MaskedArray(y, pos_mask)
@@ -185,5 +185,11 @@ def semilogy_posneg(ax, x, y, color=None, **kwargs):
     if color is None:
         color = next(ax._get_lines.color_cycle)
 
-    ax.semilogy(x, pos_line, color=color, **kwargs)
-    ax.semilogy(x, np.abs(neg_line), color=color, linestyle='dashed')
+    if color_pos is None:
+        color_pos = color
+
+    if color_neg is None:
+        color_neg = color
+        
+    ax.semilogy(x, pos_line, color=color_pos, **kwargs)
+    ax.semilogy(x, np.abs(neg_line), color=color_neg, linestyle='dashed')

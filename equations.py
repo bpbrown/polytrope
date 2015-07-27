@@ -8,6 +8,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import analysis
+
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
@@ -60,10 +62,10 @@ class Atmosphere:
         self.necessary_quantities['del_s0'] = self.del_s0
         
         self.T0_zz = self._new_ncc()
-        self.del_T0 = self._new_ncc()
+        self.T0_z = self._new_ncc()
         self.T0 = self._new_ncc()
         self.necessary_quantities['T0_zz'] = self.T0_zz
-        self.necessary_quantities['del_T0'] = self.del_T0
+        self.necessary_quantities['T0_z'] = self.T0_z
         self.necessary_quantities['T0'] = self.T0
 
         self.del_P0 = self._new_ncc()
@@ -98,7 +100,7 @@ class Atmosphere:
 
         # thermodynamic quantities
         self.problem.parameters['T0'] = self.T0
-        self.problem.parameters['del_T0'] = self.del_T0
+        self.problem.parameters['T0_z'] = self.T0_z
         self.problem.parameters['T0_zz'] = self.T0_zz
         
         self.problem.parameters['rho0'] = self.rho0
@@ -116,31 +118,25 @@ class Atmosphere:
         # diffusivities
         self.problem.parameters['nu'] = self.nu
         self.problem.parameters['chi'] = self.chi
+        self.problem.parameters['del_chi'] = self.del_chi
 
-        if not self.constant_diffusivities:
-            self.problem.parameters['del_chi'] = self.del_chi
+        # thermal boundary conditions
+        self.problem.parameters['T1_left']  = self.T1_left
+        self.problem.parameters['T1_right'] = self.T1_right
+        self.problem.parameters['T1_z_left']  = self.T1_z_left
+        self.problem.parameters['T1_z_right'] = self.T1_z_right
 
+
+    def copy_atmosphere(self, atmosphere):
+        '''
+        Copies values from a target atmosphere into the current atmosphere.
+        '''
+        self.necessary_quantities = atmosphere.necessary_quantities
+            
     def plot_atmosphere(self):
-        fig_atm = plt.figure()
-        axT = fig_atm.add_subplot(2,2,1)
-        axT.plot(self.z[0,:], self.T0['g'][0,:])
-        axT.set_ylabel('T0')
-        axP = fig_atm.add_subplot(2,2,2)
-        axP.plot(self.z[0,:], self.P0['g'][0,:])
-        axP.set_ylabel('P0')
-        axR = fig_atm.add_subplot(2,2,3)
-        axR.plot(self.z[0,:], self.rho0['g'][0,:])
-        axR.set_ylabel(r'$\rho0$')
-        axS = fig_atm.add_subplot(2,2,4)
-        mask = (self.del_s0['g'][0,:]>0)
-        axS.semilogy(self.z[0,mask], self.del_s0['g'][0,mask])
-        mask = (self.del_s0['g'][0,:]<0)
-        axS.semilogy(self.z[0,mask], np.abs(self.del_s0['g'][0,mask]), linestyle='dashed', color='red')
-        
-        axS.set_ylabel(r'$\nabla s0$')
-        fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
         for key in self.necessary_quantities:
+            logger.debug("plotting atmosphereic quantity {}".format(key))
             fig_q = plt.figure()
             ax = fig_q.add_subplot(1,1,1)
             quantity = self.necessary_quantities[key]
@@ -150,7 +146,23 @@ class Atmosphere:
             ax.set_ylabel(key)
             fig_q.savefig("atmosphere_{}_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
             plt.close(fig_q)
-            
+
+        fig_atm = plt.figure()
+        axT = fig_atm.add_subplot(2,2,1)
+        axT.plot(self.z[0,:], self.T0['g'][0,:])
+        axT.set_ylabel('T0')
+        axP = fig_atm.add_subplot(2,2,2)
+        axP.semilogy(self.z[0,:], self.P0['g'][0,:]) 
+        axP.set_ylabel('P0')
+        axR = fig_atm.add_subplot(2,2,3)
+        axR.semilogy(self.z[0,:], self.rho0['g'][0,:])
+        axR.set_ylabel(r'$\rho0$')
+        axS = fig_atm.add_subplot(2,2,4)
+        analysis.semilogy_posneg(axS, self.z[0,:], self.del_s0['g'][0,:], color_neg='red')
+        
+        axS.set_ylabel(r'$\nabla s0$')
+        fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
+                
     def check_that_atmosphere_is_set(self):
         for key in self.necessary_quantities:
             quantity = self.necessary_quantities[key]['g']
@@ -182,7 +194,10 @@ class Atmosphere:
 
     def check_atmosphere(self):
         if self.make_plots:
-            self.plot_atmosphere()
+            try:
+                self.plot_atmosphere()
+            except:
+                logger.info("Problems in plot_atmosphere: atm full of NaNs?")
         self.test_hydrostatic_balance()
         self.check_that_atmosphere_is_set()
 
@@ -262,14 +277,15 @@ class Polytrope(Atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
+        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
             self.constant_diffusivities = False
             
         self._set_atmosphere()
-        
+        self._set_timescales()
+
     def _calculate_Lz_cz(self, n_rho_cz, m_cz):
         '''
         Calculate Lz based on the number of density scale heights and the initial polytrope.
@@ -279,7 +295,7 @@ class Polytrope(Atmosphere):
         
     def _set_atmosphere(self):
         super(Polytrope, self)._set_atmosphere()
-        
+
         # polytropic atmosphere characteristics
         self.poly_n = 1/(self.gamma-1) - self.epsilon
 
@@ -294,7 +310,7 @@ class Polytrope(Atmosphere):
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
  
         self.T0_zz['g'] = 0        
-        self.del_T0['g'] = -1
+        self.T0_z['g'] = -1
         self.T0['g'] = self.z0 - self.z       
 
         self.P0['g'] = (self.z0 - self.z)**(self.poly_n+1)
@@ -316,23 +332,32 @@ class Polytrope(Atmosphere):
         logger.info("polytropic atmosphere parameters:")
         logger.info("   poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
         logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
-        
-        logger.info("   density scale heights = {:g}".format(np.log(self.Lz**self.poly_n)))
+
+        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
+        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
+        rho0_ratio = rho0_max/rho0_min
+        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+        logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
+        logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_n)))
         H_rho_top = (self.z0-self.Lz)/self.poly_n
         H_rho_bottom = (self.z0)/self.poly_n
         logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
         logger.info("   H_rho/delta x = {:g} (top)  {:g} (bottom)".format(H_rho_top/self.delta_x,
                                                                           H_rho_bottom/self.delta_x))
-
+        
+    def _set_timescales(self, atmosphere=None):
+        if atmosphere is None:
+            atmosphere=self
+            
         # min of global quantity
-        self.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
-        self.freefall_time = np.sqrt(self.Lz/self.g)
-        self.buoyancy_time = np.sqrt(self.Lz/self.g/np.abs(self.epsilon))
+        atmosphere.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
+        atmosphere.freefall_time = np.sqrt(self.Lz/self.g)
+        atmosphere.buoyancy_time = np.sqrt(self.Lz/self.g/np.abs(self.epsilon))
         
         logger.info("atmospheric timescales:")
-        logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
-                                                                                               self.freefall_time,
-                                                                                               self.buoyancy_time))
+        logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(atmosphere.min_BV_time,
+                                                                                               atmosphere.freefall_time,
+                                                                                               atmosphere.buoyancy_time))
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         
         logger.info("problem parameters:")
@@ -390,11 +415,62 @@ class Polytrope(Atmosphere):
         
         self.nu['g'] = nu
         self.chi['g'] = chi
-        if not self.constant_diffusivities:
-            self.chi.differentiate('z', out=self.del_chi)
-            self.chi.set_scales(1, keep_data=True)
-            
+        
+        self.chi.differentiate('z', out=self.del_chi)
+        self.chi.set_scales(1, keep_data=True)
 
+class Polytrope_adiabatic(Polytrope):
+    def __init__(self,
+                 nx=256, nz=128,
+                 Lx=None, aspect_ratio=4,
+                 Lz=None, n_rho_cz = 3.5,
+                 gamma=5/3,                 
+                 **kwargs):
+
+        logger.info("************* entering polytrope_adiabatic")
+        full_atm = Polytrope(Lz=Lz, n_rho_cz=n_rho_cz,
+                             gamma=gamma,nx=nx,nz=nz, Lx=Lx, aspect_ratio=aspect_ratio,
+                             **kwargs)
+        
+        self.atmosphere_name = 'single adiabatic polytrope'
+        m_cz = full_atm.m_ad
+        self.epsilon = 0
+        
+        if Lz is None:
+            if n_rho_cz is not None:
+                Lz = self._calculate_Lz_cz(n_rho_cz, m_cz)
+            else:
+                logger.error("Either Lz or n_rho must be set")
+                raise
+        if Lx is None:
+            Lx = Lz*aspect_ratio
+
+        logger.info("************* Doing polytrope_adiabatic super.__init__")
+        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+                
+        self.constant_diffusivities = full_atm.constant_diffusivities
+
+        logger.info("************* Doing polytrope_adiabatic _set_atmosphere()")
+            
+        self._set_atmosphere()
+        full_atm._set_timescales(atmosphere=self)
+
+        self.T0_IC = self._new_ncc()
+        self.rho0_IC = self._new_ncc()
+        self.ln_rho0_IC = self._new_ncc()
+
+        self.T0_IC['g'] = full_atm.T0['g'] - self.T0['g']
+        self.rho0_IC['g'] = full_atm.rho0['g'] - self.rho0['g']
+        self.ln_rho0_IC['g'] = np.log(full_atm.rho0['g']) - np.log(self.rho0['g'])
+        
+        self.delta_s = full_atm.delta_s
+        
+    ## def _set_diffusivities(self, **kwargs):
+    ##     self.full_atm._set_diffusivities(**kwargs)
+    ##     self.nu = self.full_atm.nu
+    ##     self.chi = self.full_atm.chi
+    ##     self.del_chi = self.full_atm.del_chi
+              
 class Multitrope(MultiLayerAtmosphere):
     '''
     Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.
@@ -410,6 +486,8 @@ class Multitrope(MultiLayerAtmosphere):
                  gamma=5/3,
                  n_rho_cz=3.5, n_rho_rz=2, 
                  m_rz=3, stiffness=100,
+                 stable_bottom=True,
+                 stable_top=False,
                  **kwargs):
 
         self.atmosphere_name = 'multitrope'
@@ -426,6 +504,10 @@ class Multitrope(MultiLayerAtmosphere):
         self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
         self.m_cz = self.m_ad - self.epsilon
 
+        if stable_top:
+            stable_bottom = False
+            
+        self.stable_bottom = stable_bottom
 
         self.n_rho_cz = n_rho_cz
         self.n_rho_rz = n_rho_rz
@@ -436,7 +518,16 @@ class Multitrope(MultiLayerAtmosphere):
         
         Lx = Lz_cz*aspect_ratio
         
-        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_rz, Lz_cz], **kwargs)
+        
+        overshoot_pad = 0.2*Lz_cz 
+        if self.stable_bottom:
+            Lz_bottom = Lz_rz - overshoot_pad
+            Lz_top = Lz_cz + overshoot_pad
+        else:
+            Lz_bottom = Lz_cz + overshoot_pad
+            Lz_top = Lz_rz - overshoot_pad
+
+        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
 
         self._set_atmosphere()
         
@@ -456,27 +547,41 @@ class Multitrope(MultiLayerAtmosphere):
         # 
         # z_interface = (T_interface/(-del_T))*(np.exp(n_rho/m)-1)
 
-        Lz_cz = np.exp(n_rho_cz/m_cz)-1
-
+        if self.stable_bottom:
+            Lz_cz = np.exp(n_rho_cz/m_cz)-1
+        else:
+            Lz_rz = np.exp(n_rho_rz/m_rz)-1
+            
         del_T_rz = -(m_cz+1)/(m_rz+1)
-        T_interface = (Lz_cz+1) # T at bottom of CZ
-        Lz_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
 
+        if self.stable_bottom:
+            T_interface = (Lz_cz+1) # T at bottom of CZ
+            Lz_rz = T_interface/(-del_T_rz)*(np.exp(n_rho_rz/m_rz)-1)
+        else:
+            T_interface = (Lz_rz+1) # T at bottom of CZ
+            Lz_cz = T_interface/(-del_T_rz)*(np.exp(n_rho_cz/m_cz)-1)
+            
         Lz = Lz_cz + Lz_rz
         logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
     def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=1):
         if tanh_center is None:
-            tanh_center = self.Lz_rz
-
+            if self.stable_bottom:
+                tanh_center = self.Lz_rz
+            else:
+                tanh_center = self.Lz_cz
+                                
         # start with a simple profile, adjust amplitude later (in _set_diffusivities)
         kappa_top = 1
     
         phi = (1/2*(1-np.tanh((self.z-tanh_center)/tanh_width)))
         inv_phi = 1-phi
-        self.kappa = self._new_ncc() 
-        self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
+        self.kappa = self._new_ncc()
+        if self.stable_bottom:
+            self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
+        else:
+            self.kappa['g'] = (phi+inv_phi*kappa_ratio)*kappa_top
         self.necessary_quantities['kappa'] = self.kappa
         
     def _set_atmosphere(self):
@@ -504,8 +609,8 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("Solving for T0")
         # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
         flux_top = -1
-        self.del_T0['g'] = flux_top/self.kappa['g']
-        self.del_T0.antidifferentiate('z',('right',0), out=self.T0)
+        self.T0_z['g'] = flux_top/self.kappa['g']
+        self.T0_z.antidifferentiate('z',('right',0), out=self.T0)
         self.T0['g'] += 1
         self.T0.set_scales(1, keep_data=True)
     
@@ -580,7 +685,15 @@ class Multitrope(MultiLayerAtmosphere):
         # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
         # Prandtl_top = nu_top/chi_top
         self.chi_top = np.sqrt((self.g*self.delta_s*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
+            
         self.nu_top = self.chi_top*Prandtl_top
+
+        if not self.stable_bottom:
+            # try to rescale chi appropriately so that the
+            # Rayleigh number is set at the top of the CZ
+            # to the desired value by removing the density
+            # scaling from the rz.  This is a guess.
+            self.chi_top = np.exp(self.n_rho_rz)*self.chi_top
 
         self.constant_diffusivities = False
 
@@ -728,7 +841,11 @@ class Equations():
         analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
         analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
         analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
-        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")        
+        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
+        analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
+        analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
+        analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")        
+
         analysis_tasks.append(analysis_profile)
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
@@ -752,11 +869,20 @@ class Equations():
 
         return self.analysis_tasks
     
+    def evaluate_at_point(self, f, z=0):
+        return f.interpolate(z=z)
+
 class FC_equations(Equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-        
+
+        # possible boundary condition values for a normal system
+        self.T1_left  = 0
+        self.T1_right = 0
+        self.T1_z_left  = 0
+        self.T1_z_right = 0
+
     def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
@@ -780,20 +906,13 @@ class FC_equations(Equations):
 
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.thermal_diff           = " Cv_inv*chi*(Lap(T1, T1_z)      + T1_z*del_ln_rho0)"
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source = ""
-        if include_background_flux:
-            self.source +=    " Cv_inv*chi*(T0_zz + del_T0*del_ln_rho0 + del_T0*dz(ln_rho1))"
-        else:
-            self.source += " +0 "
-        if not self.constant_diffusivities:
-            self.thermal_diff +=    " + Cv_inv*del_chi*dz(T1) "
-            if include_background_flux:
-                self.source += " + Cv_inv*del_chi*del_T0"
+        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z)     + T1_z*del_ln_rho0 "
+                                       "              + T0_z*dz(ln_rho1)) + del_chi*dz(T1)) ")
+        self.nonlinear_thermal_diff =  " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.source =                  " Cv_inv*(chi*(T0_zz             + T0_z*del_ln_rho0) + del_chi*T0_z)"
                 
-        self.problem.substitutions['L_thermal'] = self.thermal_diff 
-        self.problem.substitutions['NL_thermal'] = self.nonlinear_thermal_diff
+        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
+        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
         
         self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
@@ -812,35 +931,43 @@ class FC_equations(Equations):
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
-        # here we have assumed chi = constant in both rho and radius
-        self.problem.add_equation(("(scale)*( dt(T1)   + w*del_T0 + (gamma-1)*T0*Div_u -  L_thermal) = "
+        self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
         
         logger.info("using nonlinear EOS for entropy, via substitution")
         # non-linear EOS for s, where we've subtracted off
-        # Cv_inv*∇s0 =  del_T0/(T0 + T1) - (gamma-1)*del_ln_rho0
+        # Cv_inv*∇s0 =  T0_z/(T0 + T1) - (gamma-1)*del_ln_rho0
         # move entropy to a substitution; no need to solve for it.
         #self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
         #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
 
                 
     def set_BC(self,
-               fixed_flux=False, fixed_temperature=False, mixed_flux_temperature=True,
-               stress_free=True, no_slip=False):
-        
+               fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
+               stress_free=None, no_slip=None):
+
+        if fixed_flux is None and fixed_temperature is None and mixed_temperature_flux is None:
+            mixed_flux_temperature = True
+        if stress_free is None and no_slip is None:
+            stress_free = True
+
         # thermal boundary conditions
         if fixed_flux:
             logger.info("Thermal BC: fixed flux (T1_z)")
-            self.problem.add_bc( "left(Q_z) = 0")
-            self.problem.add_bc("right(Q_z) = 0")
+            self.problem.add_bc( "left(T1_z) = T1_z_left")
+            self.problem.add_bc("right(T1_z) = T1_z_right")
         elif fixed_temperature:
             logger.info("Thermal BC: fixed temperature (T1)")
-            self.problem.add_bc( "left(T1) = 0")
-            self.problem.add_bc("right(T1) = 0")            
+            self.problem.add_bc( "left(T1) = T1_left")
+            self.problem.add_bc("right(T1) = T1_right")
         elif mixed_flux_temperature:
             logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
-            self.problem.add_bc("left(Q_z) = 0")
-            self.problem.add_bc("right(T1) = 0")
+            self.problem.add_bc("left(T1_z) = T1_z_left")
+            self.problem.add_bc("right(T1)  = T1_right")
+        elif mixed_temperature_flux:
+            logger.info("Thermal BC: mixed temperature/flux (T1/T1_z)")
+            self.problem.add_bc("left(T1)    = T1_left")
+            self.problem.add_bc("right(T1_z) = T1_z_right")
         else:
             logger.error("Incorrect thermal boundary conditions specified")
             raise
@@ -863,6 +990,22 @@ class FC_equations(Equations):
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
 
+    def set_IC(self, solver, A0=1e-6, seed=42):
+        # initial conditions
+        self.T_IC = T_IC = solver.state['T1']
+        self.ln_rho_IC = solver.state['ln_rho1']
+        
+        # Random perturbations, initialized globally for same results in parallel
+        gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
+        slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
+        rand = np.random.RandomState(seed=seed)
+        noise = rand.standard_normal(gshape)[slices]        
+        
+        T_IC.set_scales(self.domain.dealias, keep_data=True)
+        z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+        T_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise*self.T0['g']
+
+        logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
 class FC_polytrope(FC_equations, Polytrope):
     def __init__(self, *args, **kwargs):
@@ -873,7 +1016,55 @@ class FC_polytrope(FC_equations, Polytrope):
     def set_equations(self, *args, **kwargs):
         super(FC_polytrope, self).set_equations(*args, **kwargs)
         self.check_atmosphere()
+
+class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
+    def __init__(self, *args, **kwargs):
+        super(FC_polytrope_adiabatic, self).__init__() 
+        Polytrope_adiabatic.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+        self.T1_left  = self.at_boundary(self.T0_IC, z=0,       BC_text='T1')
+        self.T1_right = self.at_boundary(self.T0_IC, z=self.Lz, BC_text='T1')
+        self.T1_z_left  = self.at_boundary(self.T0_IC, z=0,       dz=True, BC_text='T1')
+        self.T1_z_right = self.at_boundary(self.T0_IC, z=self.Lz, dz=True, BC_text='T1')
+
+    def set_equations(self, *args, **kwargs):
+        super(FC_polytrope_adiabatic, self).set_equations(*args, **kwargs)
+        self.check_atmosphere()
+
+    def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
+        if derivative or dz:
+            f_bc=self._new_ncc()
+            f.differentiate('z', out=f_bc)
+            BC_text += "_z"
+        else:
+            f_bc = f
+
+        BC_field = self.evaluate_at_point(f_bc, z=z)
+
+        try:
+            BC = BC_field['g'][0][0]
+        except:
+            BC = BC_field['g']
+            logger.error("shape of BC_field {}".format(BC_field['g'].shape))
+            logger.error("BC = {}".format(BC))
+
+        if np.abs(BC) < tol:
+            BC = 0
+        logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
+        return BC
+
+
+    def set_IC(self, *args, **kwargs):
+        super(FC_polytrope_adiabatic, self).set_IC(*args, **kwargs)
+        # update initial conditions to include super-adiabatic component
+        logger.info("shapes: {} and {}".format(self.T_IC['g'].shape, self.T0_IC['g'].shape))
+        self.T0_IC.set_scales(self.domain.dealias, keep_data=True)
+        self.T_IC['g'] += self.T0_IC['g']
         
+        #self.ln_rho_IC['g'] += self.ln_rho0_IC['g']        
+        logger.info("adding in nonadiabatic background to T1 and ln_rho1")
+
 class FC_multitrope(FC_equations, Multitrope):
     def __init__(self, *args, **kwargs):
         super(FC_multitrope, self).__init__() 
