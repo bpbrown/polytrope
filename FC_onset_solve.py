@@ -318,8 +318,8 @@ class FC_onset_solver:
                 self.local_file[key_eigenvalues] = eigenvalues
                 my_keys.append(key_prof)
                 my_keys.append(key_eigenvalues)
-        if keys == []:
-            keys.append('none')
+        if my_keys == []:
+            my_keys.append('none')
         asciiList = [n.encode('ascii', 'ignore') for n in my_keys]
         self.local_file.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
         self.local_file.close()
@@ -337,11 +337,11 @@ class FC_onset_solver:
             keys_part = []
             for raw_key in file_part['keys'][:]:
                 key = str(raw_key[0])[2:-1]
-                keys.append(key)
                 keys_part.append(key)
             for key in keys_part:
                 if key == 'none':
                     break
+                keys.append(key)
                 file_all[key] = np.asarray(file_part[key][:])
         asciiList = [n.encode('ascii', 'ignore') for n in np.sort(keys)]
         file_all.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
