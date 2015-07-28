@@ -295,7 +295,7 @@ if __name__ == '__main__':
     nz = 32
     Lx = 100
     epsilon=1e-4
-    out_dir = '/regulus/exoweather/evan/'
+    out_dir = './'#'/regulus/exoweather/evan/'
     n_rho_cz = 32
 
 
