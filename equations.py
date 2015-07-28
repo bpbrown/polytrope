@@ -278,7 +278,7 @@ class Polytrope(Atmosphere):
         if Lx is None:
             Lx = Lz*aspect_ratio
             
-        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
@@ -938,7 +938,8 @@ class FC_equations(Equations):
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                                   "0"))
+                                   #"(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
         
         logger.info("using nonlinear EOS for entropy, via substitution")
         # non-linear EOS for s, where we've subtracted off
