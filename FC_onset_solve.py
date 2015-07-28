@@ -58,7 +58,7 @@ class FC_onset_solver:
             os.makedirs(self.out_dir)
         if CW.size > 1:
             self.local_file_dir = self.out_dir + self.out_file_name + '/'
-            if not os.path.exists(self.local_file_dir):
+            if not os.path.exists(self.local_file_dir) and CW.rank == 0:
                 os.makedirs(self.local_file_dir)
             self.local_file_name = self.local_file_dir + 'proc_{}.h5'.format(CW.rank)
             self.local_file = h5py.File(self.local_file_name, 'w')
