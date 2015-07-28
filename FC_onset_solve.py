@@ -300,7 +300,7 @@ if __name__ == '__main__':
 
 
     start_ra = 40
-    stop_ra  = 200
+    stop_ra  = 60
     res = 10
     steps = (stop_ra - start_ra)/res + 1
 
