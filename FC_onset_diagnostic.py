@@ -3,15 +3,16 @@ import matplotlib.pyplot as plt
 import h5py
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-eps = 5e-02
-ra_start = 60
-ra_stop = 90
-directory = './'
+eps = 1e-04
+ra_start = 64
+ra_stop = 70
+directory = '../../polytrope/'
+n_rho = 3.5
 
 total_dir = directory + 'FC_onset_solve/'
-file_name = '{0}evals_eps_{1:.0e}_ras_{2:04d}-{3:04d}.h5'.format(total_dir, eps, ra_start, ra_stop)
+file_name = '{0}evals_eps_{1:.0e}_ras_{2:04d}-{3:04d}_nrho_{4:.1f}.h5'.format(total_dir, eps, ra_start, ra_stop, n_rho)
 
-def plot_flow_profiles(file_name, profiles=['w', 'T1']):
+def plot_flow_profiles(file_name, profiles=['u', 'w', 's_fluc']):
     import os
     out_dir = file_name[:-3]+'_diagnostics/'
     if not os.path.exists(out_dir):
@@ -41,8 +42,9 @@ def plot_flow_profiles(file_name, profiles=['w', 'T1']):
     #loop through each wavenumber
     fig = plt.figure(figsize=(20,10))
     for i in range(len(prof_keys[0])):
-        w_key = prof_keys[0][i]
-        t_key = prof_keys[1][i]
+        u_key = prof_keys[0][i]
+        w_key = prof_keys[1][i]
+        t_key = prof_keys[2][i]
         wavenum = t_key.split('_')[0]
         ra_key = wavenum + '_ras'
         eval_key = wavenum + '_evals'
@@ -50,11 +52,23 @@ def plot_flow_profiles(file_name, profiles=['w', 'T1']):
         evals = f[eval_key][:]
         print('Plotting wavenum {0}'.format(wavenum))
         count = 1
-        for j in range(f[prof_keys[0][i]][:].shape[0]):
-            w_key = prof_keys[0][i]
-            t_key = prof_keys[1][i]
+        for j in range(f[u_key][:].shape[0]):
             
             fig.clear()
+            ax = fig.add_subplot(1,1,1)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            
+            im = ax.pcolormesh(xs, zs, f[t_key][j], cmap='RdBu_r')
+            ax.quiver(xs, zs, f[u_key][j], f[w_key][j], pivot = 'mid')
+            ax.set_ylim(z[0], z[-1])
+            ax.set_xlim(x[0], x[-1])
+            ax.set_xlabel('x')
+            ax.set_ylabel('z')
+            cbar = plt.colorbar(im, cax=cax)
+            cbar.ax.get_yaxis().labelpad = 15
+            cbar.ax.set_ylabel(r'Temp Profile', rotation=270)
+            '''
             ax = fig.add_subplot(1,2,1)
             bx = fig.add_subplot(1,2,2)
 
@@ -81,8 +95,7 @@ def plot_flow_profiles(file_name, profiles=['w', 'T1']):
             cbar = plt.colorbar(im, cax=cax)
             cbar.ax.get_yaxis().labelpad = 15
             cbar.ax.set_ylabel(r'Temp Fluctuations', rotation=270)
-
-
+            '''
             plt.subplots_adjust(top=0.88, wspace=0.5, hspace=0.4)
             fig.suptitle('Wavenumber {0}; Ra {1:.4g}; eval {2:.4g}'.format(wavenum, ras[j], evals[j]), fontsize=16)
             plt.savefig(out_dir+'wavenum{0}_{1:04d}'.format(wavenum, count), dpi=100)

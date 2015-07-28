@@ -19,7 +19,7 @@ class FC_onset_solver:
     (e^[positive omega]) mode arises.
     '''
 
-    def __init__(self, nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
+    def __init__(self, ra_range, profiles=['u','w','T1'], nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
         n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=False,
         grid_dtype=np.complex128, comm=MPI.COMM_SELF,
 	    out_dir=''):
@@ -47,10 +47,21 @@ class FC_onset_solver:
         self.x = self.atmosphere.x
         self.z = self.atmosphere.z
 
+        self.ra_range = ra_range
+        self.profiles = profiles
+
+        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}'.format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz)
+
         out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0] + '/'
         self.out_dir = out_dir + out_dir_base
         if not os.path.exists(self.out_dir) and CW.rank == 0:
             os.makedirs(self.out_dir)
+        if CW.size > 1:
+            self.local_file_dir = self.out_dir + self.out_file_name + '/'
+            if not os.path.exists(self.local_file_dir):
+                os.makedirs(self.local_file_dir)
+            self.local_file_name = self.local_file_dir + 'proc_{}.h5'.format(CW.rank)
+            self.local_file = h5py.File(self.local_file_name, 'w')
 
     def build_solver(self, ra, pr=1):
         '''
@@ -283,10 +294,53 @@ class FC_onset_solver:
             print('Critical Ra of {0:.4g} found'.format(10**crit))
         return 10**crit
 
+    def full_parallel_solve(self, stitch_files=True):
+        kxs = int(nx/2)
+        kxs_global = list(np.arange(kxs))
+        tasks = kxs_global * len(self.ra_range)
+        for i in range(len(self.ra_range)):
+            for j in range(kxs):
+                tasks[i*kxs + j] = (tasks[i*kxs + j], self.ra_range[i])
+        my_tasks = tasks[CW.rank::CW.size]
 
-        
+        my_keys = []
+        for task in my_tasks:
+            wave = task[0]
+            ra = task[1]
+            returns = self.get_unstable_modes(ra, wave, profiles=self.profiles)
+            profiles = returns[0]
+            eigenvalues = returns[1]
+            key = '{0:07.2f}_{1:04d}'.format(ra, wave)
+            key_prof = key + '_prof'
+            key_eigenvalues = key + '_eig'
+            if eigenvalues.shape[0] > 0:
+                self.local_file[key_prof] = profiles
+                self.local_file[key_eigenvalues] = eigenvalues
+                my_keys.append(key_prof)
+                my_keys.append(key_eigenvalues)
+        asciiList = [n.encode('ascii', 'ignore') for n in my_keys]
+        self.local_file.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
+        self.local_file.close()
+        CW.Barrier()
+        if stitch_files and CW.rank == 0:
+            self.stitch_files()
 
-    
+    def stitch_files(self):
+        filename = self.out_dir + self.out_file_name + '.h5'
+        file_all = h5py.File(filename, 'w')
+        keys = []
+        for i in range(CW.size):
+            partial_file = self.local_file_dir + 'proc_{}.h5'.format(i)
+            file_part = h5py.File(partial_file, 'r')
+            keys_part = []
+            for raw_key in file_part['keys'][:]:
+                key = str(raw_key[0])[2:-1]
+                keys.append(key)
+                keys_part.append(key)
+            for key in keys_part:
+                file_all[key] = np.asarray(file_part[key][:])
+        asciiList = [n.encode('ascii', 'ignore') for n in np.sort(keys)]
+        file_all.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
             
 
 if __name__ == '__main__':
@@ -296,17 +350,18 @@ if __name__ == '__main__':
     Lx = 100
     epsilon=1e-4
     out_dir = './'#'/regulus/exoweather/evan/'
-    n_rho_cz = 32
+    n_rho_cz = 20
 
 
-    start_ra = 40
-    stop_ra  = 60
-    res = 10
+    start_ra = 65
+    stop_ra  = 66
+    res = 0.5
     steps = (stop_ra - start_ra)/res + 1
 
 
-    solver = FC_onset_solver(nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
-    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
+    solver = FC_onset_solver(np.linspace(start_ra, stop_ra, steps), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+    solver.full_parallel_solve()
+#    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
 if False:
     returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
     if CW.rank == 0:
