@@ -418,12 +418,13 @@ class FC_onset_solver:
             figname = self.out_dir + filename + '_growth_node_plot.png'
             plt.savefig(figname, dpi=100)
 
-    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True):
+    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True):
        if CW.rank == process:
             import matplotlib.pyplot as plt
             wavenums = np.arange(self.nx/2)
             onsets = np.zeros(wavenums.shape[0])
             if clear:
+                plt.figure(figsize=(15,10))
                 plt.clf()
             eps = atmosphere[0]
             n_rho = atmosphere[1]
@@ -442,7 +443,8 @@ class FC_onset_solver:
             plt.yscale('log')
             plt.ylim(np.min(onsets)/2,np.max(onsets))
             figname = self.out_dir + filename + '_onset_curve.png'
-            plt.savefig(figname, dpi=100)
+            if save:
+                plt.savefig(figname, dpi=100)
                 
 if __name__ == '__main__':
     eqs = 7
@@ -450,20 +452,19 @@ if __name__ == '__main__':
     nz = 32
     Lx = 100
     epsilon=1e-4
-    out_dir = './'#'/regulus/exoweather/evan/'
-    n_rho_cz = 20
+    out_dir = '/regulus/exoweather/evan/'
+    n_rho_cz = [3.5, 10, 20]
 
-    '''
-    start_ra = 1
-    stop_ra  = 4
-    res = 10
-    steps = (stop_ra - start_ra)/res + 1
-    '''
-
-    #solver = FC_onset_solver(np.linspace(start_ra, stop_ra, steps), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
-    solver = FC_onset_solver(np.logspace(1, 3, 20), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
-    #solver.full_parallel_solve()
-    wavenumbers, profiles, filename, atmosphere = solver.read_file()
-    solver.plot_growth_modes(wavenumbers, filename)
-    solver.plot_onset_curve(wavenumbers, filename, atmosphere)
-#    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
+    for n_rho in n_rho_cz:
+        solver = FC_onset_solver(np.logspace(1, 3, 50), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+        solver.full_parallel_solve()
+        wavenumbers, profiles, filename, atmosphere = solver.read_file()
+        solver.plot_growth_modes(wavenumbers, filename)
+    for i in range(len(n_rho_cz)):
+        wavenumbers, profiles, filename, atmosphere = solver.read_file(n_rho=n_rho_cz[i])
+        if i == 0:
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=True, save=False)
+        elif i == len(n_rho_cz)-1:
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=True)
+        if i == 0:
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False)
