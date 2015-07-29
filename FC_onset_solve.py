@@ -8,6 +8,9 @@ import sys
 
 import equations
 
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
 from mpi4py import MPI
 CW = MPI.COMM_WORLD
 import matplotlib
@@ -364,6 +367,7 @@ class FC_onset_solver:
         if filename[-3:] != '.h5':
             filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}.h5'.format(eps, start_ra, stop_ra, n_rho)
 
+        logger.info('reading file {}'.format(filename))
 
         if CW.rank == process:
             f = h5py.File(filename, 'r')
@@ -391,6 +395,7 @@ class FC_onset_solver:
         return None, None, None, None
 
     def plot_growth_modes(self, wavenumbers, filename, process=0):
+        logger.info('plotting growth modes on process {}'.format(process))
         if CW.rank == process:
             import matplotlib.pyplot as plt
             wavenums = []
@@ -418,8 +423,9 @@ class FC_onset_solver:
             figname = self.out_dir + filename + '_growth_node_plot.png'
             plt.savefig(figname, dpi=100)
 
-    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True):
-       if CW.rank == process:
+    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True, linestyle='--'):
+        logger.info('plotting onset curve on process {}'.format(process))
+        if CW.rank == process:
             import matplotlib.pyplot as plt
             wavenums = np.arange(self.nx/2)
             onsets = np.zeros(wavenums.shape[0])
@@ -436,7 +442,7 @@ class FC_onset_solver:
                         onsets[wavenum] = my_ra
             wavenums = wavenums[np.where(onsets > 0)]
             onsets = onsets[np.where(onsets > 0)]
-            plt.plot(wavenums, onsets, label='n_rho: {} & eps: {:.1e}'.format(n_rho, eps))
+            plt.plot(wavenums, onsets, label='n_rho: {} & eps: {:.1e}'.format(n_rho, eps), linestyle=linestyle)
             plt.legend(loc='lower right')
             plt.xlabel('wavenum index')
             plt.ylabel('Ra crit')
