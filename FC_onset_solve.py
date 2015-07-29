@@ -331,6 +331,6 @@ if __name__ == '__main__':
         if i == 0:
             solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=True, save=False)
         elif i == len(n_rho_cz)-1:
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=True)
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=True, linestyle='-.')
         if i == 0:
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False)
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False, linestyle=':')
