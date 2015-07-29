@@ -24,7 +24,7 @@ class FC_onset_solver:
     (e^[positive omega]) mode arises.
     '''
 
-    def __init__(self, ra_range, profiles=['u','w','T1'], nx=64, nz=64, Lx=30, Lz=10, epsilon=1e-4, gamma=5/3,
+    def __init__(self, ra_range, profiles=['u','w','T1'], nx=64, nz=64, aspect_ratio=10, epsilon=1e-4, gamma=5/3,
         n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=False,
         grid_dtype=np.complex128, comm=MPI.COMM_SELF,
 	    out_dir=''):
@@ -35,20 +35,23 @@ class FC_onset_solver:
         '''
         self.nx = nx
         self.nz = nz
-        self.Lx = Lx
-        self.Lz = Lz
         self.epsilon = epsilon
         self.gamma = gamma
         self.n_rho_cz = n_rho_cz
         self.constant_diffusivities=constant_diffusivities
         self.constant_Kappa=constant_kappa
 
-        self.atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz,
+        self.atmosphere = equations.FC_polytrope(nx=nx, nz=nz, aspect_ratio=10,
                 gamma=gamma, grid_dtype=grid_dtype, n_rho_cz=n_rho_cz,
                 constant_diffusivities=constant_diffusivities,
                 constant_kappa=constant_kappa,
                 comm=comm, epsilon=epsilon)
+        self.Lx = self.atmosphere.Lx
+        self.Lz = self.atmosphere.Lz
 
+        self.n_rho_true = np.log(np.max(self.atmosphere.rho0['g'])/np.min(self.atmosphere.rho0['g']))
+
+        logger.info('# of density scale heights: {}'.format(self.n_rho_true))
         self.x = self.atmosphere.x
         self.z = self.atmosphere.z
 
@@ -67,6 +70,9 @@ class FC_onset_solver:
                 os.makedirs(self.local_file_dir)
             CW.Barrier()
             self.local_file_name = self.local_file_dir + 'proc_{}.h5'.format(CW.rank)
+            self.local_file = h5py.File(self.local_file_name, 'w')
+        else:
+            self.local_file_name = self.out_dir + self.out_file_name + '.h5'
             self.local_file = h5py.File(self.local_file_name, 'w')
 
     def build_solver(self, ra, pr=1):
@@ -179,6 +185,7 @@ class FC_onset_solver:
                 self.local_file[key_eigenvalues] = eigenvalues
                 my_keys.append(key_prof)
                 my_keys.append(key_eigenvalues)
+        logger.info('Setting up file keys...')
         if my_keys == []:
             my_keys.append('none')
         asciiList = [n.encode('ascii', 'ignore') for n in my_keys]
@@ -205,6 +212,8 @@ class FC_onset_solver:
                     break
                 keys.append(key)
                 file_all[key] = np.asarray(file_part[key][:])
+        if keys == []:
+            keys.append('none')
         asciiList = [n.encode('ascii', 'ignore') for n in np.sort(keys)]
         file_all.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
             
@@ -219,7 +228,7 @@ class FC_onset_solver:
         if eps == None:
             eps = self.epsilon
         if n_rho == None:
-            n_rho = self.n_rho_cz
+            n_rho = self.n_rho_true
         if nx == None:
             nx = self.nx
         if nz == None:
@@ -234,6 +243,8 @@ class FC_onset_solver:
             keys = []
             for raw_key in f['keys'][:]:
                 key = str(raw_key[0])[2:-1]
+                if key == 'none':
+                    return None, None, None, None
                 split = key.split('_')
                 keys.append([key, float(split[0]), int(split[1])])
             wavenumbers = []
@@ -307,6 +318,7 @@ class FC_onset_solver:
             plt.xlabel('wavenum index')
             plt.ylabel('Ra crit')
             plt.yscale('log')
+            plt.xlim(0, self.nx/2)
             plt.ylim(np.min(onsets)/2,np.max(onsets))
             figname = self.out_dir + filename + '_onset_curve.png'
             if save:
@@ -314,23 +326,30 @@ class FC_onset_solver:
                 
 if __name__ == '__main__':
     eqs = 7
-    nx = 32
-    nz = 32
-    Lx = 100
+    nx = 64
+    nz = 64
+    aspect_ratio=10
     epsilon=1e-4
-    out_dir = '/regulus/exoweather/evan/'
-    n_rho_cz = [3.5, 10, 20]
+    out_dir = './'#'/regulus/exoweather/evan/'
+    n_rho_cz = [3.5, 5, 7, 12]
 
     for n_rho in n_rho_cz:
-        solver = FC_onset_solver(np.logspace(1, 3, 100), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+        solver = FC_onset_solver(np.logspace(1, 3, 1), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
         solver.full_parallel_solve()
         wavenumbers, profiles, filename, atmosphere = solver.read_file()
-        solver.plot_growth_modes(wavenumbers, filename)
+        if wavenumbers != None:
+            solver.plot_growth_modes(wavenumbers, filename)
     for i in range(len(n_rho_cz)):
         wavenumbers, profiles, filename, atmosphere = solver.read_file(n_rho=n_rho_cz[i])
-        if i == 0:
+        if wavenumbers == None:
+            continue
+        if i == 0 and len(n_rho_cz) > 1:
             solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=True, save=False)
         elif i == len(n_rho_cz)-1:
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=True, linestyle='-.')
+            if len(n_rho_cz) == 1:
+                clear = True
+            else:
+                clear = False
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, linestyle='-.')
         if i == 0:
             solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False, linestyle=':')
