@@ -313,7 +313,7 @@ class FC_onset_solver:
             returns = self.get_unstable_modes(ra, wave, profiles=self.profiles)
             profiles = returns[0]
             eigenvalues = returns[1]
-            key = '{0:07.2f}_{1:04d}'.format(ra, wave)
+            key = '{0:09.2f}_{1:04d}'.format(ra, wave)
             key_prof = key + '_prof'
             key_eigenvalues = key + '_eig'
             if eigenvalues.shape[1] > 0:
@@ -353,16 +353,18 @@ class FC_onset_solver:
         filename = self.out_dir
         if start_ra == None and stop_ra == None and eps==None and n_rho==None:
             filename += self.out_file_name + '.h5'
-        else:
-            if start_ra == None:
-                start_ra = self.ra_range[0]
-            if stop_ra == None:
-                stop_ra = self.ra_range[-1]
-            if eps == None:
-                eps = self.epsilon
-            if n_rho == None:
-                n_rho = self.n_rho_cz
+        if start_ra == None:
+            start_ra = self.ra_range[0]
+        if stop_ra == None:
+            stop_ra = self.ra_range[-1]
+        if eps == None:
+            eps = self.epsilon
+        if n_rho == None:
+            n_rho = self.n_rho_cz
+        if filename[-3:] != '.h5':
             filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}.h5'.format(eps, start_ra, stop_ra, n_rho)
+
+
         if CW.rank == process:
             f = h5py.File(filename, 'r')
             keys = []
@@ -385,8 +387,8 @@ class FC_onset_solver:
                     wavenumbers[ra_counter].append((key_pack[2], np.asarray(f[key_pack[0]][1])))
                 if 'prof' in key_pack[0]:
                     profiles[ra_counter].append((key_pack[2], f[key_pack[0]][:]))
-            return wavenumbers, profiles, filename.split('/')[-1].split('.h5')[0]
-        return None, None, None
+            return wavenumbers, profiles, filename.split('/')[-1].split('.h5')[0], (eps, n_rho)
+        return None, None, None, None
 
     def plot_growth_modes(self, wavenumbers, filename, process=0):
         if CW.rank == process:
@@ -416,23 +418,29 @@ class FC_onset_solver:
             figname = self.out_dir + filename + '_growth_node_plot.png'
             plt.savefig(figname, dpi=100)
 
-    def plot_onset_curve(self, wavenumbers, filename, process=0):
+    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True):
        if CW.rank == process:
             import matplotlib.pyplot as plt
             wavenums = np.arange(self.nx/2)
             onsets = np.zeros(wavenums.shape[0])
-            plt.clf()
+            if clear:
+                plt.clf()
+            eps = atmosphere[0]
+            n_rho = atmosphere[1]
             for ra_pack in wavenumbers:
                 my_ra = ra_pack[0]
                 for j in range(len(ra_pack)-1):
                     wavenum = ra_pack[j+1][0]
                     if onsets[wavenum] == 0:
                         onsets[wavenum] = my_ra
-            plt.plot(wavenums, onsets, 'o')
+            wavenums = wavenums[np.where(onsets > 0)]
+            onsets = onsets[np.where(onsets > 0)]
+            plt.plot(wavenums, onsets, label='n_rho: {} & eps: {:.1e}'.format(n_rho, eps))
+            plt.legend(loc='lower right')
             plt.xlabel('wavenum index')
             plt.ylabel('Ra crit')
             plt.yscale('log')
-            plt.ylim(np.min(onsets[np.where(onsets > 0)])/2,np.max(onsets))
+            plt.ylim(np.min(onsets)/2,np.max(onsets))
             figname = self.out_dir + filename + '_onset_curve.png'
             plt.savefig(figname, dpi=100)
                 
@@ -454,8 +462,8 @@ if __name__ == '__main__':
 
     #solver = FC_onset_solver(np.linspace(start_ra, stop_ra, steps), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
     solver = FC_onset_solver(np.logspace(1, 3, 20), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
-    solver.full_parallel_solve()
-    wavenumbers, profiles, filename = solver.read_file()
+    #solver.full_parallel_solve()
+    wavenumbers, profiles, filename, atmosphere = solver.read_file()
     solver.plot_growth_modes(wavenumbers, filename)
-    solver.plot_onset_curve(wavenumbers, filename)
+    solver.plot_onset_curve(wavenumbers, filename, atmosphere)
 #    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
