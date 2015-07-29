@@ -55,7 +55,7 @@ class FC_onset_solver:
         self.ra_range = ra_range
         self.profiles = profiles
 
-        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}'.format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz)
+        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{4:04g}'.format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz, self.nx, self.nz)
 
         out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0] + '/'
         self.out_dir = out_dir + out_dir_base
@@ -352,7 +352,7 @@ class FC_onset_solver:
         asciiList = [n.encode('ascii', 'ignore') for n in np.sort(keys)]
         file_all.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
             
-    def read_file(self, start_ra=None, stop_ra=None, eps=None, n_rho=None, process=0):
+    def read_file(self, start_ra=None, stop_ra=None, eps=None, n_rho=None, nx=None, nz=None, process=0):
         filename = self.out_dir
         if start_ra == None and stop_ra == None and eps==None and n_rho==None:
             filename += self.out_file_name + '.h5'
@@ -364,8 +364,12 @@ class FC_onset_solver:
             eps = self.epsilon
         if n_rho == None:
             n_rho = self.n_rho_cz
+        if nx == None:
+            nx = self.nx
+        if nz == None:
+            nz = self.nz
         if filename[-3:] != '.h5':
-            filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}.h5'.format(eps, start_ra, stop_ra, n_rho)
+            filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{4:04g}.h5'.format(eps, start_ra, stop_ra, n_rho, nx, nz)
 
         logger.info('reading file {}'.format(filename))
 
@@ -423,7 +427,7 @@ class FC_onset_solver:
             figname = self.out_dir + filename + '_growth_node_plot.png'
             plt.savefig(figname, dpi=100)
 
-    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True, linestyle='--'):
+    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True, linestyle='-'):
         logger.info('plotting onset curve on process {}'.format(process))
         if CW.rank == process:
             import matplotlib.pyplot as plt
@@ -462,7 +466,7 @@ if __name__ == '__main__':
     n_rho_cz = [3.5, 10, 20]
 
     for n_rho in n_rho_cz:
-        solver = FC_onset_solver(np.logspace(1, 3, 50), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+        solver = FC_onset_solver(np.logspace(1, 3, 2), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
         solver.full_parallel_solve()
         wavenumbers, profiles, filename, atmosphere = solver.read_file()
         solver.plot_growth_modes(wavenumbers, filename)
