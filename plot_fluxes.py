@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 import analysis
 
-
 def plot_flows(averages, z, output_path='./'):
     figs = {}
 
@@ -188,7 +187,25 @@ def plot_fluxes(fluxes, z, output_path='./'):
 
     for key in figs.keys():
         figs[key].savefig(output_path+'energy_{}.png'.format(key))
+
+def plot_profiles(data, z, output_path='./'):
+    figs = {}
+
+    keys = ['IE_fluc', 'PE_fluc', 's_mean', 's_fluc', 'T1', 'ln_rho1']
     
+    for key in keys:
+        fig_flow = plt.figure(figsize=(16,8))
+        ax1 = fig_flow.add_subplot(1,1,1)
+        logger.info(data[key].shape)
+        for i in range(data[key].shape[0]):
+                ax1.plot(z, data[key][i,0,:])
+
+        ax1.set_xlabel("z")
+        ax1.set_ylabel(key)
+        figs[key]=fig_flow
+
+    for key in figs.keys():
+        figs[key].savefig(output_path+'profiles_{}.png'.format(key))
 
 def main(files, output_path='./'):
     logger.info("opening {}".format(files))
@@ -202,7 +219,7 @@ def main(files, output_path='./'):
     plot_fluxes(averages, z, output_path=output_path)
     plot_flows(averages, z, output_path=output_path)
     diagnose_overshoot(averages, z, output_path=output_path)
-    
+    plot_profiles(data.data, z, output_path=output_path)
 
 
 if __name__ == "__main__":

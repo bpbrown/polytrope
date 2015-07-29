@@ -53,6 +53,8 @@ def plot_energies(data, times, output_path='./'):
     ax1.plot(t, data['KE'], label="KE")
     ax1.plot(t, data['PE']-data['PE'][0], label="PE-PE$_0$")
     ax1.plot(t, data['IE']-data['IE'][0], label="IE-IE$_0$")
+    ax1.plot(t, data['IE_fluc'], label="IE$_1$", linestyle='dashed')
+    ax1.plot(t, data['PE_fluc'], label="PE$_1$", linestyle='dashed')
     ax1.plot(t, data['TE']-data['TE'][0], label="TE-TE$_0$", color='black')
     ax1.legend()
     ax1.set_xlabel("time")

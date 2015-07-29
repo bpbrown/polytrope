@@ -17,10 +17,9 @@ from dedalus import public as de
 
 
 class Atmosphere:
-    def __init__(self, gamma=5/3, verbose=False, **kwargs):
+    def __init__(self, verbose=False, **kwargs):
         self._set_domain(**kwargs)
         
-        self.gamma = gamma
         self.make_plots = verbose
         
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
@@ -46,6 +45,9 @@ class Atmosphere:
 
     def get_problem(self):
         return self.problem
+
+    def evaluate_at_point(self, f, z=0):
+        return f.interpolate(z=z)
 
     def _set_atmosphere(self):
         self.necessary_quantities = OrderedDict()
@@ -259,15 +261,10 @@ class Polytrope(Atmosphere):
         
         self.atmosphere_name = 'single polytrope'
 
-        self.m_ad = 1/(gamma-1)
-        
+        self._set_atmosphere_parameters(gamma=gamma, epsilon=epsilon, poly_m=m_cz)
         if m_cz is None:
-            if epsilon is not None:
-                m_cz = self.m_ad - epsilon
-                self.epsilon = epsilon
-            else:
-                logger.error("Either m_cz or epsilon must be set")
-                raise
+            m_cz = self.poly_m
+
         if Lz is None:
             if n_rho_cz is not None:
                 Lz = self._calculate_Lz_cz(n_rho_cz, m_cz)
@@ -276,13 +273,15 @@ class Polytrope(Atmosphere):
                 raise
         if Lx is None:
             Lx = Lz*aspect_ratio
-            
-        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+
+        super(Polytrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
+        self.z0 = 1. + self.Lz
         
         self.constant_diffusivities = constant_diffusivities
         if constant_kappa:
             self.constant_diffusivities = False
-            
+
         self._set_atmosphere()
         self._set_timescales()
 
@@ -292,18 +291,34 @@ class Polytrope(Atmosphere):
         '''
         Lz_cz = np.exp(n_rho_cz/m_cz)-1
         return Lz_cz
-        
+    
+    def _set_atmosphere_parameters(self, gamma=5/3, epsilon=0, poly_m=None, g=None):
+        # polytropic atmosphere characteristics
+        self.gamma = gamma
+        self.epsilon = epsilon
+
+        self.m_ad = 1/(self.gamma-1)
+
+        # trap on poly_m/epsilon conflicts?
+        if poly_m is None:
+            self.poly_m = self.m_ad - self.epsilon
+        else:
+            self.poly_m = poly_m
+
+        if g is None:
+            self.g = self.poly_m + 1
+        else:
+            self.g = g
+
+        logger.info("polytropic atmosphere parameters:")
+        logger.info("   poly_m = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_m, self.epsilon, self.gamma))
+    
     def _set_atmosphere(self):
         super(Polytrope, self)._set_atmosphere()
 
-        # polytropic atmosphere characteristics
-        self.poly_n = 1/(self.gamma-1) - self.epsilon
-
-        self.z0 = 1. + self.Lz
-
-        self.del_ln_rho_factor = -self.poly_n
+        self.del_ln_rho_factor = -self.poly_m
         self.del_ln_rho0['g'] = self.del_ln_rho_factor/(self.z0 - self.z)
-        self.rho0['g'] = (self.z0 - self.z)**self.poly_n
+        self.rho0['g'] = (self.z0 - self.z)**self.poly_m
 
         self.del_s0_factor = - self.epsilon/self.gamma
         self.delta_s = self.del_s0_factor*np.log(self.z0)
@@ -313,7 +328,7 @@ class Polytrope(Atmosphere):
         self.T0_z['g'] = -1
         self.T0['g'] = self.z0 - self.z       
 
-        self.P0['g'] = (self.z0 - self.z)**(self.poly_n+1)
+        self.P0['g'] = (self.z0 - self.z)**(self.poly_m+1)
         self.P0.differentiate('z', out=self.del_P0)
         self.del_P0.set_scales(1, keep_data=True)
         self.P0.set_scales(1, keep_data=True)
@@ -324,23 +339,22 @@ class Polytrope(Atmosphere):
             # consider whether to scale nccs involving chi differently (e.g., energy equation)
             self.scale['g'] = self.z0 - self.z
 
-        self.g = self.poly_n + 1
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z0 - self.z)
         
-        logger.info("polytropic atmosphere parameters:")
-        logger.info("   poly_n = {:g}, epsilon = {:g}, gamma = {:g}".format(self.poly_n, self.epsilon, self.gamma))
-        logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
 
-        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
-        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
+        #rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
+        #rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
+        rho0_max = np.max(self.evaluate_at_point(self.rho0, z=0)['g'])
+        rho0_min = np.min(self.evaluate_at_point(self.rho0, z=self.Lz)['g'])
+        self.rho0.set_scales(1, keep_data=True)
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
-        logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_n)))
-        H_rho_top = (self.z0-self.Lz)/self.poly_n
-        H_rho_bottom = (self.z0)/self.poly_n
+        logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_m)))
+        H_rho_top = (self.z0-self.Lz)/self.poly_m
+        H_rho_bottom = (self.z0)/self.poly_m
         logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
         logger.info("   H_rho/delta x = {:g} (top)  {:g} (bottom)".format(H_rho_top/self.delta_x,
                                                                           H_rho_bottom/self.delta_x))
@@ -427,42 +441,39 @@ class Polytrope_adiabatic(Polytrope):
                  gamma=5/3,                 
                  **kwargs):
 
-        logger.info("************* entering polytrope_adiabatic")
+        logger.info("************* entering polytrope_adiabatic, setting full_atm")
         full_atm = Polytrope(Lz=Lz, n_rho_cz=n_rho_cz,
                              gamma=gamma,nx=nx,nz=nz, Lx=Lx, aspect_ratio=aspect_ratio,
                              **kwargs)
         
         self.atmosphere_name = 'single adiabatic polytrope'
-        m_cz = full_atm.m_ad
-        self.epsilon = 0
-        
+
         if Lz is None:
-            if n_rho_cz is not None:
-                Lz = self._calculate_Lz_cz(n_rho_cz, m_cz)
-            else:
-                logger.error("Either Lz or n_rho must be set")
-                raise
+            # take Lz from full_atm so that n_rho_cz is consistent
+            Lz = full_atm.Lz
         if Lx is None:
             Lx = Lz*aspect_ratio
 
-        logger.info("************* Doing polytrope_adiabatic super.__init__")
-        super(Polytrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=Lz)
-                
-        self.constant_diffusivities = full_atm.constant_diffusivities
+        super(Polytrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+        self.z0 = 1. + self.Lz
 
-        logger.info("************* Doing polytrope_adiabatic _set_atmosphere()")
+        logger.info("************* setting adiabatic atm")
             
+        self.constant_diffusivities = full_atm.constant_diffusivities
+        self._set_atmosphere_parameters(gamma=gamma, epsilon=0, g=full_atm.g, poly_m=full_atm.m_ad)
         self._set_atmosphere()
         full_atm._set_timescales(atmosphere=self)
 
         self.T0_IC = self._new_ncc()
         self.rho0_IC = self._new_ncc()
         self.ln_rho0_IC = self._new_ncc()
-
+        logger.info("full_T0: {}".format(full_atm.T0['g']))
+        logger.info("self_T0: {}".format(self.T0['g']))
         self.T0_IC['g'] = full_atm.T0['g'] - self.T0['g']
         self.rho0_IC['g'] = full_atm.rho0['g'] - self.rho0['g']
         self.ln_rho0_IC['g'] = np.log(full_atm.rho0['g']) - np.log(self.rho0['g'])
-        
+        logger.info("{}".format(self.T0_IC['g']))
+
         self.delta_s = full_atm.delta_s
         
     ## def _set_diffusivities(self, **kwargs):
@@ -818,6 +829,8 @@ class Equations():
         analysis_tasks.append(analysis_slice)
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
+        analysis_profile.add_task("plane_avg(T1)", name="T1")
+        analysis_profile.add_task("plane_avg(ln_rho1)", name="ln_rho1")
         analysis_profile.add_task("plane_avg(KE)", name="KE")
         analysis_profile.add_task("plane_avg(PE)", name="PE")
         analysis_profile.add_task("plane_avg(IE)", name="IE")
@@ -869,8 +882,29 @@ class Equations():
 
         return self.analysis_tasks
     
-    def evaluate_at_point(self, f, z=0):
-        return f.interpolate(z=z)
+    def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
+        if derivative or dz:
+            f_bc=self._new_ncc()
+            f.differentiate('z', out=f_bc)
+            BC_text += "_z"
+        else:
+            f_bc = f
+
+        BC_field = f_bc.interpolate(z=z)
+
+        try:
+            BC = BC_field['g'][0][0]
+        except:
+            BC = BC_field['g']
+            logger.error("shape of BC_field {}".format(BC_field['g'].shape))
+            logger.error("BC = {}".format(BC))
+
+        if np.abs(BC) < tol:
+            BC = 0
+        logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
+        return BC
+
+
 
 class FC_equations(Equations):
     def __init__(self):
@@ -1032,29 +1066,6 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
         super(FC_polytrope_adiabatic, self).set_equations(*args, **kwargs)
         self.check_atmosphere()
 
-    def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
-        if derivative or dz:
-            f_bc=self._new_ncc()
-            f.differentiate('z', out=f_bc)
-            BC_text += "_z"
-        else:
-            f_bc = f
-
-        BC_field = self.evaluate_at_point(f_bc, z=z)
-
-        try:
-            BC = BC_field['g'][0][0]
-        except:
-            BC = BC_field['g']
-            logger.error("shape of BC_field {}".format(BC_field['g'].shape))
-            logger.error("BC = {}".format(BC))
-
-        if np.abs(BC) < tol:
-            BC = 0
-        logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
-        return BC
-
-
     def set_IC(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).set_IC(*args, **kwargs)
         # update initial conditions to include super-adiabatic component
@@ -1062,7 +1073,7 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
         self.T0_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC['g'] += self.T0_IC['g']
         
-        #self.ln_rho_IC['g'] += self.ln_rho0_IC['g']        
+        self.ln_rho_IC['g'] = self.ln_rho0_IC['g']        
         logger.info("adding in nonadiabatic background to T1 and ln_rho1")
 
 class FC_multitrope(FC_equations, Multitrope):
