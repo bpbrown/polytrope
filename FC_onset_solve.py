@@ -10,6 +10,8 @@ import equations
 
 from mpi4py import MPI
 CW = MPI.COMM_WORLD
+import matplotlib
+matplotlib.use('Agg')
 
 class FC_onset_solver:
     '''
@@ -60,6 +62,7 @@ class FC_onset_solver:
             self.local_file_dir = self.out_dir + self.out_file_name + '/'
             if not os.path.exists(self.local_file_dir) and CW.rank == 0:
                 os.makedirs(self.local_file_dir)
+            CW.Barrier()
             self.local_file_name = self.local_file_dir + 'proc_{}.h5'.format(CW.rank)
             self.local_file = h5py.File(self.local_file_name, 'w')
 
@@ -346,7 +349,93 @@ class FC_onset_solver:
         asciiList = [n.encode('ascii', 'ignore') for n in np.sort(keys)]
         file_all.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
             
+    def read_file(self, start_ra=None, stop_ra=None, eps=None, n_rho=None, process=0):
+        filename = self.out_dir
+        if start_ra == None and stop_ra == None and eps==None and n_rho==None:
+            filename += self.out_file_name + '.h5'
+        else:
+            if start_ra == None:
+                start_ra = self.ra_range[0]
+            if stop_ra == None:
+                stop_ra = self.ra_range[-1]
+            if eps == None:
+                eps = self.epsilon
+            if n_rho == None:
+                n_rho = self.n_rho_cz
+            filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}.h5'.format(eps, start_ra, stop_ra, n_rho)
+        if CW.rank == process:
+            f = h5py.File(filename, 'r')
+            keys = []
+            for raw_key in f['keys'][:]:
+                key = str(raw_key[0])[2:-1]
+                split = key.split('_')
+                keys.append([key, float(split[0]), int(split[1])])
+            wavenumbers = []
+            profiles = []
+            ra_counter = 0
+            for key_pack in keys:
+                if wavenumbers == []:
+                    wavenumbers.append([key_pack[1]])
+                    profiles.append([key_pack[1]])
+                elif wavenumbers[ra_counter][0] != key_pack[1]:
+                    wavenumbers.append([key_pack[1]])
+                    profiles.append([key_pack[1]])
+                    ra_counter += 1
+                if 'eig' in key_pack[0]:
+                    wavenumbers[ra_counter].append((key_pack[2], np.asarray(f[key_pack[0]][1])))
+                if 'prof' in key_pack[0]:
+                    profiles[ra_counter].append((key_pack[2], f[key_pack[0]][:]))
+            return wavenumbers, profiles, filename.split('/')[-1].split('.h5')[0]
+        return None, None, None
 
+    def plot_growth_modes(self, wavenumbers, filename, process=0):
+        if CW.rank == process:
+            import matplotlib.pyplot as plt
+            wavenums = []
+            wavenums_ind = []
+            plot_pairs = []
+            plt.figure(figsize=(15,10))
+            for ra_pack in wavenumbers:
+                my_ra = ra_pack[0]
+                for j in range(len(ra_pack)-1):
+                    if ra_pack[j+1][0] not in wavenums:
+                        wavenums.append(ra_pack[j+1][0])
+                        wavenums_ind.append(len(wavenums)-1)
+                    if len(plot_pairs) != len(wavenums):
+                        plot_pairs.append([[my_ra],[ra_pack[j+1][1][0]]])
+                    else:
+                        index = wavenums_ind[wavenums.index(ra_pack[j+1][0])]
+                        plot_pairs[index][0].append(my_ra)
+                        plot_pairs[index][1].append(ra_pack[j+1][1][0])
+            for i in range(len(plot_pairs)):
+                plt.plot(plot_pairs[i][0], plot_pairs[i][1], label='wavenum {0}'.format(wavenums[i]))
+            plt.legend()
+            plt.xlabel('Ra')
+            plt.ylabel('growth node strength')
+            plt.yscale('log')
+            figname = self.out_dir + filename + '_growth_node_plot.png'
+            plt.savefig(figname, dpi=100)
+
+    def plot_onset_curve(self, wavenumbers, filename, process=0):
+       if CW.rank == process:
+            import matplotlib.pyplot as plt
+            wavenums = np.arange(self.nx/2)
+            onsets = np.zeros(wavenums.shape[0])
+            plt.clf()
+            for ra_pack in wavenumbers:
+                my_ra = ra_pack[0]
+                for j in range(len(ra_pack)-1):
+                    wavenum = ra_pack[j+1][0]
+                    if onsets[wavenum] == 0:
+                        onsets[wavenum] = my_ra
+            plt.plot(wavenums, onsets, 'o')
+            plt.xlabel('wavenum index')
+            plt.ylabel('Ra crit')
+            plt.yscale('log')
+            plt.ylim(np.min(onsets[np.where(onsets > 0)])/2,np.max(onsets))
+            figname = self.out_dir + filename + '_onset_curve.png'
+            plt.savefig(figname, dpi=100)
+                
 if __name__ == '__main__':
     eqs = 7
     nx = 32
@@ -356,27 +445,17 @@ if __name__ == '__main__':
     out_dir = './'#'/regulus/exoweather/evan/'
     n_rho_cz = 20
 
-
-    start_ra = 65
-    stop_ra  = 66
-    res = 0.5
+    '''
+    start_ra = 1
+    stop_ra  = 4
+    res = 10
     steps = (stop_ra - start_ra)/res + 1
+    '''
 
-
-    solver = FC_onset_solver(np.linspace(start_ra, stop_ra, steps), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+    #solver = FC_onset_solver(np.linspace(start_ra, stop_ra, steps), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+    solver = FC_onset_solver(np.logspace(1, 3, 20), profiles=['u','w','T1'],nx=nx, nz=nz, Lx=Lx, n_rho_cz=n_rho_cz, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
     solver.full_parallel_solve()
+    wavenumbers, profiles, filename = solver.read_file()
+    solver.plot_growth_modes(wavenumbers, filename)
+    solver.plot_onset_curve(wavenumbers, filename)
 #    solver.plot_onsets(np.linspace(start_ra, stop_ra, steps), profiles=['w', 'T1'])
-if False:
-    returned = solver.solve_unstable_modes_parallel(ra)#find_onset_ra(start=1, end=3)
-    if CW.rank == 0:
-        for i in range(len(returned)):
-            item = returned[i]
-            zs, xs = np.meshgrid(solver.z, solver.x)
-            if np.asarray(item[0]).shape[0] > 0:
-                eigenvalue = np.asarray(item[1])
-                string = 'w field; '
-                for j in range(eigenvalue.shape[1]):
-                    array = eigenvalue[:,j]
-                    string += 'Eval: {0:.4g} at index {1}'.format(array[1], array[0])
-                    string += '; wavenumber {0}'.format(i)
-                print(string)
