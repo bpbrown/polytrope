@@ -24,42 +24,52 @@ class FC_onset_solver:
     (e^[positive omega]) mode arises.
     '''
 
-    def __init__(self, ra_range, profiles=['u','w','T1'], nx=64, nz=64, aspect_ratio=10, epsilon=1e-4, gamma=5/3,
-        n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=False,
-        grid_dtype=np.complex128, comm=MPI.COMM_SELF,
-	    out_dir=''):
+    def __init__(self, ra_range, profiles=['u','w','T1'], nx=64, nz=64, 
+                aspect_ratio=10, epsilon=1e-4, gamma=5/3,
+                n_rho_cz=3.5, constant_diffusivities=True, constant_kappa=False,
+                grid_dtype=np.complex128, comm=MPI.COMM_SELF, out_dir=''):
         '''
-        Initializes the atmosphere, sets up basic variables.
-
+        Initializes the atmosphere, sets up basic variables and output files
         NOTE: To run in parallel, set comm=MPI.COMM_SELF.
+
+        ----
+        PARAMETERS
+        ----
+        ra_range - a 1d numpy array of Ra values over which to solve EVPs
+        profiles - The dedalus profiles to save to file for all unstable modes
+        nx, nz   - The number of dedalus nodes to run in in the x and z, respectively
+        aspect_ratio - the value of Lx/Lz for the atmosphere
+        epsilon  - The level of superadiabaticity of the atmosphere (0 = adiabatic)
+        gamma    - The adiabatic index of the atmosphere
+        n_rho_cz - The number of density scale heights which the atmosphere spans
+        constant_diffusivites - If true, diffusivities will be constant in the atmosphere
+        constant_kappa - If true, kappa will be constant in the atmosphere
+        grid_dtype - The data type of the dedalus grid
+        comm - The MPI communicator.  If not set to MPI.COMM_SELF, the problem will
+                    not run in parallel.
+        out_dir  - The base output directory of all data.
         '''
-        self.nx = nx
-        self.nz = nz
-        self.epsilon = epsilon
-        self.gamma = gamma
-        self.n_rho_cz = n_rho_cz
-        self.constant_diffusivities=constant_diffusivities
-        self.constant_Kappa=constant_kappa
+        self.nx, self.nz, self.epsilon, self.gamma = nx, nz, epsilon, gamma
+        self.n_rho_cz, self.constant_diffusivities, self.constant_kappa = \
+                                n_rho_cz, constant_diffusivites, constant_kappa
 
         self.atmosphere = equations.FC_polytrope(nx=nx, nz=nz, aspect_ratio=10,
-                gamma=gamma, grid_dtype=grid_dtype, n_rho_cz=n_rho_cz,
-                constant_diffusivities=constant_diffusivities,
-                constant_kappa=constant_kappa,
-                comm=comm, epsilon=epsilon)
-        self.Lx = self.atmosphere.Lx
-        self.Lz = self.atmosphere.Lz
-
+                        gamma=gamma, grid_dtype=grid_dtype, n_rho_cz=n_rho_cz,
+                        constant_diffusivities=self.constant_diffusivities,
+                        constant_kappa=self.constant_kappa,
+                        comm=comm, epsilon=epsilon)
+        self.x, self.z = self.atmosphere.x, self.atmosphere.z
+        self.Lx, self.Lz = self.atmosphere.Lx, self.atmosphere.Lz
         self.n_rho_true = np.log(np.max(self.atmosphere.rho0['g'])/np.min(self.atmosphere.rho0['g']))
-
         logger.info('# of density scale heights: {}'.format(self.n_rho_true))
-        self.x = self.atmosphere.x
-        self.z = self.atmosphere.z
 
         self.ra_range = ra_range
         self.profiles = profiles
 
-        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{5:04g}'.format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz, self.nx, self.nz)
+        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{5:04g}'.\
+                                format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz, self.nx, self.nz)
 
+        #Set up output files and directory
         out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0] + '/'
         self.out_dir = out_dir + out_dir_base
         if not os.path.exists(self.out_dir) and CW.rank == 0:
@@ -77,7 +87,7 @@ class FC_onset_solver:
 
     def build_solver(self, ra, pr=1):
         '''
-        Sets up the EVP solver for a given value of ra.
+        Sets up the EVP solver for a given value of ra and Pr.
         '''
         self.atmosphere.set_eigenvalue_problem(ra, pr,\
                     include_background_flux=False)
@@ -88,7 +98,7 @@ class FC_onset_solver:
 
     def solve(self, wave, ra, pr=1):
         '''
-        Solves the system at the wavenumber index specified by wave and at
+        Solves the system at the wavenumber INDEX specified and at
         the given ra.  Stores eigenvalues.
         '''
         self.build_solver(ra, pr=pr)
@@ -162,7 +172,12 @@ class FC_onset_solver:
         return (unstables, self._positive_eigenvalues_r)
     
     def full_parallel_solve(self, stitch_files=True):
-        kxs = int(nx/2)
+        '''
+        Solves EVPs in parallel and keeps track of all unstable modes, saving them
+        out to a local file.
+        '''
+        #Grabs wavenumbers and ras.  Splits up ras and wavenumbers across all processors.
+        kxs = int(self.nx/2)
         kxs_global = list(np.arange(kxs))
         tasks = kxs_global * len(self.ra_range)
         for i in range(len(self.ra_range)):
@@ -170,6 +185,7 @@ class FC_onset_solver:
                 tasks[i*kxs + j] = (tasks[i*kxs + j], self.ra_range[i])
         my_tasks = tasks[CW.rank::CW.size]
 
+        #For each 'task' (ra & wavenumber), solve the EVP and save unstable modes.
         my_keys = []
         for task in my_tasks:
             wave = task[0]
@@ -185,6 +201,8 @@ class FC_onset_solver:
                 self.local_file[key_eigenvalues] = eigenvalues
                 my_keys.append(key_prof)
                 my_keys.append(key_eigenvalues)
+
+        #Save all file keys for later reading of the file
         logger.info('Setting up file keys...')
         if my_keys == []:
             my_keys.append('none')
@@ -195,12 +213,17 @@ class FC_onset_solver:
         if stitch_files and CW.rank == 0:
             self.stitch_files()
 
-    def stitch_files(self):
+    def stitch_files(self, num_files=CW.size):
+        '''
+        Merges the output files from all processors involved in an EVP run.
+        '''
         logger.info('Merging files...')
         filename = self.out_dir + self.out_file_name + '.h5'
         file_all = h5py.File(filename, 'w')
         keys = []
-        for i in range(CW.size):
+
+        #Pull all the data out of each file
+        for i in range(num_files):
             partial_file = self.local_file_dir + 'proc_{}.h5'.format(i)
             file_part = h5py.File(partial_file, 'r')
             keys_part = []
@@ -212,14 +235,34 @@ class FC_onset_solver:
                     break
                 keys.append(key)
                 file_all[key] = np.asarray(file_part[key][:])
+        #Store all keys properly for later reading
         if keys == []:
             keys.append('none')
         asciiList = [n.encode('ascii', 'ignore') for n in np.sort(keys)]
         file_all.create_dataset('keys', (len(asciiList),1), 'S20', asciiList)
             
     def read_file(self, start_ra=None, stop_ra=None, eps=None, n_rho=None, nx=None, nz=None, process=0):
+        '''
+        Read a specified file using kwargs OR read the natural file for the given solver.
+
+        IF all kwargs=None (except for process), then this reads the file with the name 'self.out_dir'+'.h5'
+        If kwargs are specified, this will try to read the file which is SIMILAR to self.out_dir, but which
+        is modified by those kwargs.
+
+        RETURNS: (on CW.rank == process):
+            wavenumbers:    a list of Ra, where each Ra is paired with each wavenumber that has an unstable mode
+                            and the values of those unstable modes
+            profiles:       a list of Ra, where each Ra is paried with each wavenumber and the profiles of the
+                            unstable modes at that wavenumber
+            filename:       The name of the read file, minus the '.h5'
+            atmosphere:     A tuple containing (epsilon, n_rho)
+
+                (on CW.rank != process):
+            returns None, None, None, None
+
+        '''
         filename = self.out_dir
-        if start_ra == None and stop_ra == None and eps==None and n_rho==None:
+        if start_ra == None and stop_ra == None and eps==None and n_rho==None and nx == None and nz == None:
             filename += self.out_file_name + '.h5'
         if start_ra == None:
             start_ra = self.ra_range[0]
@@ -238,6 +281,7 @@ class FC_onset_solver:
 
         logger.info('reading file {}'.format(filename))
 
+        #If we're on the specified process, open the file and read it.
         if CW.rank == process:
             f = h5py.File(filename, 'r')
             keys = []
@@ -266,6 +310,9 @@ class FC_onset_solver:
         return None, None, None, None
 
     def plot_growth_modes(self, wavenumbers, filename, process=0):
+        '''
+        Plots the value of unstable growth nodes vs. Ra
+        '''
         logger.info('plotting growth modes on process {}'.format(process))
         if CW.rank == process:
             import matplotlib.pyplot as plt
@@ -294,7 +341,14 @@ class FC_onset_solver:
             figname = self.out_dir + filename + '_growth_node_plot.png'
             plt.savefig(figname, dpi=100)
 
-    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True, linestyle='-', figname='default', dpi=150):
+    def plot_onset_curve(self, wavenumbers, filename, atmosphere, 
+                         process=0, clear=True, save=True, 
+                         linestyle='-', figname='default', dpi=150):
+        '''
+        Plots a critical Ra curve vs. wavenumber.  Has options to save/clear
+            the figure (or not) depending on whether or not you want to add
+            curves from other atmospheres.
+        '''
         logger.info('plotting onset curve on process {}'.format(process))
         if CW.rank == process:
             import matplotlib.pyplot as plt
@@ -326,49 +380,14 @@ class FC_onset_solver:
                 plt.xlabel('wavenum')
             else:
                 plt.xlabel('wavenum index')
+                plt.xlim(0, self.nx/2)
             plt.ylabel('Ra_top crit')
             plt.yscale('log')
             plt.xscale('log')
-            plt.xlim(0, self.nx/2)
             if figname == 'default':
                 figname = self.out_dir + filename + '_onset_curve.png'
             else:
                 figname = self.out_dir + figname
             if save:
                 plt.savefig(figname, dpi=dpi)
-                
-if __name__ == '__main__':
-    eqs = 7
-    nx = 64
-    nz = 128
-    aspect_ratio=10
-    epsilon=1e-4
-    out_dir = '/regulus/exoweather/evan/'
-    n_rho_cz = [3.5, 5, 7, 12]
 
-    '''
-    for n_rho in n_rho_cz:
-        solver = FC_onset_solver(np.logspace(1, 4, 200), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
-        solver.full_parallel_solve()
-        wavenumbers, profiles, filename, atmosphere = solver.read_file()
-        if wavenumbers != None:
-            solver.plot_growth_modes(wavenumbers, filename)
-    '''
-    for i in range(len(n_rho_cz)):
-        solver = FC_onset_solver(np.logspace(1, 4, 200), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho_cz[i], epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
-        solver.full_parallel_solve()
-        wavenumbers, profiles, filename, atmosphere = solver.read_file(n_rho=n_rho_cz[i])
-        atmosphere = (atmosphere[0], atmosphere[1], solver.Lx)
-        if wavenumbers == None:
-            continue
-        if i == 0 and len(n_rho_cz) > 1:
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=True, save=False)
-        elif i == len(n_rho_cz)-1:
-            if len(n_rho_cz) == 1:
-                clear = True
-            else:
-                clear = False
-            figname = 'onset_{:.04g}x{:.04g}_nrhos_{:.04g}-{:.04g}.png'.format(nx, nz, n_rho_cz[0], n_rho_cz[-1])
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, figname=figname)
-        else:
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False)
