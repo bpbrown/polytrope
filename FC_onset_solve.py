@@ -305,6 +305,10 @@ class FC_onset_solver:
                 plt.clf()
             eps = atmosphere[0]
             n_rho = atmosphere[1]
+            if len(atmosphere) > 2:
+                Lx = atmosphere[2]
+            else:
+                Lx = None
             for ra_pack in wavenumbers:
                 my_ra = ra_pack[0]
                 for j in range(len(ra_pack)-1):
@@ -312,11 +316,16 @@ class FC_onset_solver:
                     if onsets[wavenum] == 0:
                         onsets[wavenum] = my_ra
             wavenums = wavenums[np.where(onsets > 0)]
+            if Lx != None:
+                wavenums = 2*np.pi*wavenums/Lx
             print(onsets)
             onsets = onsets[np.where(onsets > 0)]
             plt.plot(wavenums, onsets, label='n_rho: {} & eps: {:.1e}'.format(n_rho, eps), linestyle=linestyle)
             plt.legend(loc='lower right')
-            plt.xlabel('wavenum index')
+            if Lx != None:
+                plt.xlabel('wavenum')
+            else:
+                plt.xlabel('wavenum index')
             plt.ylabel('Ra_top crit')
             plt.yscale('log')
             plt.xscale('log')
@@ -337,14 +346,19 @@ if __name__ == '__main__':
     out_dir = '/regulus/exoweather/evan/'
     n_rho_cz = [3.5, 5, 7, 12]
 
+    '''
     for n_rho in n_rho_cz:
         solver = FC_onset_solver(np.logspace(1, 4, 200), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
         solver.full_parallel_solve()
         wavenumbers, profiles, filename, atmosphere = solver.read_file()
         if wavenumbers != None:
             solver.plot_growth_modes(wavenumbers, filename)
+    '''
     for i in range(len(n_rho_cz)):
+        solver = FC_onset_solver(np.logspace(1, 4, 200), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho_cz[i], epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+        solver.full_parallel_solve()
         wavenumbers, profiles, filename, atmosphere = solver.read_file(n_rho=n_rho_cz[i])
+        atmosphere = (atmosphere[0], atmosphere[1], solver.Lx)
         if wavenumbers == None:
             continue
         if i == 0 and len(n_rho_cz) > 1:
@@ -354,6 +368,7 @@ if __name__ == '__main__':
                 clear = True
             else:
                 clear = False
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, linestyle='-.', figname='onset_0064x00128_3.5_5_7_12.png')
+            figname = 'onset_{:.04g}x{:.04g}_nrhos_{:.04g}-{:.04g}.png'.format(nx, nz, n_rho_cz[0], n_rho_cz[-1])
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, figname=figname)
         else:
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False, linestyle=':')
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False)
