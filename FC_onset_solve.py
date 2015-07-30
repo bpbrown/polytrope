@@ -294,7 +294,7 @@ class FC_onset_solver:
             figname = self.out_dir + filename + '_growth_node_plot.png'
             plt.savefig(figname, dpi=100)
 
-    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True, linestyle='-'):
+    def plot_onset_curve(self, wavenumbers, filename, atmosphere, process=0, clear=True, save=True, linestyle='-', figname='default', dpi=150):
         logger.info('plotting onset curve on process {}'.format(process))
         if CW.rank == process:
             import matplotlib.pyplot as plt
@@ -317,13 +317,16 @@ class FC_onset_solver:
             plt.plot(wavenums, onsets, label='n_rho: {} & eps: {:.1e}'.format(n_rho, eps), linestyle=linestyle)
             plt.legend(loc='lower right')
             plt.xlabel('wavenum index')
-            plt.ylabel('Ra crit')
+            plt.ylabel('Ra_top crit')
             plt.yscale('log')
             plt.xscale('log')
             plt.xlim(0, self.nx/2)
-            figname = self.out_dir + filename + '_onset_curve.png'
+            if figname == 'default':
+                figname = self.out_dir + filename + '_onset_curve.png'
+            else:
+                figname = self.out_dir + figname
             if save:
-                plt.savefig(figname, dpi=100)
+                plt.savefig(figname, dpi=dpi)
                 
 if __name__ == '__main__':
     eqs = 7
@@ -351,6 +354,6 @@ if __name__ == '__main__':
                 clear = True
             else:
                 clear = False
-            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, linestyle='-.')
+            solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, linestyle='-.', figname='onset_0064x00128_3.5_5_7_12.png')
         else:
             solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False, linestyle=':')
