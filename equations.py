@@ -21,7 +21,7 @@ class Atmosphere:
         self._set_domain(**kwargs)
         
         self.make_plots = verbose
-        
+                
     def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
@@ -171,17 +171,35 @@ class Atmosphere:
             quantity_set = quantity.any()
             if not quantity_set:
                 logger.info("WARNING: atmosphere {} is all zeros".format(key))
+                
+    def test_hydrostatic_balance(self, P_z=None, P=None, T=None, rho=None, make_plots=False):
+
+        if rho is None:
+            logger.error("HS balance test requires rho (currently)")
+            raise
         
-    def test_hydrostatic_balance(self, make_plots=False):
+        if P_z is None:
+            if P is None:
+                if T is None:
+                    logger.error("HS balance test requires P_z, P or T")
+                    raise
+                else:
+                    P = self._new_ncc()
+                    P['g'] = T['g']*rho['g']
+
+            P_z = self._new_ncc()
+            P.differentiate('z', out=P_z)
+            P_z.set_scales(1, keep_data=True)
+                    
         # error in hydrostatic balance diagnostic
-        HS_balance = self.del_P0['g']+self.g*self.rho0['g']
-        relative_error = HS_balance/self.del_P0['g']
+        HS_balance = P_z['g']+self.g*rho['g']
+        relative_error = HS_balance/P_z['g']
         
         if self.make_plots or make_plots:
             fig = plt.figure()
             ax1 = fig.add_subplot(2,1,1)
-            ax1.plot(self.z[0,:], self.del_P0['g'][0,:])
-            ax1.plot(self.z[0,:], -self.g*self.rho0['g'][0,:])
+            ax1.plot(self.z[0,:], P_z['g'][0,:])
+            ax1.plot(self.z[0,:], -self.g*rho['g'][0,:])
             ax1.set_ylabel(r'$\nabla P$ and $\rho g$')
             ax1.set_xlabel('z')
 
@@ -194,13 +212,13 @@ class Atmosphere:
         max_rel_err = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error)), op=MPI.MAX)
         logger.info('max error in HS balance: {}'.format(max_rel_err))
 
-    def check_atmosphere(self):
+    def check_atmosphere(self, **kwargs):
         if self.make_plots:
             try:
                 self.plot_atmosphere()
             except:
                 logger.info("Problems in plot_atmosphere: atm full of NaNs?")
-        self.test_hydrostatic_balance()
+        self.test_hydrostatic_balance(**kwargs)
         self.check_that_atmosphere_is_set()
 
 
@@ -1041,6 +1059,26 @@ class FC_equations(Equations):
 
         logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
+    def get_full_T(self, solver):
+        T1 = solver.state['T1']
+        T = self._new_ncc()
+        T.set_scales(self.domain.dealias, keep_data=False)
+        T['g'] = self.T0['g'] + T1['g']
+        return T
+
+    def get_full_rho(self, solver):
+        ln_rho1 = solver.state['ln_rho1']
+        rho = self._new_ncc()
+        rho['g'] = atmosphere.rho0['g']*np.exp(ln_rho1['g'])
+        rho.set_scales(self.domain.dealias, keep_data=True)
+        return rho
+
+    def check_system(self, solver):
+        T = self.get_full_T(solver)
+        rho = self.get_full_rho(solver)
+
+        self.check_atmosphere(T=T, rho=rho)
+
 class FC_polytrope(FC_equations, Polytrope):
     def __init__(self, *args, **kwargs):
         super(FC_polytrope, self).__init__() 
@@ -1049,7 +1087,7 @@ class FC_polytrope(FC_equations, Polytrope):
 
     def set_equations(self, *args, **kwargs):
         super(FC_polytrope, self).set_equations(*args, **kwargs)
-        self.check_atmosphere()
+        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
 class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
     def __init__(self, *args, **kwargs):
@@ -1064,8 +1102,8 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
 
     def set_equations(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).set_equations(*args, **kwargs)
-        self.check_atmosphere()
-
+        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+        
     def set_IC(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).set_IC(*args, **kwargs)
         # update initial conditions to include super-adiabatic component
@@ -1084,8 +1122,7 @@ class FC_multitrope(FC_equations, Multitrope):
 
     def set_equations(self, *args, **kwargs):
         super(FC_multitrope,self).set_equations(*args, **kwargs)
-        self.check_atmosphere()
-
+        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
                         
 # needs to be tested again and double-checked
 class AN_polytrope(Polytrope):
