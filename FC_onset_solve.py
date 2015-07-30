@@ -58,7 +58,7 @@ class FC_onset_solver:
         self.ra_range = ra_range
         self.profiles = profiles
 
-        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{4:04g}'.format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz, self.nx, self.nz)
+        self.out_file_name = 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{5:04g}'.format(self.epsilon, self.ra_range[0], self.ra_range[-1], self.n_rho_cz, self.nx, self.nz)
 
         out_dir_base = sys.argv[0].split('/')[-1].split('.py')[0] + '/'
         self.out_dir = out_dir + out_dir_base
@@ -234,7 +234,7 @@ class FC_onset_solver:
         if nz == None:
             nz = self.nz
         if filename[-3:] != '.h5':
-            filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{4:04g}.h5'.format(eps, start_ra, stop_ra, n_rho, nx, nz)
+            filename += 'evals_eps_{0:.0e}_ras_{1:04g}-{2:04g}_nrho_{3:.1f}_{4:04g}x{5:04g}.h5'.format(eps, start_ra, stop_ra, n_rho, nx, nz)
 
         logger.info('reading file {}'.format(filename))
 
@@ -312,14 +312,15 @@ class FC_onset_solver:
                     if onsets[wavenum] == 0:
                         onsets[wavenum] = my_ra
             wavenums = wavenums[np.where(onsets > 0)]
+            print(onsets)
             onsets = onsets[np.where(onsets > 0)]
             plt.plot(wavenums, onsets, label='n_rho: {} & eps: {:.1e}'.format(n_rho, eps), linestyle=linestyle)
             plt.legend(loc='lower right')
             plt.xlabel('wavenum index')
             plt.ylabel('Ra crit')
             plt.yscale('log')
+            plt.xscale('log')
             plt.xlim(0, self.nx/2)
-            plt.ylim(np.min(onsets)/2,np.max(onsets))
             figname = self.out_dir + filename + '_onset_curve.png'
             if save:
                 plt.savefig(figname, dpi=100)
@@ -327,14 +328,14 @@ class FC_onset_solver:
 if __name__ == '__main__':
     eqs = 7
     nx = 64
-    nz = 64
+    nz = 128
     aspect_ratio=10
     epsilon=1e-4
-    out_dir = './'#'/regulus/exoweather/evan/'
+    out_dir = '/regulus/exoweather/evan/'
     n_rho_cz = [3.5, 5, 7, 12]
 
     for n_rho in n_rho_cz:
-        solver = FC_onset_solver(np.logspace(1, 3, 1), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
+        solver = FC_onset_solver(np.logspace(1, 4, 200), profiles=['u','w','T1'],nx=nx, nz=nz, aspect_ratio=aspect_ratio, n_rho_cz=n_rho, epsilon=epsilon, comm=MPI.COMM_SELF, out_dir=out_dir, constant_kappa=True)
         solver.full_parallel_solve()
         wavenumbers, profiles, filename, atmosphere = solver.read_file()
         if wavenumbers != None:
@@ -351,5 +352,5 @@ if __name__ == '__main__':
             else:
                 clear = False
             solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=clear, save=True, linestyle='-.')
-        if i == 0:
+        else:
             solver.plot_onset_curve(wavenumbers, filename, atmosphere, clear=False, save=False, linestyle=':')
