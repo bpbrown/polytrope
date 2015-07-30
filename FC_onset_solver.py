@@ -51,7 +51,7 @@ class FC_onset_solver:
         '''
         self.nx, self.nz, self.epsilon, self.gamma = nx, nz, epsilon, gamma
         self.n_rho_cz, self.constant_diffusivities, self.constant_kappa = \
-                                n_rho_cz, constant_diffusivites, constant_kappa
+                                n_rho_cz, constant_diffusivities, constant_kappa
 
         self.atmosphere = equations.FC_polytrope(nx=nx, nz=nz, aspect_ratio=10,
                         gamma=gamma, grid_dtype=grid_dtype, n_rho_cz=n_rho_cz,
