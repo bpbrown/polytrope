@@ -13,7 +13,7 @@ import analysis
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-from tools.EVP_override import EVP_homogeneous
+from tools.EVP import EVP_homogeneous
 from dedalus import public as de
 
 class Atmosphere:
