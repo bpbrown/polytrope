@@ -504,25 +504,14 @@ class Multitrope(MultiLayerAtmosphere):
 
         self.atmosphere_name = 'multitrope'
         
-        # gamma = c_p/c_v
-        # n_rho_cz = number of density scale heights in CZ
-        # n_rho_rz = number of density scale heights in RZ
-        # m_rz = polytropic index of radiative zone
-        # stiffness = (m_rz - m_ad)/(m_ad - m_cz) = (m_rz - m_ad)/epsilon
-
-        self.m_ad = 1/(gamma-1)
-        self.m_rz = m_rz
-        self.stiffness = stiffness
-        self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
-        self.m_cz = self.m_ad - self.epsilon
 
         if stable_top:
             stable_bottom = False
             
         self.stable_bottom = stable_bottom
 
-        self.n_rho_cz = n_rho_cz
-        self.n_rho_rz = n_rho_rz
+        self._set_atmosphere_parameters(gamma=gamma, n_rho_cz=n_rho_cz,
+                                        n_rho_rz=n_rho_rz, m_rz=m_rz, stiffness=stiffness)
         
         Lz_cz, Lz_rz, Lz = self._calculate_Lz(n_rho_cz, self.m_cz, n_rho_rz, self.m_rz)
         self.Lz_cz = Lz_cz
@@ -539,9 +528,49 @@ class Multitrope(MultiLayerAtmosphere):
             Lz_bottom = Lz_cz + overshoot_pad
             Lz_top = Lz_rz - overshoot_pad
 
-        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
+        super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
 
+        logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
+
+        self.z_cz =self.Lz_cz + 1
         self._set_atmosphere()
+
+        T0_max = self.domain.dist.comm_cart.allreduce(np.max(self.T0['g']), op=MPI.MAX)
+        T0_min = self.domain.dist.comm_cart.allreduce(np.min(self.T0['g']), op=MPI.MIN)
+        logger.info("   temperature: min {}  max {}".format(T0_min, T0_max))
+
+        P0_max = self.domain.dist.comm_cart.allreduce(np.max(self.P0['g']), op=MPI.MAX)
+        P0_min = self.domain.dist.comm_cart.allreduce(np.min(self.P0['g']), op=MPI.MIN)
+        logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
+
+        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
+        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
+        rho0_ratio = rho0_max/rho0_min
+        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+        logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
+        logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
+        logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
+        H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
+        H_rho_bottom = (self.z_cz)/self.m_cz
+        logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
+        logger.info("   H_rho/delta x = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top/self.delta_x,
+                                                                          H_rho_bottom/self.delta_x))
+
+        self._set_timescales()
+        
+    def _set_timescales(self, atmosphere=None):
+        if atmosphere is None:
+            atmosphere=self
+        # min of global quantity
+        self.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
+        self.freefall_time = np.sqrt(self.Lz_cz/self.g)
+        self.buoyancy_time = np.sqrt(self.Lz_cz/self.g/np.abs(self.epsilon))
+        
+        logger.info("atmospheric timescales:")
+        logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
+                                                                                               self.freefall_time,
+                                                                                               self.buoyancy_time))
+
         
     def _calculate_Lz(self, n_rho_cz, m_cz, n_rho_rz, m_rz):
         '''
@@ -595,18 +624,50 @@ class Multitrope(MultiLayerAtmosphere):
         else:
             self.kappa['g'] = (phi+inv_phi*kappa_ratio)*kappa_top
         self.necessary_quantities['kappa'] = self.kappa
+
+
+    def _set_atmosphere_parameters(self,
+                                   gamma=5/3,
+                                   n_rho_cz=3.5,
+                                   n_rho_rz=2, m_rz=3, stiffness=100,
+                                   g=None):
         
+        # polytropic atmosphere characteristics
+
+        # gamma = c_p/c_v
+        # n_rho_cz = number of density scale heights in CZ
+        # n_rho_rz = number of density scale heights in RZ
+        # m_rz = polytropic index of radiative zone
+        # stiffness = (m_rz - m_ad)/(m_ad - m_cz) = (m_rz - m_ad)/epsilon
+
+        self.gamma = gamma
+
+        self.m_ad = 1/(gamma-1)
+        self.m_rz = m_rz
+        self.stiffness = stiffness
+        self.epsilon = (self.m_rz - self.m_ad)/self.stiffness
+        self.m_cz = self.m_ad - self.epsilon
+
+        self.n_rho_cz = n_rho_cz
+        self.n_rho_rz = n_rho_rz
+        
+        if g is None:
+            self.g = self.m_cz + 1
+        else:
+            self.g = g
+
+        logger.info("multitrope atmosphere parameters:")
+        logger.info("   m_cz = {:g}, epsilon = {:g}, gamma = {:g}".format(self.m_cz, self.epsilon, self.gamma))
+        logger.info("   m_rz = {:g}, stiffness = {:g}".format(self.m_rz, self.stiffness))
+    
     def _set_atmosphere(self):
         super(MultiLayerAtmosphere, self)._set_atmosphere()
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
-        
-        self.z_cz =self.Lz_cz + 1
 
         self.delta_s = self.epsilon*(self.gamma-1)/self.gamma*np.log(self.z_cz)
         logger.info("Atmosphere delta s is {}".format(self.delta_s))
 
-        self.g = (self.m_cz + 1)
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z_cz - self.z)
@@ -651,42 +712,6 @@ class Multitrope(MultiLayerAtmosphere):
         self.del_ln_rho0.set_scales(1, keep_data=True)        
         self.del_s0['g'] = 1/self.gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
 
-        logger.info("multitrope atmosphere parameters:")
-        logger.info("   m_cz = {:g}, epsilon = {:g}, gamma = {:g}".format(self.m_cz, self.epsilon, self.gamma))
-        logger.info("   m_rz = {:g}, stiffness = {:g}".format(self.m_rz, self.stiffness))
-
-        logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
-
-        T0_max = self.domain.dist.comm_cart.allreduce(np.max(self.T0['g']), op=MPI.MAX)
-        T0_min = self.domain.dist.comm_cart.allreduce(np.min(self.T0['g']), op=MPI.MIN)
-        logger.info("   temperature: min {}  max {}".format(T0_min, T0_max))
-
-        P0_max = self.domain.dist.comm_cart.allreduce(np.max(self.P0['g']), op=MPI.MAX)
-        P0_min = self.domain.dist.comm_cart.allreduce(np.min(self.P0['g']), op=MPI.MIN)
-        logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
-
-        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
-        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
-        rho0_ratio = rho0_max/rho0_min
-        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
-        logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
-        logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
-        logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
-        H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
-        H_rho_bottom = (self.z_cz)/self.m_cz
-        logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
-        logger.info("   H_rho/delta x = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top/self.delta_x,
-                                                                          H_rho_bottom/self.delta_x))
-
-        # min of global quantity
-        self.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
-        self.freefall_time = np.sqrt(self.Lz_cz/self.g)
-        self.buoyancy_time = np.sqrt(self.Lz_cz/self.g/np.abs(self.epsilon))
-        
-        logger.info("atmospheric timescales:")
-        logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
-                                                                                               self.freefall_time,
-                                                                                               self.buoyancy_time))
 
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
         logger.info("problem parameters:")
