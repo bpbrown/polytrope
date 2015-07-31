@@ -406,14 +406,6 @@ class Polytrope(Atmosphere):
 
             logger.info("   using constant nu, chi")
             logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
-
-            # determine characteristic timescales
-            self.thermal_time = self.Lz**2/chi
-            self.top_thermal_time = 1/chi
-
-            self.viscous_time = self.Lz**2/nu
-            self.top_viscous_time = 1/nu
-        
         else:
             self.constant_kappa = True
 
@@ -430,26 +422,24 @@ class Polytrope(Atmosphere):
             chi = chi_top/(self.rho0['g'])
         
             logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top))
-
-            # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
-            # broken in parallel runs.
-            self.thermal_time = self.Lz**2/chi_top #chi[...,self.nz/2][0]
-            self.top_thermal_time = 1/chi_top
-
-            self.viscous_time = self.Lz**2/nu_top #nu[...,self.nz/2][0]
-            self.top_viscous_time = 1/nu_top
-            
-        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
-                                                                          self.top_thermal_time))
-        
+                    
         #Allows for atmosphere reuse
         self.chi.set_scales(1, keep_data=True)
-        
         self.nu['g'] = nu
         self.chi['g'] = chi
-        
+
         self.chi.differentiate('z', out=self.del_chi)
         self.chi.set_scales(1, keep_data=True)
+
+        # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
+        self.thermal_time = self.Lz**2/self.chi.interpolate(z=self.Lz/2)['g'][0][0]
+        self.top_thermal_time = 1/chi_top
+
+        self.viscous_time = self.Lz**2/self.nu.interpolate(z=self.Lz/2)['g'][0][0]
+        self.top_viscous_time = 1/nu_top
+
+        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
+                                                                          self.top_thermal_time))
 
 class Polytrope_adiabatic(Polytrope):
     def __init__(self,
@@ -476,30 +466,23 @@ class Polytrope_adiabatic(Polytrope):
         self.z0 = 1. + self.Lz
 
         logger.info("************* setting adiabatic atm")
-            
+
         self.constant_diffusivities = full_atm.constant_diffusivities
         self._set_atmosphere_parameters(gamma=gamma, epsilon=0, g=full_atm.g, poly_m=full_atm.m_ad)
+
         self._set_atmosphere()
         full_atm._set_timescales(atmosphere=self)
 
         self.T0_IC = self._new_ncc()
         self.rho0_IC = self._new_ncc()
         self.ln_rho0_IC = self._new_ncc()
-        logger.info("full_T0: {}".format(full_atm.T0['g']))
-        logger.info("self_T0: {}".format(self.T0['g']))
+        
         self.T0_IC['g'] = full_atm.T0['g'] - self.T0['g']
         self.rho0_IC['g'] = full_atm.rho0['g'] - self.rho0['g']
         self.ln_rho0_IC['g'] = np.log(full_atm.rho0['g']) - np.log(self.rho0['g'])
-        logger.info("{}".format(self.T0_IC['g']))
 
         self.delta_s = full_atm.delta_s
-        
-    ## def _set_diffusivities(self, **kwargs):
-    ##     self.full_atm._set_diffusivities(**kwargs)
-    ##     self.nu = self.full_atm.nu
-    ##     self.chi = self.full_atm.chi
-    ##     self.del_chi = self.full_atm.del_chi
-              
+                      
 class Multitrope(MultiLayerAtmosphere):
     '''
     Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.

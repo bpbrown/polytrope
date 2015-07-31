@@ -29,7 +29,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-    nx = nz*2
+    nx = nz*4
     
     atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
