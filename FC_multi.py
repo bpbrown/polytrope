@@ -112,7 +112,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = 0.25*atmosphere.thermal_time
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.5*3600
+    solver.stop_wall_time = 11.75*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_Ra{}_S{}".format(args['--Rayleigh'], args['--stiffness'])
+    data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
