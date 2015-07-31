@@ -49,6 +49,17 @@ class Atmosphere:
     def evaluate_at_point(self, f, z=0):
         return f.interpolate(z=z)
 
+    def value_at_boundary(self, field):
+        #scale = field.
+        field_top    = self.evaluate_at_point(field, z=self.Lz)['g'][0][0]
+        if not np.isfinite(field_top):
+            logger.info("Likely interpolation error at top boundary; setting field=1")
+            field_top = 1
+            
+        field_bottom = self.evaluate_at_point(field, z=0)['g'][0][0]
+        field.set_scales(1, keep_data=True)
+        return field_bottom, field_top
+    
     def _set_atmosphere(self):
         self.necessary_quantities = OrderedDict()
 
@@ -212,13 +223,13 @@ class Atmosphere:
         max_rel_err = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error)), op=MPI.MAX)
         logger.info('max error in HS balance: {}'.format(max_rel_err))
 
-    def check_atmosphere(self, **kwargs):
-        if self.make_plots:
+    def check_atmosphere(self, make_plots=False, **kwargs):
+        if self.make_plots or make_plots:
             try:
                 self.plot_atmosphere()
             except:
                 logger.info("Problems in plot_atmosphere: atm full of NaNs?")
-        self.test_hydrostatic_balance(**kwargs)
+        self.test_hydrostatic_balance(make_plots=make_plots, **kwargs)
         self.check_that_atmosphere_is_set()
 
 
@@ -361,12 +372,7 @@ class Polytrope(Atmosphere):
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z0 - self.z)
         
-
-        #rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
-        #rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
-        rho0_max = np.max(self.evaluate_at_point(self.rho0, z=0)['g'])
-        rho0_min = np.min(self.evaluate_at_point(self.rho0, z=self.Lz)['g'])
-        self.rho0.set_scales(1, keep_data=True)
+        rho0_max, rho0_min = value_at_boundary(self.rho0)
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
@@ -504,7 +510,6 @@ class Multitrope(MultiLayerAtmosphere):
 
         self.atmosphere_name = 'multitrope'
         
-
         if stable_top:
             stable_bottom = False
             
@@ -537,18 +542,15 @@ class Multitrope(MultiLayerAtmosphere):
         self.z_cz =self.Lz_cz + 1
         self._set_atmosphere()
 
-        T0_max = self.domain.dist.comm_cart.allreduce(np.max(self.T0['g']), op=MPI.MAX)
-        T0_min = self.domain.dist.comm_cart.allreduce(np.min(self.T0['g']), op=MPI.MIN)
+        T0_max, T0_min = self.value_at_boundary(self.T0)
+        P0_max, P0_min = self.value_at_boundary(self.P0)
+        rho0_max, rho0_min = self.value_at_boundary(self.rho0)
+
         logger.info("   temperature: min {}  max {}".format(T0_min, T0_max))
-
-        P0_max = self.domain.dist.comm_cart.allreduce(np.max(self.P0['g']), op=MPI.MAX)
-        P0_min = self.domain.dist.comm_cart.allreduce(np.min(self.P0['g']), op=MPI.MIN)
         logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
-
-        rho0_max = self.domain.dist.comm_cart.allreduce(np.max(self.rho0['g']), op=MPI.MAX)
-        rho0_min = self.domain.dist.comm_cart.allreduce(np.min(self.rho0['g']), op=MPI.MIN)
-        rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+
+        rho0_ratio = rho0_max/rho0_min
         logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
         logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
         logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
@@ -716,7 +718,7 @@ class Multitrope(MultiLayerAtmosphere):
 
 
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
-        logger.info("problem parameters:")
+        logger.info("problem parameters (multitrope):")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         Rayleigh_top = Rayleigh
         Prandtl_top = Prandtl
@@ -742,7 +744,7 @@ class Multitrope(MultiLayerAtmosphere):
         self.chi['g'] = self.kappa['g']/self.rho0['g']
         self.chi.differentiate('z', out=self.del_chi)
         self.chi.set_scales(1, keep_data=True)
-
+        
         self.top_thermal_time = 1/self.chi_top
         self.thermal_time = self.Lz_cz**2/self.chi_top
 

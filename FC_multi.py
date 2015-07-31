@@ -55,6 +55,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
 
+    atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.rho0, T=atmosphere.T0)
+    
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
             os.mkdir('{:s}/'.format(data_dir))
