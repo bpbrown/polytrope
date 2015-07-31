@@ -172,7 +172,7 @@ class Atmosphere:
             if not quantity_set:
                 logger.info("WARNING: atmosphere {} is all zeros".format(key))
                 
-    def test_hydrostatic_balance(self, P_z=None, P=None, T=None, rho=None, make_plots=True):
+    def test_hydrostatic_balance(self, P_z=None, P=None, T=None, rho=None, make_plots=False):
 
         if rho is None:
             logger.error("HS balance test requires rho (currently)")
@@ -468,7 +468,7 @@ class Polytrope_adiabatic(Polytrope):
         logger.info("************* setting adiabatic atm")
 
         self.constant_diffusivities = full_atm.constant_diffusivities
-        self._set_atmosphere_parameters(gamma=gamma, epsilon=0, g=full_atm.g, poly_m=full_atm.m_ad)
+        self._set_atmosphere_parameters(gamma=gamma, epsilon=0, poly_m=full_atm.m_ad)
 
         self._set_atmosphere()
         full_atm._set_timescales(atmosphere=self)
@@ -1057,11 +1057,11 @@ class FC_equations(Equations):
         rho['g'] = self.rho0['g']*np.exp(ln_rho1['g'])
         return rho
 
-    def check_system(self, solver):
+    def check_system(self, solver, **kwargs):
         T = self.get_full_T(solver)
         rho = self.get_full_rho(solver)
 
-        self.check_atmosphere(T=T, rho=rho)
+        self.check_atmosphere(T=T, rho=rho, **kwargs)
 
 class FC_polytrope(FC_equations, Polytrope):
     def __init__(self, *args, **kwargs):

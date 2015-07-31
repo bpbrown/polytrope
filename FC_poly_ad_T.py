@@ -48,7 +48,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
     # Build solver
     solver = problem.build_solver(ts)
 
-    atmosphere.check_system(solver)
+    atmosphere.check_system(solver, make_plots=True)
     
     do_checkpointing=True
     if do_checkpointing:
