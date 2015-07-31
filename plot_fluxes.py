@@ -3,7 +3,7 @@ Plot energy fluxes from joint analysis files.
 
 Usage:
     plot_fluxes.py join <base_path>
-    plot_fluxes.py plot <files>... [--output=<output>]
+    plot_fluxes.py <files>... [--output=<output>]
 
 Options:
     --output=<output>  Output directory [default: ./fluxes]
@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
     if args['join']:
         post.merge_analysis(args['<base_path>'])
-    elif args['plot']:
+    else:
         output_path = pathlib.Path(args['--output']).absolute()
         # Create output directory if needed
         with Sync() as sync:

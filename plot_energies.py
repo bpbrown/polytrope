@@ -3,7 +3,7 @@ Plot energies from joint analysis files.
 
 Usage:
     plot_energies.py join <base_path>
-    plot_energies.py plot <files>... [--output=<output>]
+    plot_energies.py <files>... [--output=<output>]
 
 Options:
     --output=<output>  Output directory [default: ./scalar]
@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     if args['join']:
         post.merge_analysis(args['<base_path>'])
-    elif args['plot']:
+    else:
         output_path = pathlib.Path(args['--output']).absolute()
         # Create output directory if needed
         with Sync() as sync:

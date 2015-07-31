@@ -531,7 +531,9 @@ class Multitrope(MultiLayerAtmosphere):
         Lx = Lz_cz*aspect_ratio
         
         
-        overshoot_pad = 0.2*Lz_cz 
+        overshoot_pad = 0.2*(Lz_cz/10) 
+        self.tanh_width = overshoot_pad
+
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
             Lz_top = Lz_cz + overshoot_pad
@@ -539,8 +541,9 @@ class Multitrope(MultiLayerAtmosphere):
             Lz_bottom = Lz_cz + overshoot_pad
             Lz_top = Lz_rz - overshoot_pad
 
-        super(Multitrope, self).__init__(gamma=gamma, nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
+        super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
 
+        self.gamma = gamma
         self._set_atmosphere()
         
     def _calculate_Lz(self, n_rho_cz, m_cz, n_rho_rz, m_rz):
@@ -616,7 +619,7 @@ class Multitrope(MultiLayerAtmosphere):
         # this seems to work fine; bandwidth only a few terms worse.
         self.scale['g'] = 1.
                 
-        self._compute_kappa_profile(kappa_ratio, tanh_center=self.Lz_rz, tanh_width=0.25)
+        self._compute_kappa_profile(kappa_ratio, tanh_center=self.Lz_rz, tanh_width=self.tanh_width)
 
         logger.info("Solving for T0")
         # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
