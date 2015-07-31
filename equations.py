@@ -1061,16 +1061,17 @@ class FC_equations(Equations):
 
     def get_full_T(self, solver):
         T1 = solver.state['T1']
+        T1.set_scales(self.domain.dealias, keep_data=True)
         T = self._new_ncc()
         T.set_scales(self.domain.dealias, keep_data=False)
         T['g'] = self.T0['g'] + T1['g']
+        T.set_scales(1, keep_data=True)
         return T
 
     def get_full_rho(self, solver):
         ln_rho1 = solver.state['ln_rho1']
         rho = self._new_ncc()
-        rho['g'] = atmosphere.rho0['g']*np.exp(ln_rho1['g'])
-        rho.set_scales(self.domain.dealias, keep_data=True)
+        rho['g'] = self.rho0['g']*np.exp(ln_rho1['g'])
         return rho
 
     def check_system(self, solver):
