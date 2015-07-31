@@ -172,7 +172,7 @@ class Atmosphere:
             if not quantity_set:
                 logger.info("WARNING: atmosphere {} is all zeros".format(key))
                 
-    def test_hydrostatic_balance(self, P_z=None, P=None, T=None, rho=None, make_plots=False):
+    def test_hydrostatic_balance(self, P_z=None, P=None, T=None, rho=None, make_plots=True):
 
         if rho is None:
             logger.error("HS balance test requires rho (currently)")

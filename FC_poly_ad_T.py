@@ -33,7 +33,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     nx = nz*4
     
-    atmosphere = equations.FC_polytrope_adiabatic(nx=nx, nz=nz, constant_kappa=True)
+    atmosphere = equations.FC_polytrope_adiabatic(nx=nx, nz=nz, constant_kappa=True, epsilon=1e-4)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
     atmosphere.set_BC(fixed_temperature=True)
     problem = atmosphere.get_problem()
