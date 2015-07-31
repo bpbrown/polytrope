@@ -13,8 +13,8 @@ import analysis
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
+from tools.EVP_override import EVP_homogeneous
 from dedalus import public as de
-
 
 class Atmosphere:
     def __init__(self, gamma=5/3, verbose=False, **kwargs):
@@ -761,7 +761,7 @@ class Equations():
         self.set_equations(*args, **kwargs)
 
     def set_eigenvalue_problem(self, *args, **kwargs):
-        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
+        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
