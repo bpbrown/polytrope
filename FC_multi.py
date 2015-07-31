@@ -55,7 +55,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
 
-    atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.rho0, T=atmosphere.T0)
+    #atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
     
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
@@ -107,6 +107,28 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
 
 
+    rho = atmosphere.get_full_rho(solver)
+    rho.set_scales(1,keep_data=True)
+    T = atmosphere.get_full_T(solver)
+    T.set_scales(1,keep_data=True)
+    chi = atmosphere.chi
+    chi.set_scales(1,keep_data=True)
+    
+    flux = rho['g']*T['g']*chi['g']
+    print("flux with perturbations: {}",format(flux[0,:]))
+
+
+    rho = atmosphere.rho0
+    rho.set_scales(1,keep_data=True)
+    T = atmosphere.T0
+    T.set_scales(1,keep_data=True)
+    chi = atmosphere.chi
+    chi.set_scales(1,keep_data=True)
+    
+    flux = rho['g']*T['g']*chi['g']
+    print("flux_0: {}".format(flux[0,:]))
+
+    
     max_dt = atmosphere.min_BV_time 
     max_dt = atmosphere.buoyancy_time*0.25
 
