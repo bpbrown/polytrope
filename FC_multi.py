@@ -72,30 +72,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         checkpoint = Checkpoint(data_dir)
         checkpoint.set_checkpoint(solver, wall_dt=1800)
 
-    x = atmosphere.domain.grid(0)
-    z = atmosphere.domain.grid(1)
-
-
     # initial conditions
-    T = solver.state['T1']
-    ln_rho = solver.state['ln_rho1']
-
     if restart is None:
-         # Random perturbations, initialized globally for same results in parallel
-        gshape = atmosphere.domain.dist.grid_layout.global_shape(scales=atmosphere.domain.dealias)
-        slices = atmosphere.domain.dist.grid_layout.slices(scales=atmosphere.domain.dealias)
-        rand = np.random.RandomState(seed=42)
-        noise = rand.standard_normal(gshape)[slices]
-
-        A0 = 1e-6
-        
-        T.set_scales(atmosphere.domain.dealias, keep_data=True)
-        z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-        T['g'] = A0*np.sin(np.pi*z_dealias/atmosphere.Lz)*noise*atmosphere.T0['g']
-
-        logger.info("A0 = {:g}".format(A0))
-        #logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
-        
+        atmosphere.set_IC(solver)
     else:
         if do_checkpointing:
             logger.info("restarting from {}".format(restart))

@@ -945,6 +945,14 @@ class Equations():
         logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
         return BC
 
+    def global_noise(self, seed=42):            
+        # Random perturbations, initialized globally for same results in parallel
+        gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
+        slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
+        rand = np.random.RandomState(seed=seed)
+        noise = rand.standard_normal(gshape)[slices]        
+        return noise
+
 
 
 class FC_equations(Equations):
@@ -1065,20 +1073,15 @@ class FC_equations(Equations):
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
 
-    def set_IC(self, solver, A0=1e-6, seed=42):
+    def set_IC(self, solver, A0=1e-6, **kwargs):
         # initial conditions
-        self.T_IC = T_IC = solver.state['T1']
+        self.T_IC = solver.state['T1']
         self.ln_rho_IC = solver.state['ln_rho1']
-        
-        # Random perturbations, initialized globally for same results in parallel
-        gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
-        slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
-        rand = np.random.RandomState(seed=seed)
-        noise = rand.standard_normal(gshape)[slices]        
-        
-        T_IC.set_scales(self.domain.dealias, keep_data=True)
+
+        noise = self.global_noise(**kwargs)
+        self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
-        T_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise*self.T0['g']
+        self.T_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise*self.T0['g']
 
         logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
