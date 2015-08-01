@@ -527,7 +527,7 @@ class Multitrope(MultiLayerAtmosphere):
         
         overshoot_pad = 0.2*(Lz_cz/10) 
         self.tanh_width = overshoot_pad
-
+        logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
             Lz_top = Lz_cz + overshoot_pad
@@ -681,7 +681,7 @@ class Multitrope(MultiLayerAtmosphere):
         # this seems to work fine; bandwidth only a few terms worse.
         self.scale['g'] = 1.
                 
-        self._compute_kappa_profile(kappa_ratio, tanh_center=self.Lz_rz, tanh_width=self.tanh_width)
+        self._compute_kappa_profile(kappa_ratio, tanh_width=self.tanh_width)
 
         logger.info("Solving for T0")
         # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
@@ -752,6 +752,17 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
 
+    def get_flux(self, rho, T):
+        rho.set_scales(1,keep_data=True)
+        T_z = self._new_ncc()
+        T.differentiate('z', out=T_z)
+        T_z.set_scales(1,keep_data=True)
+        chi = self.chi
+        chi.set_scales(1,keep_data=True)
+        flux = self._new_ncc()
+        flux['g'] = rho['g']*T_z['g']*chi['g']
+        return flux
+        
 # need to implement flux-based Rayleigh number here.
 class PolytropeFlux(Polytrope):
     def __init__(self, *args, **kwargs):
