@@ -10,16 +10,29 @@ framework.  To run these problems, first install
 Once [Dedalus](http://dedalus-project.org/) is installed and activated, do the following:
 ```
 #!bash
-python3 anelastic_igw.py
-python3 plot_results_parallel.py anelastic_igw slices 1 1 5
-```
-To run in parallel, do something like
-```
-#!bash
-mpirun -np 4 python3 anelastic_convection.py
-mpirun -np 2 python3 plot_results_parallel.py anelastic_convection slices 1 1 10
+mpirun -np 4 python3 FC_poly.py
+mpirun -np 2 python3 plot_results_parallel.py FC_poly_Ra1e6 slices 1 1 10
 ```
 
-Contact Ben Brown (and see Brown et al 2012; Vasil et al 2013) for
-more details.
+For multitropes, use
+```
+#!bash
+mpirun -np 4 python3 FC_multi.py
+```
+and for exoplanet inspired (stable top, unstable bottom) atmospheres, consider
+```
+#!bash
+mpirun -np 4 python3 FC_poly_oz.py
+```
+
+We are using docopt in these general driver cases, and
+```
+#!bash
+python3 FC_multi.py --help
+```
+will describe various command-line options.
+
+Contact the exoweather team for more details.
+
+References: Brown, Vasil & Zweibel 2012, Vasil et al 2013, Lecoanet et al 2014.
 
