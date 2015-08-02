@@ -13,8 +13,8 @@ import analysis
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
+from tools.EVP import EVP_homogeneous
 from dedalus import public as de
-
 
 class Atmosphere:
     def __init__(self, verbose=False, **kwargs):
@@ -138,7 +138,6 @@ class Atmosphere:
         self.problem.parameters['T1_right'] = self.T1_right
         self.problem.parameters['T1_z_left']  = self.T1_z_left
         self.problem.parameters['T1_z_right'] = self.T1_z_right
-
 
     def copy_atmosphere(self, atmosphere):
         '''
@@ -817,7 +816,7 @@ class Equations():
         self.set_equations(*args, **kwargs)
 
     def set_eigenvalue_problem(self, *args, **kwargs):
-        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega')
+        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
@@ -829,7 +828,7 @@ class Equations():
         self.problem.parameters['delta_s_atm'] = self.delta_s
         self.problem.substitutions['s_fluc'] = '(1/Cv_inv*log(1+T1/T0) - 1/Cv_inv*(gamma-1)*ln_rho1)'
         self.problem.substitutions['s_mean'] = '(1/Cv_inv*log(T0) - 1/Cv_inv*(gamma-1)*ln_rho0)'
-        
+
         self.problem.substitutions['KE'] = 'rho_full*(u**2+w**2)/2'
         self.problem.substitutions['PE'] = 'rho_full*phi'
         self.problem.substitutions['PE_fluc'] = 'rho_fluc*phi'
