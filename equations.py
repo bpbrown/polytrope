@@ -689,6 +689,7 @@ class Multitrope(MultiLayerAtmosphere):
         flux_top = -1
         self.T0_z['g'] = flux_top/self.kappa['g']
         self.T0_z.antidifferentiate('z',('right',0), out=self.T0)
+        self.T0_z.differentiate('z', out=self.T0_zz)
         self.T0['g'] += 1
         self.T0.set_scales(1, keep_data=True)
     
