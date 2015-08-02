@@ -3,11 +3,11 @@ Plot energy fluxes from joint analysis files.
 
 Usage:
     plot_fluxes.py join <base_path>
-    plot_fluxes.py <files>... [--output=<output>]
+    plot_fluxes.py <files>... [--output=<output> --overshoot]
 
 Options:
     --output=<output>  Output directory [default: ./fluxes]
-
+    --overshoot        Do overshoot diagnostics
 """
 import numpy as np
 
@@ -191,7 +191,10 @@ def plot_fluxes(fluxes, z, output_path='./'):
 def plot_profiles(data, z, output_path='./'):
     figs = {}
 
-    keys = ['IE_fluc', 'PE_fluc', 's_mean', 's_fluc', 'T1', 'ln_rho1']
+    keys = ['IE_fluc', 'PE_fluc', 's_mean', 's_fluc',
+            'T1', 'ln_rho1',
+            'kappa_flux_fluc_z', 'kappa_flux_mean_z', 'kappa_flux_z',
+            'T1_source_terms']
     
     for key in keys:
         fig_flow = plt.figure(figsize=(16,8))
@@ -207,7 +210,7 @@ def plot_profiles(data, z, output_path='./'):
     for key in figs.keys():
         figs[key].savefig(output_path+'profiles_{}.png'.format(key))
 
-def main(files, output_path='./'):
+def main(files, output_path='./', overshoot=True):
     logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
@@ -218,7 +221,8 @@ def main(files, output_path='./'):
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
     plot_fluxes(averages, z, output_path=output_path)
     plot_flows(averages, z, output_path=output_path)
-    diagnose_overshoot(averages, z, output_path=output_path)
+    if overshoot:
+        diagnose_overshoot(averages, z, output_path=output_path)
     plot_profiles(data.data, z, output_path=output_path)
 
 
@@ -242,6 +246,6 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         logger.info("output to {}".format(output_path))
-        main(args['<files>'], output_path=str(output_path)+'/')
+        main(args['<files>'], output_path=str(output_path)+'/', overshoot=args['--overshoot'])
 
 

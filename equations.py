@@ -372,7 +372,7 @@ class Polytrope(Atmosphere):
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z0 - self.z)
         
-        rho0_max, rho0_min = value_at_boundary(self.rho0)
+        rho0_max, rho0_min = self.value_at_boundary(self.rho0)
         rho0_ratio = rho0_max/rho0_min
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
         logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
@@ -525,8 +525,9 @@ class Multitrope(MultiLayerAtmosphere):
         Lx = Lz_cz*aspect_ratio
         
         
-        overshoot_pad = 0.2*(Lz_cz/10) 
+        overshoot_pad = (Lz_cz/10) 
         self.tanh_width = overshoot_pad
+        overshoot_pad = 0
         logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
@@ -842,8 +843,8 @@ class Equations():
         self.problem.substitutions['Pe_rms'] = 'sqrt(u**2+w**2)*Lz/chi'
 
         self.problem.substitutions['h_flux'] = 'w*h'
-        self.problem.substitutions['kappa_flux_mean'] = '-rho_full*chi*dz(T0)'
-        self.problem.substitutions['kappa_flux_fluc'] = '-rho_full*chi*dz(T1)'
+        self.problem.substitutions['kappa_flux_mean'] = '-rho0*chi*dz(T0)'
+        self.problem.substitutions['kappa_flux_fluc'] = '-rho_full*chi*dz(T1) - rho_fluc*chi*dz(T0)'
         self.problem.substitutions['kappa_flux'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
         self.problem.substitutions['KE_flux'] = 'w*KE'
 
@@ -886,6 +887,7 @@ class Equations():
         analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux)", name="kappa_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
         analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
         analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
         analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
@@ -899,7 +901,9 @@ class Equations():
         analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
         analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
         analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")        
-
+        analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
+                                  name="T1_source_terms")
+        
         analysis_tasks.append(analysis_profile)
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
@@ -950,7 +954,7 @@ class Equations():
         gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
         slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
         rand = np.random.RandomState(seed=seed)
-        noise = rand.standard_normal(gshape)[slices]        
+        noise = rand.standard_normal(gshape)[slices]/5.        
         return noise
 
 
@@ -1150,7 +1154,19 @@ class FC_multitrope(FC_equations, Multitrope):
     def set_equations(self, *args, **kwargs):
         super(FC_multitrope,self).set_equations(*args, **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-                        
+    
+    def set_IC(self, solver, A0=1e-3, **kwargs):
+        # initial conditions
+        self.T_IC = solver.state['T1']
+        self.ln_rho_IC = solver.state['ln_rho1']
+
+        noise = self.global_noise(**kwargs)
+        self.T_IC.set_scales(self.domain.dealias, keep_data=True)
+        z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+        self.T_IC['g'] = self.epsilon*A0*noise*np.sin(np.pi*z_dealias/self.Lz)*self.T0['g']
+
+        logger.info("Starting with T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
+
 # needs to be tested again and double-checked
 class AN_polytrope(Polytrope):
     def __init__(self, *args, **kwargs):

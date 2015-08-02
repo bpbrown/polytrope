@@ -6,10 +6,13 @@ Usage:
     FC_poly.py [options] 
 
 Options:
-    --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
-    --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
-    --restart=<restart_file>   Restart from checkpoint
-    --nz=<nz>                  vertical z (chebyshev) resolution [default: 128]
+    --Rayleigh=<Rayleigh>               Rayleigh number [default: 1e6]
+    --Prandtl=<Prandtl>                 Prandtl number = nu/kappa [default: 1]
+    --restart=<restart_file>            Restart from checkpoint
+    --nz=<nz>                           vertical z (chebyshev) resolution [default: 128]
+    --n_rho_cz=<n_rho_cz>               Density scale heights across unstable layer [default: 3.5]
+
+
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -19,7 +22,7 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 from dedalus.extras.checkpointing import Checkpoint
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=128, data_dir='./'):
     import numpy as np
     import time
     import equations
@@ -31,7 +34,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     nx = nz*4
     
-    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True)
+    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -59,7 +62,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, restart=None, nz=128, data_dir='.
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time,
                                                                       atmosphere.top_thermal_time))
-
+    logger.info("full atm HS check")
+    atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
 
     max_dt = atmosphere.buoyancy_time*0.25
 
@@ -166,4 +170,5 @@ if __name__ == "__main__":
                       Prandtl=float(args['--Prandtl']),
                       nz=int(args['--nz']),
                       restart=(args['--restart']),
+                      n_rho_cz=float(args['--n_rho_cz']),
                       data_dir=data_dir)
