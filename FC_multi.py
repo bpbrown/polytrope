@@ -81,32 +81,6 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             raise
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
-
-    
-    flux_plot=False
-    if flux_plot:
-        logger.info("full atm HS check")
-        atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
-
-        import matplotlib.pyplot as plt
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-        rho = atmosphere.get_full_rho(solver)    
-        T = atmosphere.get_full_T(solver)
-        flux = atmosphere.get_flux(rho, T)
-        mean_flux = atmosphere._new_ncc()
-        flux.integrate('x', out=mean_flux)
-        mean_flux['g'] /= atmosphere.Lx
-        mean_flux.set_scales(1, keep_data=True)
-        logger.info("flux_0+1: {}".format(flux['g'][0,:]))
-        ax.plot(atmosphere.z[0,:], mean_flux['g'][0,:])
-        
-        rho = atmosphere.rho0
-        T = atmosphere.T0
-        flux = atmosphere.get_flux(rho, T)
-        logger.info("flux_0: {}".format(flux['g'][0,:]))
-        ax.plot(atmosphere.z[0,:], flux['g'][0,:])
-        fig.savefig('atmosphere_fluxes.png', dpi=300)
     
     max_dt = atmosphere.min_BV_time 
     max_dt = atmosphere.buoyancy_time*0.25

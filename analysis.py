@@ -11,8 +11,7 @@ class DedalusData():
                  keys=None, verbose=False, **kwargs):
         
         self.verbose = verbose
-        # the lambda logic here breaks if the case name has a "." in it, e.g., nrho0.3
-        self.files = sorted(files, key=lambda x: int(x.split('.')[0].split('_s')[1]))
+        self.files = sorted(files, key=lambda x: int(x.split('.h5')[0].split('_s')[1]))
         logger.debug("opening: {}".format(self.files))
         
         if keys is None:

@@ -524,8 +524,8 @@ class Multitrope(MultiLayerAtmosphere):
         
         Lx = Lz_cz*aspect_ratio
         
-        
-        overshoot_pad = (Lz_cz/10) 
+        # guess at overshoot offset and tanh width
+        overshoot_pad = 0.2*(Lz_cz/10) 
         self.tanh_width = overshoot_pad
         overshoot_pad = 0
         logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
@@ -689,6 +689,7 @@ class Multitrope(MultiLayerAtmosphere):
         flux_top = -1
         self.T0_z['g'] = flux_top/self.kappa['g']
         self.T0_z.antidifferentiate('z',('right',0), out=self.T0)
+        # need T0_zz in multitrope
         self.T0_z.differentiate('z', out=self.T0_zz)
         self.T0['g'] += 1
         self.T0.set_scales(1, keep_data=True)
