@@ -955,7 +955,7 @@ class Equations():
         gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
         slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
         rand = np.random.RandomState(seed=seed)
-        noise = rand.standard_normal(gshape)[slices]/5.        
+        noise = rand.standard_normal(gshape)[slices]
         return noise
 
 
