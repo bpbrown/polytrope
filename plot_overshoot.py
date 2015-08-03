@@ -1,12 +1,11 @@
 """
-Plot energy fluxes from joint analysis files.
+Plot overshoot from joint analysis files.
 
 Usage:
-    plot_fluxes.py join <base_path>
-    plot_fluxes.py plot <files>... [--output=<output>]
+    plot_overshoot.py [--output=<output>]
 
 Options:
-    --output=<output>  Output directory [default: ./fluxes]
+    --output=<output>  Output directory [default: ./]
 
 """
 import numpy as np
@@ -22,55 +21,9 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 import analysis
 
-
-def plot_flows(averages, z, output_path='./'):
-    figs = {}
-
-    fig_flow = plt.figure(figsize=(16,8))
-    ax1 = fig_flow.add_subplot(1,1,1)
-    ax1.semilogy(z, averages['Re_rms'], label="Re", color='darkblue')
-    ax1.semilogy(z, averages['Pe_rms'], label="Pe", color='darkred')
-    ax1.legend()
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("Re and Pe")
-    figs["Re_Pe"]=fig_flow
-
-    fig = plt.figure(figsize=(16,8))
-    ax1 = fig.add_subplot(1,1,1)
-    ax1.semilogy(z, averages['Rayleigh_global'], label="global Ra")
-    ax1.semilogy(z, np.abs(averages['Rayleigh_local']),  label=" local Ra")
-    ax1.legend()
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("Ra")
-    figs["Ra"]=fig
-
-    for key in figs.keys():
-        figs[key].savefig(output_path+'flows_{}.png'.format(key))
-
-
-def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
-    import scipy.optimize as scpop
+def make_plots(norm_diag):
     figs = {}
     apjfig = analysis.APJSingleColumnFigure()
-
-    def norm(f):
-        return f/np.max(np.abs(f))
-
-    norm_diag = OrderedDict()
-    norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
-    norm_diag['KE'] = ('KE', norm(averages['KE']))
-    norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
-    dz = np.gradient(z)
-    try:
-        norm_diag['grad_s_post'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
-    except:
-        logger.info("Missing s_tot from outputs")
-
-    try:
-        norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
-        norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
-    except:
-        logger.info("Missing grad_s from outputs")
 
     min_plot = 1
     max_plot = np.log(5) # half a log-space unit above 1
@@ -96,95 +49,96 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     apjfig.ax.set_xlim(xmin, xmax)
     figs["overshoot"]=apjfig
 
-    # estimate penetration depths
-    penetration_depths = OrderedDict()
-    if boundary is None:
-        # start in the middle
-        start_search = 0.5*(np.max(z)+np.min(z))
-    else:
-        # otherwise, start at the interface between CZ and RZ
-        start_search = boundary
-
-    logger.info("searching for roots starting from z={}".format(start_search))
-    Lz = np.max(z)-np.min(z) 
-    x = 2/Lz*z-1 # convert back to [-1,1]
-    x_start_search = 2/Lz*start_search-1
-
-    def poor_mans_root(f, z):
-        i_near = (np.abs(f)).argmin()
-        return z[i_near], f[i_near], i_near
-
-
-
-    for key in norm_diag:
-        if key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot':
-            threshold = 0
-            root_color = 'blue'
-        else:
-            threshold = 1e-2
-            root_color = 'red'
-
-        if key=='enstrophy':
-            degree = 512    
-            cheb_coeffs = np.polynomial.chebyshev.chebfit(x, norm_diag[key][1]-threshold, degree)
-            cheb_interp = np.polynomial.chebyshev.Chebyshev(cheb_coeffs)
-
-            #print(cheb_interp.roots())
-            def newton_func(x_newton):
-                return np.polynomial.chebyshev.chebval(x_newton, cheb_coeffs)
-
-            try:
-                x_root = scpop.newton(newton_func, x_start_search)
-            except:
-                logger.info("root find failed to converge")
-                x_root = x_start_search
-            z_root = (x_root+1)*Lz/2
-
-            logger.info("newton: {} : found root z={} (x:{} -> {})".format(key, z_root, x_start_search, x_root))  
-            #print(np.polynomial.chebyshev.chebroots(cheb_coeffs))
-            #apjfig.ax.semilogy(z,np.polynomial.chebyshev.chebval(x, cheb_coeffs), label='fit')
-
-        z_root_poor, f, i = poor_mans_root(norm_diag[key][1]-threshold, z)
-        logger.info("poor man: {} found root z={}".format(key, z_root_poor))
-        apjfig.ax.axvline(x=z_root_poor, linestyle='dotted', color=root_color)
+    #apjfig.ax.axvline(x=z_root_poor, linestyle='dotted', color=root_color)
 
     for key in figs.keys():
         figs[key].savefig(output_path+'diag_{}.png'.format(key))
 
 
-def plot_fluxes(fluxes, z, output_path='./'):
-
-    #flux_keys = ['enthalpy_flux_z', 'kappa_flux_z', 'kappa_flux_fluc_z', 'KE_flux_z']
-
-    figs = {}
-
-    fig_fluxes = plt.figure(figsize=(16,8))
-    ax1 = fig_fluxes.add_subplot(1,1,1)
-    ax1.plot(z, fluxes['enthalpy_flux_z'], label="h flux")
-    ax1.plot(z, fluxes['kappa_flux_z'], label=r"$\kappa\nabla T$")
-    ax1.plot(z, fluxes['KE_flux_z'], label="KE flux")
-    ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['kappa_flux_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
-    ax1.legend()
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("energy fluxes")
-    figs["fluxes"]=fig_fluxes
-
-    fig_fluxes = plt.figure(figsize=(16,8))
-    ax1 = fig_fluxes.add_subplot(1,1,1)
-    ax1.plot(z, fluxes['enthalpy_flux_z'], label="h flux")
-    ax1.plot(z, fluxes['kappa_flux_fluc_z'], label=r"$\kappa\nabla T_1$")
-    ax1.plot(z, fluxes['KE_flux_z'], label="KE flux")
-    ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['kappa_flux_fluc_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
-    ax1.legend()
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("energy fluxes")
-    figs["relative_fluxes"]=fig_fluxes
-
-    for key in figs.keys():
-        figs[key].savefig(output_path+'energy_{}.png'.format(key))
+def cheby_newton_root(z, f, z0=None, degree=512):
+    import numpy.polynomial.chebyshev as npcheb
+    import scipy.optimize as scpop
     
+    Lz = np.max(z)-np.min(z) 
+    if z0 is None:
+        z0 = Lz/2
 
-def main(files, output_path='./'):
+    def to_x(z, Lz=None):
+        # convert back to [-1,1]
+        if Lz is None:
+            Lz = np.max(z)-np.min(z) 
+        return (2/Lz)*z-1
+
+    def to_z(x, Lz):
+        # convert back from [-1,1]
+        return (x+1)*Lz/2 
+    
+    logger.info("searching for roots starting from z={}".format(z0))
+    x  = to_x(z, Lz=Lz) 
+    x0 = to_x(z0, Lz=Lz)
+    cheb_coeffs = npcheb.chebfit(x, f, degree)
+    cheb_interp = npcheb.Chebyshev(cheb_coeffs)
+
+    def newton_func(x_newton):
+        return npcheb.chebval(x_newton, cheb_coeffs)
+
+    x_root = scpop.newton(newton_func, x0)
+    z_root = to_z(x_root, Lz)
+    logger.info("newton: found root z={} (x0:{} -> {})".format(z_root, x0, x_root))
+    return z_root
+
+def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
+    import scipy.optimize as scpop
+
+    def norm(f):
+        return f/np.max(np.abs(f))
+
+    norm_diag = OrderedDict()
+    norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
+    norm_diag['KE'] = ('KE', norm(averages['KE']))
+    norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
+    dz = np.gradient(z)
+    try:
+        norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
+        norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
+    except:
+        logger.info("Missing grad_s from outputs; trying numeric gradient option")
+        try:
+            norm_diag['grad_s*'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
+            norm_diag['grad_s_mean*'] = (r'$\nabla (s_0)^*$', np.gradient(norm(averages['s_mean']), dz))
+        except:
+            logger.info("Missing s_tot from outputs")
+
+    # estimate penetration depths
+    overshoot_depths = OrderedDict()
+
+    def poor_mans_root(z, f):
+        i_near = (np.abs(f)).argmin()
+        return z[i_near], f[i_near], i_near
+    
+    for key in norm_diag:
+        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot':
+            threshold = 0
+            root_color = 'blue'
+            criteria = norm_diag[key][1] - threshold
+            if key=="KE_flux":
+                color = 'darkgreen'
+        else:
+            threshold = 1e-2
+            root_color = 'red'
+            criteria = np.log(norm_diag[key][1])-np.log(threshold)
+        logger.info("key {}".format(key))
+        
+        z_root_poor, f, i = poor_mans_root(z, criteria)
+        z_root = cheby_newton_root(z, criteria, z0=None)
+
+        overshoot_depths[key] = z_root_poor
+        logger.info("poor man: {:>10s} : found root z={}".format(key, z_root_poor))
+        logger.info("  newton: {:>10s} : found root z={}".format(key, z_root))
+    return overshoot_depths
+    
+def analyze_case(files):
+    logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
     std_devs = data.std_dev
@@ -192,12 +146,62 @@ def main(files, output_path='./'):
     z = data.z
     delta_t = times[-1]-times[0]
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
-    plot_fluxes(averages, z, output_path=output_path)
-    plot_flows(averages, z, output_path=output_path)
-    diagnose_overshoot(averages, z, output_path=output_path)
+    overshoot_depths = diagnose_overshoot(averages, z, output_path=output_path)
+    for key in overshoot_depths:
+        print("{} --> z={}".format(key, overshoot_depths[key]))
+    return overshoot_depths
+
+def analyze_all_cases(stiffness_file_list):
+    overshoot = OrderedDict()
+    first_run = True
     
+    for stiffness, files in stiffness_file_list:
+        overshoot_one_case = analyze_case(files)
+        for key in overshoot_one_case:
+            if first_run:
+                overshoot[key] = np.array(overshoot_one_case[key])
+            else:
+                overshoot[key] = np.append(overshoot[key], overshoot_one_case[key])
+                
+        if first_run:
+            stiffness_array = np.array(stiffness)
+            first_run = False
+        else:
+            stiffness_array = np.append(stiffness_array, stiffness)
+            
+    return stiffness_array, overshoot
 
-
+def plot_overshoot(stiffness, overshoot, output_path='./'):
+    apjfig = analysis.APJSingleColumnFigure()
+    ref = 'grad_s_mean'
+    ref_depth = overshoot[ref]
+    min_z = 100
+    max_z = 0
+    logger.info("reference depth:")
+    logger.info("{} -- {}".format(ref, ref_depth))
+    for key in overshoot:
+        if key!=ref and key!='grad_s':
+            logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
+            q = np.abs(overshoot[key]-ref_depth)
+            apjfig.ax.loglog(stiffness, q, label=key, marker='o')
+        min_z = min(min_z, np.min(q))
+        max_z = max(max_z, np.max(q))
+        
+    apjfig.ax.set_ylim(0.9*min_z, 1.1*max_z)
+    apjfig.legend(loc="upper left", title="diagnostics", fontsize=6)
+    apjfig.ax.set_xlabel("Stiffness S")
+    apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
+    apjfig.savefig(output_path+"overshoot.png", dpi=600)
+    
+def main(output_path='./'):
+    file_list = [(1e2, ['FC_multi_Ra1e7_S1e2_high/profiles/profiles_s9.h5']),
+                 (1e3, ['FC_multi_Ra1e7_S1e3_high/profiles/profiles_s9.h5']),
+                 (1e4, ['FC_multi_Ra1e7_S1e4_high/profiles/profiles_s9.h5'])]#,
+                 #(1e5, ['FC_multi_Ra1e7_S1e5_high/profiles/profiles_s9.h5'])]
+                 
+    stiffness, overshoot = analyze_all_cases(file_list)
+    plot_overshoot(stiffness, overshoot, output_path=output_path)
+     
 if __name__ == "__main__":
 
     import pathlib
@@ -208,16 +212,13 @@ if __name__ == "__main__":
 
     args = docopt(__doc__)
 
-    if args['join']:
-        post.merge_analysis(args['<base_path>'])
-    elif args['plot']:
-        output_path = pathlib.Path(args['--output']).absolute()
-        # Create output directory if needed
-        with Sync() as sync:
-            if sync.comm.rank == 0:
-                if not output_path.exists():
-                    output_path.mkdir()
-        logger.info("output to {}".format(output_path))
-        main(args['<files>'], output_path=str(output_path)+'/')
+    output_path = pathlib.Path(args['--output']).absolute()
+    # Create output directory if needed
+    with Sync() as sync:
+        if sync.comm.rank == 0:
+            if not output_path.exists():
+                output_path.mkdir()
+    logger.info("output to {}".format(output_path))
+    main(output_path=str(output_path)+'/')
 
 
