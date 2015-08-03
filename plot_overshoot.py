@@ -82,8 +82,13 @@ def cheby_newton_root(z, f, z0=None, degree=512):
     def newton_func(x_newton):
         return npcheb.chebval(x_newton, cheb_coeffs)
 
-    x_root = scpop.newton(newton_func, x0)
-    z_root = to_z(x_root, Lz)
+    try:
+        x_root = scpop.newton(newton_func, x0)
+        z_root = to_z(x_root, Lz)
+    except:
+        logger.info("error in root find")
+        x_root = np.nan
+        z_root = np.nan
     logger.info("newton: found root z={} (x0:{} -> {})".format(z_root, x0, x_root))
     return z_root
 
@@ -97,12 +102,13 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
     norm_diag['KE'] = ('KE', norm(averages['KE']))
     norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
-    dz = np.gradient(z)
+
     try:
         norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
     except:
         logger.info("Missing grad_s from outputs; trying numeric gradient option")
+        dz = np.gradient(z)
         try:
             norm_diag['grad_s*'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
             norm_diag['grad_s_mean*'] = (r'$\nabla (s_0)^*$', np.gradient(norm(averages['s_mean']), dz))
@@ -194,10 +200,18 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
     apjfig.savefig(output_path+"overshoot.png", dpi=600)
     
 def main(output_path='./'):
-    file_list = [(1e2, ['FC_multi_Ra1e7_S1e2_high/profiles/profiles_s9.h5']),
-                 (1e3, ['FC_multi_Ra1e7_S1e3_high/profiles/profiles_s9.h5']),
-                 (1e4, ['FC_multi_Ra1e7_S1e4_high/profiles/profiles_s9.h5'])]#,
-                 #(1e5, ['FC_multi_Ra1e7_S1e5_high/profiles/profiles_s9.h5'])]
+    import glob
+    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e1/profiles/profiles_s[8,9].h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s1?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s5?.h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s5?.h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s5?.h5'))]
+
+    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e1/profiles/profiles_s10.h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s1[0,1].h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s1[0,1].h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s1[0,1].h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s1[0,1].h5'))]
                  
     stiffness, overshoot = analyze_all_cases(file_list)
     plot_overshoot(stiffness, overshoot, output_path=output_path)

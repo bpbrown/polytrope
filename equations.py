@@ -528,9 +528,14 @@ class Multitrope(MultiLayerAtmosphere):
         Lx = Lz_cz*aspect_ratio
         
         # guess at overshoot offset and tanh width
-        overshoot_pad = 0.2*(Lz_cz/10) 
-        self.tanh_width = overshoot_pad
-        overshoot_pad = 0
+        scaling_power = -1/4
+        if stiffness >= 1e3:
+            overshoot_pad = 0.2*(Lz_cz/10)*(stiffness/1e3)**(scaling_power)
+        else:
+            overshoot_pad = 0.2*(Lz_cz/10)
+
+        self.tanh_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
+
         logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
