@@ -2,13 +2,14 @@
 Plot overshoot from joint analysis files.
 
 Usage:
-    plot_overshoot.py [--output=<output>]
+    plot_overshoot.py [options]
 
 Options:
     --output=<output>  Output directory [default: ./]
-
+    --verbose          Make diagnostic plots of each sim
 """
 import numpy as np
+from analysis import cheby_newton_root, interp_newton_root
 
 from collections import OrderedDict
 
@@ -21,18 +22,21 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 import analysis
 
-def make_plots(norm_diag):
+def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
     figs = {}
     apjfig = analysis.APJSingleColumnFigure()
 
     min_plot = 1
     max_plot = np.log(5) # half a log-space unit above 1
     for key in norm_diag:
+        color = next(apjfig.ax._get_lines.color_cycle)
+        
         if key=='KE_flux' or key=="grad_s" or key=="grad_s_mean" or key=="grad_s_post":
-            analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0])
+            analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0], color=color)
         else:
-            apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0])
-            print(np.max(norm_diag[key][1]))
+            apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0], color=color)
+
+        apjfig.ax.axvline(x=roots[key][0], linestyle='dotted', color=color)
         min_plot = min(min_plot, np.min(np.abs(norm_diag[key][1])))
         
     apjfig.ax.axhline(y=1e-2, color='black', linestyle='dashed')
@@ -49,50 +53,10 @@ def make_plots(norm_diag):
     apjfig.ax.set_xlim(xmin, xmax)
     figs["overshoot"]=apjfig
 
-    #apjfig.ax.axvline(x=z_root_poor, linestyle='dotted', color=root_color)
-
     for key in figs.keys():
-        figs[key].savefig(output_path+'diag_{}.png'.format(key))
+        figs[key].savefig(output_path+'diag_{}.png'.format(key), dpi=600)
 
-
-def cheby_newton_root(z, f, z0=None, degree=512):
-    import numpy.polynomial.chebyshev as npcheb
-    import scipy.optimize as scpop
-    
-    Lz = np.max(z)-np.min(z) 
-    if z0 is None:
-        z0 = Lz/2
-
-    def to_x(z, Lz=None):
-        # convert back to [-1,1]
-        if Lz is None:
-            Lz = np.max(z)-np.min(z) 
-        return (2/Lz)*z-1
-
-    def to_z(x, Lz):
-        # convert back from [-1,1]
-        return (x+1)*Lz/2 
-    
-    logger.info("searching for roots starting from z={}".format(z0))
-    x  = to_x(z, Lz=Lz) 
-    x0 = to_x(z0, Lz=Lz)
-    cheb_coeffs = npcheb.chebfit(x, f, degree)
-    cheb_interp = npcheb.Chebyshev(cheb_coeffs)
-
-    def newton_func(x_newton):
-        return npcheb.chebval(x_newton, cheb_coeffs)
-
-    try:
-        x_root = scpop.newton(newton_func, x0)
-        z_root = to_z(x_root, Lz)
-    except:
-        logger.info("error in root find")
-        x_root = np.nan
-        z_root = np.nan
-    logger.info("newton: found root z={} (x0:{} -> {})".format(z_root, x0, x_root))
-    return z_root
-
-def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
+def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=False):
     import scipy.optimize as scpop
 
     def norm(f):
@@ -101,23 +65,24 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
     norm_diag = OrderedDict()
     norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
     norm_diag['KE'] = ('KE', norm(averages['KE']))
-    norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
+    #norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
 
     try:
-        norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
+        #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
     except:
         logger.info("Missing grad_s from outputs; trying numeric gradient option")
         dz = np.gradient(z)
         try:
-            norm_diag['grad_s*'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
+            #norm_diag['grad_s*'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
             norm_diag['grad_s_mean*'] = (r'$\nabla (s_0)^*$', np.gradient(norm(averages['s_mean']), dz))
         except:
             logger.info("Missing s_tot from outputs")
 
     # estimate penetration depths
     overshoot_depths = OrderedDict()
-
+    roots = OrderedDict()
+    
     def poor_mans_root(z, f):
         i_near = (np.abs(f)).argmin()
         return z[i_near], f[i_near], i_near
@@ -128,7 +93,7 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
             root_color = 'blue'
             criteria = norm_diag[key][1] - threshold
             if key=="KE_flux":
-                color = 'darkgreen'
+                root_color = 'darkgreen'
         else:
             threshold = 1e-2
             root_color = 'red'
@@ -136,14 +101,27 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./'):
         logger.info("key {}".format(key))
         
         z_root_poor, f, i = poor_mans_root(z, criteria)
-        z_root = cheby_newton_root(z, criteria, z0=None)
-
-        overshoot_depths[key] = z_root_poor
+        #i_sort = np.argsort(z)
+        #z_search = np.copy(z[i_sort])
+        #criteria_search = np.copy(criteria[i_sort])
+        z_search = np.copy(z)
+        criteria_search = np.copy(criteria)
+        z_root = interp_newton_root(z_search, criteria_search, z0=None)
+        #z_root = cheby_newton_root(z, criteria, z0=None)
+ 
+        overshoot_depths[key] = z_root
+        roots[key] = (z_root, root_color)
+        
         logger.info("poor man: {:>10s} : found root z={}".format(key, z_root_poor))
         logger.info("  newton: {:>10s} : found root z={}".format(key, z_root))
+
+    if verbose:
+        logger.info("Plotting diagnostics in {}".format(output_path))
+        plot_diagnostics(z, norm_diag, roots, output_path=output_path)
+        
     return overshoot_depths
     
-def analyze_case(files):
+def analyze_case(files, verbose=False, output_path=None):
     logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
@@ -152,23 +130,31 @@ def analyze_case(files):
     z = data.z
     delta_t = times[-1]-times[0]
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
-    overshoot_depths = diagnose_overshoot(averages, z, output_path=output_path)
+
+    if output_path is None:
+        import pathlib
+        data_dir = files[0].split('/')[0]
+        data_dir += '/'
+        output_path = pathlib.Path(data_dir).absolute()
+
+    overshoot_depths = diagnose_overshoot(averages, z, output_path=str(output_path)+'/', verbose=verbose)
     for key in overshoot_depths:
         print("{} --> z={}".format(key, overshoot_depths[key]))
+
     return overshoot_depths
 
-def analyze_all_cases(stiffness_file_list):
+def analyze_all_cases(stiffness_file_list, **kwargs):
     overshoot = OrderedDict()
     first_run = True
     
     for stiffness, files in stiffness_file_list:
-        overshoot_one_case = analyze_case(files)
+        overshoot_one_case = analyze_case(files, **kwargs)
         for key in overshoot_one_case:
             if first_run:
                 overshoot[key] = np.array(overshoot_one_case[key])
             else:
                 overshoot[key] = np.append(overshoot[key], overshoot_one_case[key])
-                
+               
         if first_run:
             stiffness_array = np.array(stiffness)
             first_run = False
@@ -199,21 +185,12 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
     apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
     apjfig.savefig(output_path+"overshoot.png", dpi=600)
     
-def main(output_path='./'):
+def main(output_path='./', **kwargs):
     import glob
-    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e1/profiles/profiles_s[8,9].h5')),
-                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s1?.h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s5?.h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s5?.h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s5?.h5'))]
-
-    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e1/profiles/profiles_s10.h5')),
-                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s1[0,1].h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s1[0,1].h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s1[0,1].h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s1[0,1].h5'))]
-                 
-    stiffness, overshoot = analyze_all_cases(file_list)
+    file_list = [(1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s12?.h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]             
+    stiffness, overshoot = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, output_path=output_path)
      
 if __name__ == "__main__":
@@ -233,6 +210,6 @@ if __name__ == "__main__":
             if not output_path.exists():
                 output_path.mkdir()
     logger.info("output to {}".format(output_path))
-    main(output_path=str(output_path)+'/')
+    main(output_path=str(output_path)+'/', verbose=args['--verbose'])
 
 

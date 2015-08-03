@@ -192,3 +192,92 @@ def semilogy_posneg(ax, x, y, color=None,  color_pos=None, color_neg=None, **kwa
         
     ax.semilogy(x, pos_line, color=color_pos, **kwargs)
     ax.semilogy(x, np.abs(neg_line), color=color_neg, linestyle='dashed')
+
+def cheby_newton_root(z, f, z0=None, degree=512):
+    import numpy.polynomial.chebyshev as npcheb
+    import scipy.optimize as scpop
+    
+    Lz = np.max(z)-np.min(z) 
+    if z0 is None:
+        z0 = Lz/2
+
+    def to_x(z, Lz):
+        # convert back to [-1,1]
+        return (2/Lz)*z-1
+
+    def to_z(x, Lz):
+        # convert back from [-1,1]
+        return (x+1)*Lz/2 
+    
+    logger.info("searching for roots starting from z={}".format(z0))
+    x  = to_x(z, Lz) 
+    x0 = to_x(z0, Lz)
+    cheb_coeffs = npcheb.chebfit(x, f, degree)
+    cheb_interp = npcheb.Chebyshev(cheb_coeffs)
+    cheb_der    = npcheb.chebder(cheb_coeffs)
+    
+    
+    def newton_func(x_newton):
+        return npcheb.chebval(x_newton, cheb_coeffs)
+
+    def newton_derivative_func(x_newton):
+         return npcheb.chebval(x_newton, cheb_der)
+     
+    try:
+        x_root = scpop.newton(newton_func, x0, fprime=newton_derivative_func, tol=1e-10)
+        z_root = to_z(x_root, Lz)
+    except:
+        logger.info("error in root find")
+        x_root = np.nan
+        z_root = np.nan
+
+    logger.info("newton: found root z={} (x0:{} -> {})".format(z_root, x0, x_root))
+
+    for x0 in x:
+        print(x0, newton_func(x0))
+    a = Lz/4
+    b = Lz*3/4
+    logger.info("bisecting between z=[{},{}] (x=[{},{}])".format(a, b, to_x(a, Lz), to_x(b, Lz)))
+    logger.info("f(a) = {}  and f(b) = {}".format(newton_func(to_x(a, Lz)), newton_func(to_x(b, Lz))))
+    x_root_2 = scpop.bisect(newton_func, to_x(a, Lz), to_x(b, Lz))
+    z_root_2 = to_z(x_root_2, Lz)
+    logger.info("bisect: found root z={} (x={})".format(z_root_2, x_root_2))
+
+    return z_root_2
+
+def interp_newton_root(z, f, z0=None, a=None, b=None):
+    import scipy.optimize as scpop
+    import scipy.interpolate as scpint
+    
+    Lz = np.max(z)-np.min(z) 
+    if z0 is None:
+        z0 = Lz/2
+    
+    logger.info("searching for roots starting from z={}".format(z0))
+
+    int_f = scpint.interp1d(z, f)
+
+    def newton_func(x_newton):
+        return int_f(x_newton)
+
+    try:
+        z_root = scpop.newton(newton_func, x0, tol=1e-10)
+    except:
+        logger.info("error in root find")
+        z_root = np.nan
+
+    logger.info("newton: found root z={} (z0:{})".format(z_root, z0))
+
+    # root find with bisect; this is working more robustly.
+    if a is None:
+        a = Lz/4
+    if b is None:
+        b = Lz*3/4
+        
+    logger.info("bisecting between z=[{},{}]".format(a, b))
+    logger.info("f(a) = {}  and f(b) = {}".format(newton_func(a), newton_func(b)))
+    z_root_2 = scpop.bisect(newton_func, a, b)
+    logger.info("bisect: found root z={}".format(z_root_2))
+    z_root = z_root_2
+        
+    return z_root
