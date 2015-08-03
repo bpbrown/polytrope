@@ -6,7 +6,7 @@ Usage:
     plot_energies.py <files>... [--output=<output>]
 
 Options:
-    --output=<output>  Output directory [default: ./scalar]
+    --output=<output>  Output directory; if blank a guess based on likely case name will be made
 
 """
 import numpy as np
@@ -105,7 +105,12 @@ if __name__ == "__main__":
     if args['join']:
         post.merge_analysis(args['<base_path>'])
     else:
-        output_path = pathlib.Path(args['--output']).absolute()
+        if args['--output'] is not None:
+            output_path = pathlib.Path(args['--output']).absolute()
+        else:
+            data_dir = args['<files>'][0].split('/')[0]
+            data_dir += '/'
+            output_path = pathlib.Path(data_dir).absolute()
         # Create output directory if needed
         with Sync() as sync:
             if sync.comm.rank == 0:
