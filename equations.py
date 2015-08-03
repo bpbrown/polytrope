@@ -50,14 +50,18 @@ class Atmosphere:
         return f.interpolate(z=z)
 
     def value_at_boundary(self, field):
-        #scale = field.
-        field_top    = self.evaluate_at_point(field, z=self.Lz)['g'][0][0]
-        if not np.isfinite(field_top):
-            logger.info("Likely interpolation error at top boundary; setting field=1")
-            field_top = 1
-            
+        orig_scale = field.meta[:]['scale']
+        try:
+            field_top    = self.evaluate_at_point(field, z=self.Lz)['g'][0][0]
+            if not np.isfinite(field_top):
+                logger.info("Likely interpolation error at top boundary; setting field=1")
+                logger.info("orig_scale: {}".format(orig_scale))
+                field_top = 1
+        except:
+            logger.error("field at top shape {}".format(field['g'].shape))
+
         field_bottom = self.evaluate_at_point(field, z=0)['g'][0][0]
-        field.set_scales(1, keep_data=True)
+        field.set_scales(orig_scale, keep_data=True)
         return field_bottom, field_top
     
     def _set_atmosphere(self):
