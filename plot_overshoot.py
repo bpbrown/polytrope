@@ -180,7 +180,7 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
         max_z = max(max_z, np.max(q))
         
     apjfig.ax.set_ylim(0.9*min_z, 1.1*max_z)
-    apjfig.legend(loc="upper left", title="diagnostics", fontsize=6)
+    apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
     apjfig.ax.set_xlabel("Stiffness S")
     apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
     apjfig.savefig(output_path+"overshoot.png", dpi=600)
@@ -189,7 +189,13 @@ def main(output_path='./', **kwargs):
     import glob
     file_list = [(1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
                  (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s12?.h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]             
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]
+
+    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e1/profiles/profiles_s[8,9].h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s[8,9].h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s[8,9].h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s[8,9].h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s[8,9].h5'))]
     stiffness, overshoot = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, output_path=output_path)
      

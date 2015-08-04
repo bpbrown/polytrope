@@ -84,7 +84,7 @@ print()
 
 #plt.ion()
 # Options
-fnames = ["s","enstrophy"]
+fnames = ["s'","enstrophy"]
 xstr = 'x/H'
 ystr = 'z/H'
 cmapname = 'Spectral_r'
@@ -269,7 +269,7 @@ def add_image(fig, imax, cbax, x, y, data, cmap):
         imax.axis(plot_extent)
     else:
         im = imax.imshow(data, zorder=1, aspect='auto',
-                         interpolation='nearest', origin='lower',
+                         interpolation='none', origin='lower',
                          cmap=cmap)
         shape = data.shape
         plot_extent = [-0.5, shape[1] - 0.5, -0.5, shape[0] - 0.5]
