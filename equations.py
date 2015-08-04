@@ -528,8 +528,9 @@ class Multitrope(MultiLayerAtmosphere):
         Lx = Lz_cz*aspect_ratio
         
         # guess at overshoot offset and tanh width
+        # current guess for overshoot pad is based on Ra=1e6 cases from S=1e1-1e5, with n_rho_cz=1, at peak transient.
         scaling_power = -1/4
-        overshoot_constat = 0.02*Lz_cz
+        overshoot_constant = 2*0.1*Lz_cz  # extra 2x factor here for now
         anchor_stiffness = 1e3
         if stiffness <= anchor_stiffness:
             overshoot_pad = overshoot_constant*(stiffness/anchor_stiffness)**(scaling_power)
