@@ -28,6 +28,8 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
 
     min_plot = 1
     max_plot = np.log(5) # half a log-space unit above 1
+    plot_floor = 1e-7
+
     for key in norm_diag:
         color = next(apjfig.ax._get_lines.color_cycle)
         
@@ -38,12 +40,14 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
 
         apjfig.ax.axvline(x=roots[key][0], linestyle='dotted', color=color)
         min_plot = min(min_plot, np.min(np.abs(norm_diag[key][1])))
-        
+
+    min_plot = max(plot_floor, min_plot)
+
     apjfig.ax.axhline(y=1e-2, color='black', linestyle='dashed')
     apjfig.ax.axhline(y=1e-4, color='black', linestyle='dashed')
     if boundary is not None:
         apjfig.ax.axvline(x=boundary, color='black', linestyle='dotted')
-    apjfig.legend(loc="lower right", title="normalized by max", fontsize=6)
+    apjfig.legend(loc="upper left", title="normalized by max", fontsize=6)
     apjfig.ax.set_xlabel("z")
     apjfig.ax.set_ylabel("overshoot diags")#, \n normalized by max")
     apjfig.ax.set_ylim(min_plot, max_plot)
@@ -187,15 +191,21 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
     
 def main(output_path='./', **kwargs):
     import glob
-    file_list = [(1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
+    file_list = [(1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s12?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
                  (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s12?.h5')),
                  (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]
 
-    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e1/profiles/profiles_s[8,9].h5')),
-                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s[8,9].h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s[8,9].h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s[8,9].h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s[8,9].h5'))]
+    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e1/profiles/profiles_s[8,9].h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e2/profiles/profiles_s[8,9].h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e3/profiles/profiles_s[8,9].h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e4/profiles/profiles_s[8,9].h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e5/profiles/profiles_s[8,9].h5'))]
+
+    file_list = [(1e3, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e3/profiles/profiles_s8?.h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e4/profiles/profiles_s8?.h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e5/profiles/profiles_s8?.h5'))]
+
     stiffness, overshoot = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, output_path=output_path)
      

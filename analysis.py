@@ -276,7 +276,19 @@ def interp_newton_root(z, f, z0=None, a=None, b=None):
         
     logger.info("bisecting between z=[{},{}]".format(a, b))
     logger.info("f(a) = {}  and f(b) = {}".format(newton_func(a), newton_func(b)))
-    z_root_2 = scpop.bisect(newton_func, a, b)
+    try:
+        z_root_2 = scpop.bisect(newton_func, a, b)
+    except:
+        try:
+            logger.info("f(a/2) = {}  and f(b) = {}".format(newton_func(a/2), newton_func(b)))
+            z_root_2 = scpop.bisect(newton_func, a/2, b)
+        except:
+            try:
+                logger.info("f(a/10) = {}  and f(b) = {}".format(newton_func(a/10), newton_func(b)))
+                z_root_2 = scpop.bisect(newton_func, a/10, b)
+            except:
+                z_root_2 = np.nan
+
     logger.info("bisect: found root z={}".format(z_root_2))
     z_root = z_root_2
         

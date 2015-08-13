@@ -89,7 +89,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = 0.25*atmosphere.thermal_time
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 11.75*3600
+    solver.stop_wall_time = 23.75*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 

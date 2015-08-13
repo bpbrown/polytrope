@@ -36,7 +36,7 @@ else:
 if len(sys.argv) > 2:
     data_prefix = sys.argv[2]
 else:
-    data_prefix = 'unified_data'
+    data_prefix = 'slices'
     
 
 #first iteration
@@ -44,15 +44,16 @@ if len(sys.argv) > 3:
     iteration = num(sys.argv[3])
     startup_report_string = "opening files from {:s} starting with {:d}".format(data_dir, iteration)
 else:
-    restartfile = 'unified_data'
-    iteration = None
-    startup_report_string = "opening files from {:s} of type {:s}".format(data_dir, restartfile)
+    #restartfile = 'unified_data'
+    iteration = 1
+    startup_report_string = "opening files from {:s} starting with {:d}".format(data_dir, iteration)
+
 # cadence of iterations
 if len(sys.argv) > 4:
     iter_step = num(sys.argv[4])
     startup_report_string += " at cadence {:d}".format(iter_step)
 else:
-    iter_step = 0
+    iter_step = 1
   
 # number of iterations
 if len(sys.argv) > 5:
@@ -60,7 +61,7 @@ if len(sys.argv) > 5:
     startup_report_string += " repeating {:d} times".format(n_iter)
 
 else:
-    n_iter = 1
+    n_iter = size # number of mpi processes
 
 if size>n_iter:
     raise NameError("Number of processors must be <= n_iter")

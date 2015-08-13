@@ -43,6 +43,10 @@ class Atmosphere:
         field.meta['x']['constant'] = True
         return field
 
+    def _new_field(self):
+        field = self.domain.new_field()
+        return field
+
     def get_problem(self):
         return self.problem
 
@@ -198,10 +202,14 @@ class Atmosphere:
                     logger.error("HS balance test requires P_z, P or T")
                     raise
                 else:
-                    P = self._new_ncc()
+                    T_scales = T.meta[:]['scale']
+                    rho_scales = rho.meta[:]['scale']
+                    P = self._new_field()
                     P['g'] = T['g']*rho['g']
+                    T.set_scales(T_scales, keep_data=True)
+                    rho.set_scales(rho_scales, keep_data=True)
 
-            P_z = self._new_ncc()
+            P_z = self._new_field()
             P.differentiate('z', out=P_z)
             P_z.set_scales(1, keep_data=True)
                     
@@ -209,6 +217,18 @@ class Atmosphere:
         HS_balance = P_z['g']+self.g*rho['g']
         relative_error = HS_balance/P_z['g']
         
+        HS_average = self._new_field()
+        HS_average['g'] = HS_balance
+        HS_average.integrate('x')
+        HS_average['g'] /= self.Lx
+        HS_average.set_scales(1, keep_data=True)
+
+        relative_error_avg = self._new_field()
+        relative_error_avg['g'] = relative_error
+        relative_error_avg.integrate('x')
+        relative_error_avg['g'] /= self.Lx
+        relative_error_avg.set_scales(1, keep_data=True)
+
         if self.make_plots or make_plots:
             fig = plt.figure()
             ax1 = fig.add_subplot(2,1,1)
@@ -219,12 +239,14 @@ class Atmosphere:
 
             ax2 = fig.add_subplot(2,1,2)
             ax2.semilogy(self.z[0,:], np.abs(relative_error[0,:]))
+            ax2.semilogy(self.z[0,:], np.abs(relative_error_avg['g'][0,:]))
             ax2.set_ylabel(r'$|\nabla P + \rho g |/|\nabla P|$')
             ax2.set_xlabel('z')
             fig.savefig("atmosphere_HS_balance_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
         max_rel_err = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error)), op=MPI.MAX)
-        logger.info('max error in HS balance: {}'.format(max_rel_err))
+        max_rel_err_avg = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error_avg['g'])), op=MPI.MAX)
+        logger.info('max error in HS balance: point={} avg={}'.format(max_rel_err, max_rel_err_avg))
 
     def check_atmosphere(self, make_plots=False, **kwargs):
         if self.make_plots or make_plots:
@@ -1104,17 +1126,22 @@ class FC_equations(Equations):
 
     def get_full_T(self, solver):
         T1 = solver.state['T1']
+        T_scales = T1.meta[:]['scale']
         T1.set_scales(self.domain.dealias, keep_data=True)
-        T = self._new_ncc()
+        T = self._new_field()
         T.set_scales(self.domain.dealias, keep_data=False)
         T['g'] = self.T0['g'] + T1['g']
-        T.set_scales(1, keep_data=True)
+        T.set_scales(T_scales, keep_data=True)
+        T1.set_scales(T_scales, keep_data=True)
         return T
 
     def get_full_rho(self, solver):
         ln_rho1 = solver.state['ln_rho1']
-        rho = self._new_ncc()
+        rho_scales = ln_rho1.meta[:]['scale']
+        rho = self._new_field()
         rho['g'] = self.rho0['g']*np.exp(ln_rho1['g'])
+        rho.set_scales(rho_scales, keep_data=True)
+        ln_rho1.set_scales(rho_scales, keep_data=True)
         return rho
 
     def check_system(self, solver, **kwargs):
