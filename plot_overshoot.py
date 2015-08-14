@@ -33,7 +33,7 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
     for key in norm_diag:
         color = next(apjfig.ax._get_lines.color_cycle)
         
-        if key=='KE_flux' or key=="grad_s" or key=="grad_s_mean" or key=="grad_s_post":
+        if key=='KE_flux' or key=="grad_s" or key=="grad_s_mean" or key=="grad_s_post" or key=="s_mean" or key=="s_tot":
             analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0], color=color)
         else:
             apjfig.ax.semilogy(z, norm_diag[key][1], label=norm_diag[key][0], color=color)
@@ -61,7 +61,6 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
         figs[key].savefig(output_path+'diag_{}.png'.format(key), dpi=600)
 
 def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=False):
-    import scipy.optimize as scpop
 
     def norm(f):
         return f/np.max(np.abs(f))
@@ -83,6 +82,9 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
         except:
             logger.info("Missing s_tot from outputs")
 
+    norm_diag['s_mean'] = (r'$s_0$', norm(averages['s_mean']))
+    norm_diag['s_tot'] = (r'$s_0+s_1$', norm(averages['s_tot']))
+
     # estimate penetration depths
     overshoot_depths = OrderedDict()
     roots = OrderedDict()
@@ -92,8 +94,13 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
         return z[i_near], f[i_near], i_near
     
     for key in norm_diag:
-        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot':
+        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot' or key=="s_mean" or key=="s_tot":
             threshold = 0
+            if key=="s_tot" or key=="s_mean":
+                # grab the top of the atmosphere value
+                threshold = norm_diag[key][1][-1]
+                logger.info("key: {} has threshold {}".format(key, threshold))
+                
             root_color = 'blue'
             criteria = norm_diag[key][1] - threshold
             if key=="KE_flux":
@@ -191,10 +198,6 @@ def plot_overshoot(stiffness, overshoot, output_path='./'):
     
 def main(output_path='./', **kwargs):
     import glob
-    file_list = [(1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s12?.h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s12?.h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]
 
     file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e1/profiles/profiles_s[8,9].h5')),
                  (1e2, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e2/profiles/profiles_s[8,9].h5')),
@@ -205,6 +208,11 @@ def main(output_path='./', **kwargs):
     file_list = [(1e3, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e3/profiles/profiles_s8?.h5')),
                  (1e4, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e4/profiles/profiles_s8?.h5')),
                  (1e5, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e5/profiles/profiles_s8?.h5'))]
+
+    file_list = [(1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s12?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s12?.h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]
 
     stiffness, overshoot = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, output_path=output_path)

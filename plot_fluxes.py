@@ -84,7 +84,8 @@ def plot_fluxes(fluxes, z, output_path='./'):
 def plot_profiles(data, z, output_path='./'):
     figs = {}
 
-    keys = ['IE_fluc', 'PE_fluc', 's_mean', 's_fluc',
+    keys = ['IE_fluc', 'PE_fluc',
+            's_mean', 's_fluc', 's_tot',
             'T1', 'ln_rho1',
             'kappa_flux_fluc_z', 'kappa_flux_mean_z', 'kappa_flux_z',
             'T1_source_terms']
@@ -101,7 +102,7 @@ def plot_profiles(data, z, output_path='./'):
         figs[key]=fig_flow
 
     for key in figs.keys():
-        figs[key].savefig(output_path+'profiles_{}.png'.format(key))
+        figs[key].savefig(output_path+'profiles_{}.png'.format(key), dpi=600)
 
 def main(files, output_path='./', overshoot=True):
     logger.info("opening {}".format(files))
