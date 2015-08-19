@@ -60,6 +60,32 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
     for key in figs.keys():
         figs[key].savefig(output_path+'diag_{}.png'.format(key), dpi=600)
 
+def plot_overshoot_times(times, overshoot, average_overshoot=None, output_path='./'):
+    apjfig = analysis.APJSingleColumnFigure()
+    ref = 'grad_s_mean'
+    ref_depth = overshoot[ref]
+    min_z = 100
+    max_z = 0
+    logger.info("reference depth:")
+    logger.info("{} -- {}".format(ref, ref_depth))
+    for key in overshoot:
+        if key!=ref and key!='grad_s':
+            color = next(apjfig.ax._get_lines.color_cycle)
+            logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
+            q = overshoot[key] #np.abs(overshoot[key]-ref_depth)
+            apjfig.ax.plot(times, q, label=key, color=color)
+            if average_overshoot is not None:
+                apjfig.ax.axhline(average_overshoot[key], linestyle='dashed', color=color)
+        min_z = min(min_z, np.min(q))
+        max_z = max(max_z, np.max(q))
+
+    z_pad = 0.01*max_z
+    apjfig.ax.set_ylim(min_z-z_pad, max_z+z_pad)
+    apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
+    apjfig.ax.set_xlabel("time")
+    apjfig.ax.set_ylabel("$z_o$ of overshoot")
+    apjfig.savefig(output_path+"overshoot_timetrace.png", dpi=600)
+        
 def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=False):
 
     def norm(f):
@@ -131,10 +157,28 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
         plot_diagnostics(z, norm_diag, roots, output_path=output_path)
         
     return overshoot_depths
+
+def overshoot_time_trace(averages, z, times, average_overshoot=None, output_path='./'):
+    single_time = OrderedDict()
+    overshoot_depths = OrderedDict()
+    for i, time in enumerate(times):
+        for key in averages:
+            single_time[key] = averages[key][i,0,:]
+        single_overshoot_depths = diagnose_overshoot(single_time, z)
+        if i == 0:
+            for key in single_overshoot_depths:
+                overshoot_depths[key] = single_overshoot_depths[key]
+        else:
+            for key in single_overshoot_depths:
+                overshoot_depths[key] = np.append(overshoot_depths[key], single_overshoot_depths[key])
+                
+    plot_overshoot_times(times, overshoot_depths, average_overshoot=average_overshoot, output_path=output_path)
+
     
 def analyze_case(files, verbose=False, output_path=None):
-    logger.info("opening {}".format(files))
     data = analysis.Profile(files)
+    logger.info("read in data from {}".format(data.files))
+
     averages = data.average
     std_devs = data.std_dev
     times = data.times
@@ -151,6 +195,9 @@ def analyze_case(files, verbose=False, output_path=None):
     overshoot_depths = diagnose_overshoot(averages, z, output_path=str(output_path)+'/', verbose=verbose)
     for key in overshoot_depths:
         print("{} --> z={}".format(key, overshoot_depths[key]))
+
+    if verbose:
+        overshoot_time_trace(data.data, z, times, average_overshoot=overshoot_depths, output_path=str(output_path)+'/')
 
     return overshoot_depths
 
@@ -173,6 +220,7 @@ def analyze_all_cases(stiffness_file_list, **kwargs):
             stiffness_array = np.append(stiffness_array, stiffness)
             
     return stiffness_array, overshoot
+    
 
 def plot_overshoot(stiffness, overshoot, output_path='./'):
     apjfig = analysis.APJSingleColumnFigure()
@@ -205,14 +253,17 @@ def main(output_path='./', **kwargs):
                  (1e4, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e4/profiles/profiles_s[8,9].h5')),
                  (1e5, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e5/profiles/profiles_s[8,9].h5'))]
 
-    file_list = [(1e3, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e3/profiles/profiles_s8?.h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e4/profiles/profiles_s8?.h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e5/profiles/profiles_s8?.h5'))]
-
     file_list = [(1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s12?.h5')),
                  (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s12?.h5')),
+                 (3e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S3e3/profiles/profiles_s12?.h5')),
                  (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s12?.h5')),
+                 (3e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S3e4/profiles/profiles_s12?.h5')),
                  (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s12?.h5'))]
+
+#    file_list = [(1e3, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e3/profiles/profiles_s8?.h5')),
+#                 (1e4, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e4/profiles/profiles_s8?.h5')),
+#                 (1e5, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e5/profiles/profiles_s8?.h5'))]
+
 
     stiffness, overshoot = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, output_path=output_path)

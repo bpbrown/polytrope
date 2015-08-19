@@ -260,13 +260,13 @@ def interp_newton_root(z, f, z0=None, a=None, b=None):
     def newton_func(x_newton):
         return int_f(x_newton)
 
-    try:
-        z_root = scpop.newton(newton_func, x0, tol=1e-10)
-    except:
-        logger.info("error in root find")
-        z_root = np.nan
+    #try:
+    #    z_root = scpop.newton(newton_func, x0, tol=1e-10)
+    #except:
+    #    logger.info("error in root find")
+    #    z_root = np.nan
 
-    logger.info("newton: found root z={} (z0:{})".format(z_root, z0))
+    #logger.info("newton: found root z={} (z0:{})".format(z_root, z0))
 
     # root find with bisect; this is working more robustly.
     if a is None:

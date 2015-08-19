@@ -59,7 +59,7 @@ def plot_energies(data, times, output_path='./'):
     ax1.legend()
     ax1.set_xlabel("time")
     ax1.set_ylabel("energy")
-    figs["fluctating_energies"] = fig_KE
+    figs["fluctuating_energies"] = fig_KE
 
     fig_KE_only = plt.figure(figsize=(16,8))
     ax1 = fig_KE_only.add_subplot(2,1,1)
