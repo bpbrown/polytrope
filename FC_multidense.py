@@ -12,7 +12,6 @@ Options:
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
-    --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
     --label=<label>            Additional label for run output directory
@@ -34,7 +33,6 @@ except:
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
-                      nx = None,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -47,11 +45,10 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     
     # Set domain
     nz = nz_rz+nz_cz
-    if nx is None:
-        nx = nz_cz*4
-    nz_list = [nz_rz, nz_cz]
+    nx = nz_cz*4
+    nz_list = [nz_rz, 32, nz_cz]
     
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+    atmosphere = equations.FC_multitropedense(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
@@ -101,7 +98,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     
     cfl_cadence = 1
     CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
-                         max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
+                         max_change=1.5, min_change=0.5, max_dt=max_dt)
 
     CFL.add_velocities(('u', 'w'))
 
@@ -188,11 +185,7 @@ if __name__ == "__main__":
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
     logger.info("saving run in: {}".format(data_dir))
-
-    nx =  args['--nx']
-    if nx is not None:
-        nx = int(nx)
-        
+    
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
@@ -200,7 +193,6 @@ if __name__ == "__main__":
                       n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
-                      nx=nx,
                       restart=(args['--restart']),
                       data_dir=data_dir,
                       verbose=args['--verbose'])
