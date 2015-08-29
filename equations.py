@@ -1240,6 +1240,7 @@ class FC_multitrope(FC_equations, Multitrope):
 
     def set_equations(self, *args, **kwargs):
         super(FC_multitrope,self).set_equations(*args, **kwargs)
+        self.problem.meta[:]['z']['dirichlet'] = True
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
     
     def set_IC(self, solver, A0=1e-3, **kwargs):
