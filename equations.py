@@ -969,7 +969,8 @@ class Equations():
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
-
+        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
+        
     def initialize_output(self, solver, data_dir, **kwargs):
         analysis_tasks = []
         self.analysis_tasks = analysis_tasks
@@ -1005,9 +1006,11 @@ class Equations():
         analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
         analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
         analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
+        analysis_profile.add_task("plane_std(enstrophy)", name="enstrophy_std")        
         analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
         analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
         analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
+        analysis_profile.add_task("plane_std(s_fluc)", name="s_fluc_std")
         analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
         analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
         analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        

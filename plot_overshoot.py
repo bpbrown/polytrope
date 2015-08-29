@@ -118,6 +118,11 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
     norm_diag['s_mean'] = (r'$s_0$', norm(averages['s_mean']))
     norm_diag['s_tot'] = (r'$s_0+s_1$', norm(averages['s_tot']))
 
+    try:
+        norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
+    except:
+        logger.info("Missing s_fluc_std from outputs")
+        
     # estimate penetration depths
     overshoot_depths = OrderedDict()
     roots = OrderedDict()
