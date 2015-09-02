@@ -550,15 +550,21 @@ class Multitrope(MultiLayerAtmosphere):
         Lx = Lz_cz*aspect_ratio
         
         # guess at overshoot offset and tanh width
-        # current guess for overshoot pad is based on Ra=1e6 cases from S=1e1-1e5, with n_rho_cz=1, at peak transient.
-        scaling_power = -1/4
-        overshoot_constant = 2*0.1*Lz_cz  # extra 2x factor here for now
-        anchor_stiffness = 1e3
-        if stiffness <= anchor_stiffness:
-            overshoot_pad = overshoot_constant*(stiffness/anchor_stiffness)**(scaling_power)
-        else:
-            overshoot_pad = overshoot_constant
+        # current guess for overshoot pad is based off of entropy equilibration
+        # in a falling plume (location z in RZ where S(z) = S(z_top)), assuming
+        # the plume starts with the entropy of the top of the CZ.
+        # see page 139 of lab-book 15, 9/1/15 (Brown)
+        T_bcz = Lz_cz+1
+        L_ov = ((T_bcz)**((stiffness+1)/stiffness) - T_bcz)*(self.m_rz+1)/(self.m_cz+1)
+        overshoot_pad = L_ov
+        if overshoot_pad >= Lz_rz:
+            # if we go past the bottom or top of the domain,
+            # put the matching region in the middle of the stable layer.
+            # should only be a major problem for stiffness ~ O(1)
+            overshoot_pad = 0.5*Lz_rz
+            
 
+        # this is going to widen the tanh and move the location of del(s)=0 as n_rho_cz increases...
         self.tanh_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
 
         logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
