@@ -40,7 +40,7 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
 
         apjfig.ax.axvline(x=roots[key][0], linestyle='dotted', color=color)
         min_plot = min(min_plot, np.min(np.abs(norm_diag[key][1])))
-
+        logger.info("{} : {} : {}".format(key, norm_diag[key][0], norm_diag[key][1]))
     min_plot = max(plot_floor, min_plot)
 
     apjfig.ax.axhline(y=1e-2, color='black', linestyle='dashed')

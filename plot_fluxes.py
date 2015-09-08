@@ -85,22 +85,25 @@ def plot_profiles(data, z, output_path='./'):
     figs = {}
 
     keys = ['IE_fluc', 'PE_fluc',
-            's_mean', 's_fluc', 's_tot',
+            's_mean', 's_fluc', 's_tot', 's_fluc_std',
             'T1', 'ln_rho1',
             'kappa_flux_fluc_z', 'kappa_flux_mean_z', 'kappa_flux_z',
             'T1_source_terms']
     
     for key in keys:
-        fig_flow = plt.figure(figsize=(16,8))
-        ax1 = fig_flow.add_subplot(1,1,1)
-        logger.info(data[key].shape)
-        for i in range(data[key].shape[0]):
+        try:
+            fig_flow = plt.figure(figsize=(16,8))
+            ax1 = fig_flow.add_subplot(1,1,1)
+            logger.info(data[key].shape)
+            for i in range(data[key].shape[0]):
                 ax1.plot(z, data[key][i,0,:])
 
-        ax1.set_xlabel("z")
-        ax1.set_ylabel(key)
-        figs[key]=fig_flow
-
+            ax1.set_xlabel("z")
+            ax1.set_ylabel(key)
+            figs[key]=fig_flow
+        except:
+            logger.info("Missing key {}".format(key))
+            
     for key in figs.keys():
         figs[key].savefig(output_path+'profiles_{}.png'.format(key), dpi=600)
 
