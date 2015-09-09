@@ -141,12 +141,6 @@ class Atmosphere:
         self.problem.parameters['chi'] = self.chi
         self.problem.parameters['del_chi'] = self.del_chi
 
-        # thermal boundary conditions
-        self.problem.parameters['T1_left']  = self.T1_left
-        self.problem.parameters['T1_right'] = self.T1_right
-        self.problem.parameters['T1_z_left']  = self.T1_z_left
-        self.problem.parameters['T1_z_right'] = self.T1_z_right
-
     def copy_atmosphere(self, atmosphere):
         '''
         Copies values from a target atmosphere into the current atmosphere.
@@ -1091,9 +1085,18 @@ class FC_equations(Equations):
         self.T1_z_left  = 0
         self.T1_z_right = 0
 
+    def _set_subs(self):
+        super(FC_equations, self)._set_subs()
+
     def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
+        # thermal boundary conditions
+        self.problem.parameters['T1_left']  = self.T1_left
+        self.problem.parameters['T1_right'] = self.T1_right
+        self.problem.parameters['T1_z_left']  = self.T1_z_left
+        self.problem.parameters['T1_z_right'] = self.T1_z_right
+
         self._set_subs()
         
         self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
@@ -1318,17 +1321,22 @@ class FC_multitropedense(FC_equations, MultitropeDense):
 
         
 # needs to be tested again and double-checked
-class AN_polytrope(Polytrope):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-    def set_IVP_problem(self, Rayleigh, Prandtl):
-        
-        self.problem = de.IVP(self.domain, variables=['u','u_z','w','w_z','s', 'Q_z', 'pomega'], cutoff=1e-10)
+class AN_equations(Equations):
+    def __init__(self):
+        self.equation_set = 'Energy-convserving anelastic equations (LBR)'
+        self.variables = ['u','u_z','w','w_z','s', 'Q_z', 'pomega']
 
+    def _set_subs(self):
+        super(AN_equations, self)._set_subs()
+        self.problem.substitutions['s_fluc'] = 's'
+        self.problem.substitutions['ln_rho1'] = '0'
+        self.problem.substitutions['T1'] = 's_fluc/(gamma-1)'
+        
+    def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
-
+        self._set_subs()
+        
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("T0*dz(s) + Q_z = 0")
@@ -1346,9 +1354,6 @@ class AN_polytrope(Polytrope):
         
         self.problem.add_equation("(scale)*(dx(u) + w_z + w*del_ln_rho0) = 0")
 
-    def set_eigenvalue_problem(self, Rayleigh, Prandtl):
-        pass
-        
     def set_BC(self, fixed_flux=False):
         if fixed_flux:
             self.problem.add_bc( "left(Q_z) = 0")
@@ -1362,3 +1367,23 @@ class AN_polytrope(Polytrope):
         self.problem.add_bc( "left(w) = 0", condition="nx != 0")
         self.problem.add_bc( "left(pomega) = 0", condition="nx == 0")
         self.problem.add_bc("right(w) = 0")
+
+    def set_IC(self, solver, A0=1e-6, **kwargs):
+        # initial conditions
+        self.s_IC = solver.state['s']
+
+        noise = self.global_noise(**kwargs)
+        self.s_IC.set_scales(self.domain.dealias, keep_data=True)
+        z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+        self.s_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise
+
+        logger.info("Starting with s perturbations of amplitude A0 = {:g}".format(A0))
+        
+
+class AN_polytrope(AN_equations, Polytrope):
+    def __init__(self, *args, **kwargs):
+        super(AN_polytrope, self).__init__() 
+        Polytrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+        
+        
