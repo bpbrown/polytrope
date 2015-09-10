@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.special as scp
 import os
 from mpi4py import MPI
 
@@ -557,11 +558,15 @@ class Multitrope(MultiLayerAtmosphere):
             # should only be a major problem for stiffness ~ O(1)
             overshoot_pad = 0.5*Lz_rz
             
-
+        if self.stable_bottom:
+            self.match_center = self.Lz_rz
+        else:
+            self.match_center = self.Lz_cz
+            
         # this is going to widen the tanh and move the location of del(s)=0 as n_rho_cz increases...
-        self.tanh_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
+        self.match_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
 
-        logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
+        logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
             Lz_top = Lz_cz + overshoot_pad
@@ -644,23 +649,24 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
-    def _compute_kappa_profile(self, kappa_ratio, tanh_center=None, tanh_width=1):
-        if tanh_center is None:
-            if self.stable_bottom:
-                tanh_center = self.Lz_rz
-            else:
-                tanh_center = self.Lz_cz
-                                
+    def match_Phi(self, z, f=scp.erf, center=None, width=None):
+        if center is None:
+            center = self.match_center
+        if width is None:
+            width = self.match_width
+        return 1/2*(1-f((z-center)/width))
+         
+    def _compute_kappa_profile(self, kappa_ratio):
         # start with a simple profile, adjust amplitude later (in _set_diffusivities)
         kappa_top = 1
-    
-        phi = (1/2*(1-np.tanh((self.z-tanh_center)/tanh_width)))
-        inv_phi = 1-phi
+        Phi = self.match_Phi(self.z)
+        inv_Phi = 1-Phi
+        
         self.kappa = self._new_ncc()
         if self.stable_bottom:
-            self.kappa['g'] = (phi*kappa_ratio+inv_phi)*kappa_top
+            self.kappa['g'] = (Phi*kappa_ratio+inv_Phi)*kappa_top
         else:
-            self.kappa['g'] = (phi+inv_phi*kappa_ratio)*kappa_top
+            self.kappa['g'] = (Phi+inv_Phi*kappa_ratio)*kappa_top
         self.necessary_quantities['kappa'] = self.kappa
 
 
@@ -714,8 +720,8 @@ class Multitrope(MultiLayerAtmosphere):
         #self.scale['g'] = (self.z_cz - self.z)
         # this seems to work fine; bandwidth only a few terms worse.
         self.scale['g'] = 1.
-                
-        self._compute_kappa_profile(kappa_ratio, tanh_width=self.tanh_width)
+                                
+        self._compute_kappa_profile(kappa_ratio)
 
         logger.info("Solving for T0")
         # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
@@ -834,11 +840,16 @@ class MultitropeDense(Multitrope):
         self.Lz_rz = Lz_rz
         
         Lx = Lz_cz*aspect_ratio
+
+        if self.stable_bottom:
+            self.match_center = self.Lz_rz
+        else:
+            self.match_center = self.Lz_cz
+
+        self.match_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
+        overshoot_pad = 3*self.match_width
         
-        self.tanh_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
-        overshoot_pad = 3*self.tanh_width
-        
-        logger.info("using overshoot_pad = {} and tanh_width = {}".format(overshoot_pad, self.tanh_width))
+        logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
             Lz_mid = 2*overshoot_pad
