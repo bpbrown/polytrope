@@ -27,9 +27,9 @@ def erf_tanh_compound(nx, intervals, center, width, fig_name='erf_tanh_compound.
     x_basis = de.Compound('x', tuple(x_basis_list),  dealias=3/2)
     domain = de.Domain([x_basis])
 
-    make_plots(domain, fig_name=fig_name)
+    make_plots(domain, fig_name=fig_name, intervals=intervals, nx_intervals=np.cumsum(nx))
  
-def make_plots(domain, fig_name = 'erf_tanh.png'):
+def make_plots(domain, fig_name = 'erf_tanh.png', intervals=None, nx_intervals=None, cutoff=1e-10):
     x = domain.grid(0)
     
     phi_tanh = domain.new_field()
@@ -43,14 +43,24 @@ def make_plots(domain, fig_name = 'erf_tanh.png'):
     ax1.plot(x, phi_erf['g'],  label='f(x)=erf(x)')
     ax1.plot(x, phi_tanh['g'], label='f(x)=tanh(x)')
     ax1.legend(loc='upper right', title=r'$\phi(x) = \frac{1}{2}(1-f((x-'+'{})/{}'.format(center, width)+r'))$')
+    ax1.set_ylabel(r'$f(x)$')
     ax1.set_ylim(-0.05, 1.05)
+    if intervals is not None:
+        for interval in intervals:
+            ax1.axvline(x=interval[0], linestyle='dashed')
 
     ax2 = fig2.add_subplot(2,1,2)
-    ax2.loglog(np.abs(phi_erf['c'])/np.max(np.abs(phi_erf['c'])), label='f(x)=erf(x)', marker='o', linestyle='none')
-    ax2.loglog(np.abs(phi_tanh['c'])/np.max(np.abs(phi_tanh['c'])), label='f(x)=tanh(x)', marker='.', linestyle='none')
-    ax2.set_xlim(1, 1024)
-
-
+    ax2.semilogy(np.abs(phi_erf['c'])/np.max(np.abs(phi_erf['c'])), label='f(x)=erf(x)', marker='o', linestyle='none')
+    ax2.semilogy(np.abs(phi_tanh['c'])/np.max(np.abs(phi_tanh['c'])), label='f(x)=tanh(x)', marker='.', linestyle='none')
+    ax2.set_ylabel(r'$|c|/||c||$')
+    pad = 0.025*len(x)
+    ax2.set_xlim(0-pad, len(x)+pad)
+    ax2.set_ylim(1e-19, 1+np.log10(5))
+    if nx_intervals is not None:
+        for nx in nx_intervals[0:len(nx_intervals)-1]:
+            ax2.axvline(x=nx, linestyle='dashed')
+    if cutoff is not None:
+        ax2.axhline(y=cutoff, linestyle='dashed')
     fig2.savefig(fig_name, dpi=600)
 
 if __name__=="__main__":
