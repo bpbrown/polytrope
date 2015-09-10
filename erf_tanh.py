@@ -15,18 +15,21 @@ x_basis = de.Chebyshev('x', nx, interval=[0., Lx], dealias=3/2)
 domain = de.Domain([x_basis])
 x = domain.grid(0)
 
+center = 0.75
+width=0.02
+
 phi_tanh = domain.new_field()
-phi_tanh['g'] = phi(x, np.tanh, center=1)
+phi_tanh['g'] = phi(x, np.tanh, center=center, width=width)
 
 phi_erf = domain.new_field()
-phi_erf['g'] = phi(x, scp.erf, center=1)
+phi_erf['g'] = phi(x, scp.erf, center=center, width=width)
 
 
 fig = plt.figure()
 ax = fig.add_subplot(2,1,1)
 ax.plot(x, phi_erf['g'],  label='f(x)=erf(x)')
 ax.plot(x, phi_tanh['g'], label='f(x)=tanh(x)')
-ax.legend(loc='upper right', title=r'$\phi(x) = \frac{1}{2}(1-f((x-1)/0.02))$')
+ax.legend(loc='upper right', title=r'$\phi(x) = \frac{1}{2}(1-f((x-'+'{})/{}'.format(center, width)+r'))$')
 ax.set_ylim(-0.05, 1.05)
 
 ax = fig.add_subplot(2,1,2)
