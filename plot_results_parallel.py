@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+#from matplotlib.ticker import MaxNLocator
+import matplotlib.ticker as ticker
 import shelve
 import time
 import os
@@ -103,7 +104,7 @@ static_scale = True
 sliding_average = False
 box_size = 30
 true_aspect_ratio = True
-vertical_stack = True
+vertical_stack = False #True
 scale_late = True
 add_background_s0 = False
 
@@ -276,9 +277,12 @@ def add_image(fig, imax, cbax, x, y, data, cmap):
         plot_extent = [-0.5, shape[1] - 0.5, -0.5, shape[0] - 0.5]
         imax.axis(plot_extent)
 
-    fig.colorbar(im, cax=cbax, orientation='horizontal',
-        ticks=MaxNLocator(nbins=5, prune='both'))
+    cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
+                      ticks=ticker.MaxNLocator(nbins=5, prune='both'))
 
+    cb.formatter.set_powerlimits((4, 3))
+    sci_not_loc = cb.formatter.get_offset()
+    cb.update_ticks()
     return im
 
 def percent_trim(field, percent_cut=0.03):
