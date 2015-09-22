@@ -967,14 +967,6 @@ class Equations():
         logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
         return BC
 
-    def global_noise(self, seed=42):            
-        # Random perturbations, initialized globally for same results in parallel
-        gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
-        slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
-        rand = np.random.RandomState(seed=seed)
-        noise = rand.standard_normal(gshape)[slices]
-        return noise
-
     def _set_subs(self):
         # differential operators
         self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
@@ -991,6 +983,34 @@ class Equations():
         self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
         self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
 
+    def global_noise(self, seed=42, **kwargs):            
+        # Random perturbations, initialized globally for same results in parallel
+        gshape = self.domain.dist.grid_layout.global_shape(scales=self.domain.dealias)
+        slices = self.domain.dist.grid_layout.slices(scales=self.domain.dealias)
+        rand = np.random.RandomState(seed=seed)
+        noise = rand.standard_normal(gshape)[slices]
+
+        # filter in k-space
+        noise_field = self._new_field()
+        noise_field.set_scales(self.domain.dealias, keep_data=False)
+        noise_field['g'] = noise
+        self.filter_field(noise_field)
+
+        return noise_field['g']
+    
+    def filter_field(self, field,frac=0.5):
+        dom = field.domain
+        local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
+        coeff = []
+        for i in range(dom.dim)[::-1]:
+            coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+        cc = np.meshgrid(*coeff)
+
+        field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+
+        for i in range(dom.dim):
+            field_filter = field_filter | (cc[i][local_slice] > frac)
+        field['c'][field_filter] = 0j
 
 class FC_equations(Equations):
     def __init__(self):
