@@ -78,7 +78,7 @@ def AN_convection(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=128, d
     
     cfl_cadence = 1
     CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
-                         max_change=1.5, min_change=0.5, max_dt=max_dt)
+                         max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
     CFL.add_velocities(('u', 'w'))
 
