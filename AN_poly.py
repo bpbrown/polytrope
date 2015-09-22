@@ -55,7 +55,8 @@ def AN_convection(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=128, d
         checkpoint.set_checkpoint(solver, wall_dt=1800)
 
     if restart is None:
-        atmosphere.set_IC(solver)        
+        logger.info("Setting ICs")
+        atmosphere.set_IC(solver, frac=0.3)        
     else:
         logger.info("restarting from {}".format(restart))
         checkpoint.restart(restart, solver)

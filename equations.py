@@ -994,11 +994,12 @@ class Equations():
         noise_field = self._new_field()
         noise_field.set_scales(self.domain.dealias, keep_data=False)
         noise_field['g'] = noise
-        self.filter_field(noise_field)
+        self.filter_field(noise_field, **kwargs)
 
         return noise_field['g']
     
     def filter_field(self, field,frac=0.5):
+        logger.info("filtering field with frac={}".format(frac))
         dom = field.domain
         local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
         coeff = []
@@ -1435,7 +1436,6 @@ class AN_equations(Equations):
     def set_IC(self, solver, A0=1e-6, **kwargs):
         # initial conditions
         self.s_IC = solver.state['s']
-
         noise = self.global_noise(**kwargs)
         self.s_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
