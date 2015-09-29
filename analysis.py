@@ -141,7 +141,7 @@ class Slice(DedalusData):
             self.z = f['scales']['z']['1.0'][:]
 
             self.times = np.append(self.times, f['scales']['sim_time'][:])
-            self.writes = np.append(self.writes, int(f['scales']['write_number'][:]))
+            self.writes = np.append(self.writes, f['scales']['write_number'][:])
             f.close()
             
         for key in self.keys:

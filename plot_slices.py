@@ -9,23 +9,18 @@ Options:
     --output=<output>  Output directory; if blank a guess based on likely case name will be made
     --fields=<fields>  Comma separated list of fields to plot [default: s',enstrophy]
 """
-
 import numpy as np
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import brewer2mpl
-from mpi4py import MPI
 
 import analysis
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
-
-comm_world = MPI.COMM_WORLD
-rank = comm_world.rank
-size = comm_world.size
 
 class Colortable():
     def __init__(self, field,
@@ -109,7 +104,12 @@ class ImageStack():
                 cindex = 0
 
             image = Image(field_name,imax,cbax)
-            image.add_image(fig,x,y,field.T)
+            image.add_image(fig,x,y,field[0].T)
+            
+            static_min, static_max = image.set_scale(field, percent_cut=0.1)
+            
+            image.im.set_clim(static_min, static_max)
+
             images.append(image)
             
         # Title
@@ -130,11 +130,11 @@ class ImageStack():
     def write(self, data_dir, name, i_fig):
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
         self.fig.savefig(figure_file, dpi=self.dpi_png)
-        print("writting {:s}".format(figure_file))
+        logger.info("writting {:s}".format(figure_file))
             
 class Image():
     def __init__(self, field_name, imax, cbax,
-                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=True, units=True):
+                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=False, units=True):
 
         self.xstr = 'x/H'
         self.ystr = 'z/H'
@@ -269,13 +269,19 @@ class Image():
     
 
 def main(files, fields, output_path='./', output_name='snapshot'):
+    from mpi4py import MPI
+
+    comm_world = MPI.COMM_WORLD
+    rank = comm_world.rank
+    size = comm_world.size
+    
     data = analysis.Slice(files)
     
     # select down to the data you wish to plot
     data_list = []
     for field in fields:
-        logger.info(data.data[field][0,:].shape)
-        data_list.append(data.data[field][0,:])
+        logger.info(data.data[field].shape)
+        data_list.append(data.data[field])
         
     imagestack = ImageStack(data.x, data.z, data_list, fields)
     ##if static_scale:
@@ -298,7 +304,6 @@ def main(files, fields, output_path='./', output_name='snapshot'):
             current_data.append(data.data[field][i,:])
         imagestack.update(current_data)
         i_fig = data.writes[i]
-        logger.info(i_fig)
         # Update time title
         tstr = 't = {:6.3e}'.format(time)
         imagestack.timestring.set_text(tstr)
@@ -331,6 +336,15 @@ if __name__ == "__main__":
                     output_path.mkdir()
         fields = args['--fields'].split(',')
         logger.info("output to {}".format(output_path))
-        main(args['<files>'], fields, output_path=str(output_path)+'/')
+        
+        def accumulate_files(filename,*args,file_list):
+            print(filename)
+            file_list.append(filename)
+            
+        file_list = []
+        post.visit_writes(args['<files>'],  accumulate_files, file_list=file_list)
+        print(file_list)
+        
+        main(file_list, fields, output_path=str(output_path)+'/')
 
 
