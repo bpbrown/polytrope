@@ -40,10 +40,10 @@ class Colortable():
         self.float_scale = float_scale
         self.logscale = logscale
 
-        self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_color_map).mpl_colormap
+        self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_scale).mpl_colormap
 
 class ImageStack():
-    def __init__(self, x, y, fields, true_aspect_ratio=True, vertical_stack=True, scale=3.0):
+    def __init__(self, x, y, fields, field_names, true_aspect_ratio=True, vertical_stack=True, scale=3.0):
         # Storage
         images = []
         image_axes = []
@@ -90,7 +90,8 @@ class ImageStack():
         cindex = 0
 
         for j, field in enumerate(fields):
-
+            field_name = field_names[j]
+            
             left = (l_mar + w_im * cindex + l_pad) / w_total
             bottom = 1 - (t_mar + h_im * (row + 1) - b_pad) / h_total
             width = w_data / w_total
@@ -111,6 +112,10 @@ class ImageStack():
                 row += 1
                 cindex = 0
 
+            image = Image(field_name)
+            image.add_image(fig,x,y,field[0].T)
+            images.append(image)
+            
         # Title
         height = 1 - (0.6 * t_mar) / h_total
         timestring = fig.suptitle(r'', y=height, size=16)
@@ -119,7 +124,8 @@ class ImageStack():
         self.imax = image_axes[j]
         self.cbax = cbar_axes[j]
         
-        #images.append(add_image(fig, imax, cbax, x, y, field[0].T, cmap))
+        
+
         #add_labels(fname)
 
         ## if static_scale:
@@ -271,7 +277,7 @@ def main(files, fields, output_path='./'):
     for field in fields:
         field_data.append(data.data[field])
     
-    images = ImageStack(data.x, data.z, field_data)
+    images = ImageStack(data.x, data.z, field_data, fields)
     
     for field in fields:
         logger.info("field {}".format(field))
