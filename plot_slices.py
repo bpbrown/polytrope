@@ -43,7 +43,7 @@ class Colortable():
         self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_color_map).mpl_colormap
 
 class ImageStack():
-    def __init__(x, y, fields, true_aspect_ratio=True, vertical_stack=True, scale=3.0):
+    def __init__(self, x, y, fields, true_aspect_ratio=True, vertical_stack=True, scale=3.0):
         # Storage
         images = []
         image_axes = []
@@ -119,25 +119,25 @@ class ImageStack():
         self.imax = image_axes[j]
         self.cbax = cbar_axes[j]
         
-        images.append(add_image(fig, imax, cbax, x, y, field[0].T, cmap))
-        add_labels(fname)
+        #images.append(add_image(fig, imax, cbax, x, y, field[0].T, cmap))
+        #add_labels(fname)
 
-        if static_scale:
-            if fname in log_list:
-                static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
-            else:
-                # center on zero
-                static_min, static_max = set_scale(field, even_scale=even_scale, percent_cut=0.1)
+        ## if static_scale:
+        ##     if fname in log_list:
+        ##         static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
+        ##     else:
+        ##         # center on zero
+        ##         static_min, static_max = set_scale(field, even_scale=even_scale, percent_cut=0.1)
 
-            if scale_late:
-                static_min = comm_world.scatter([static_min]*size,root = size-1)
-                static_max = comm_world.scatter([static_max]*size,root = size-1)
-            else:
-                static_min = comm_world.scatter([static_min]*size,root = 0)
-                static_max = comm_world.scatter([static_max]*size,root = 0)
+        ##     if scale_late:
+        ##         static_min = comm_world.scatter([static_min]*size,root = size-1)
+        ##         static_max = comm_world.scatter([static_max]*size,root = size-1)
+        ##     else:
+        ##         static_min = comm_world.scatter([static_min]*size,root = 0)
+        ##         static_max = comm_world.scatter([static_max]*size,root = 0)
 
-            images[j].set_clim(static_min, static_max)
-            print(fname, ": +- ", -static_min, static_max)
+        ##     images[j].set_clim(static_min, static_max)
+        ##     print(fname, ": +- ", -static_min, static_max)
 
     def add_labels(self, fname):
         # Title
@@ -267,6 +267,11 @@ class Image():
 
 def main(files, fields, output_path='./'):
     data = analysis.Slice(files)
+    field_data = []
+    for field in fields:
+        field_data.append(data.data[field])
+    
+    images = ImageStack(data.x, data.z, field_data)
     
     for field in fields:
         logger.info("field {}".format(field))
