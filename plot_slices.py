@@ -109,42 +109,32 @@ class ImageStack():
                 cindex = 0
 
             image = Image(field_name,imax,cbax)
-            image.add_image(fig,x,y,field[0].T)
+            image.add_image(fig,x,y,field.T)
             images.append(image)
             
         # Title
         height = 1 - (0.6 * t_mar) / h_total
         self.timestring = fig.suptitle(r'', y=height, size=16)
-        # Set up images and labels        
+
+        self.images = images
         
-
+        # Set up images and labels        
         #
-
-        ## if static_scale:
-        ##     if fname in log_list:
-        ##         static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
-        ##     else:
-        ##         # center on zero
-        ##         static_min, static_max = set_scale(field, even_scale=even_scale, percent_cut=0.1)
-
-        ##     if scale_late:
-        ##         static_min = comm_world.scatter([static_min]*size,root = size-1)
-        ##         static_max = comm_world.scatter([static_max]*size,root = size-1)
-        ##     else:
-        ##         static_min = comm_world.scatter([static_min]*size,root = 0)
-        ##         static_max = comm_world.scatter([static_max]*size,root = 0)
-
         ##     images[j].set_clim(static_min, static_max)
         ##     print(fname, ": +- ", -static_min, static_max)
 
-
+    def update(self, fields):
+        for i, image in enumerate(self.images):
+            image.update_image(fields[i].T)
+            
     def write(self, data_dir, name, i_fig):
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
         self.fig.savefig(figure_file, dpi=self.dpi_png)
         print("writting {:s}".format(figure_file))
             
 class Image():
-    def __init__(self, field_name, imax, cbax, float_scale=False, fixed_lim=None, even_scale=True, units=True):
+    def __init__(self, field_name, imax, cbax,
+                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=True, units=True):
 
         self.xstr = 'x/H'
         self.ystr = 'z/H'
@@ -153,11 +143,15 @@ class Image():
         self.cbax = cbax
         
         self.colortable = Colortable(field_name)
+        
         self.field_name = field_name
         self.float_scale = float_scale
         self.fixed_lim = fixed_lim
         self.even_scale = even_scale
+        self.static_scale = static_scale
+        
         self.units = units
+        
         self.add_labels(field_name)
         
     def add_labels(self, fname):
@@ -233,11 +227,11 @@ class Image():
         else:
             im.set_data(data)
 
-        if not self.static_scale or self.float_scale:
-            image_min, image_max = self.set_scale(field, fixed_lim=fixed_lim, even_scale=even_scale)
-            self.im.set_clim(image_min, image_max)
+        #if not self.static_scale or self.float_scale:
+        image_min, image_max = self.set_scale(data, fixed_lim=self.fixed_lim, even_scale=self.even_scale)
+        self.im.set_clim(image_min, image_max)
 
-    def percent_trim(self, field, percent_cut=0.03):
+    def percent_trim(self, field, percent_cut=0.1):
         if isinstance(percent_cut, list):
             if len(percent_cut) > 1:
                 low_percent_cut  = percent_cut[0]
@@ -256,7 +250,7 @@ class Image():
         max_value = sorted_field[(1-high_percent_cut)*N_elements-1]
         return min_value, max_value
 
-    def set_scale(field, fixed_lim=None, even_scale=True, percent_cut=0.03):
+    def set_scale(self, field, fixed_lim=None, even_scale=True, percent_cut=0.03):
         if fixed_lim is None:
             if even_scale:
                 image_min, image_max = self.percent_trim(field, percent_cut=percent_cut)
@@ -276,13 +270,33 @@ class Image():
 
 def main(files, fields, output_path='./', output_name='snapshot'):
     data = analysis.Slice(files)
-    field_data = []
-    for field in fields:
-        field_data.append(data.data[field])
     
-    imagestack = ImageStack(data.x, data.z, field_data, fields)
+    # select down to the data you wish to plot
+    data_list = []
+    for field in fields:
+        logger.info(data.data[field][0,:].shape)
+        data_list.append(data.data[field][0,:])
+        
+    imagestack = ImageStack(data.x, data.z, data_list, fields)
+    ##if static_scale:
+        ##     if fname in log_list:
+        ##         static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
+        ##     else:
+        ##         # center on zero
+        ##         static_min, static_max = set_scale(field, even_scale=even_scale, percent_cut=0.1)
+
+        ##     if scale_late:
+        ##         static_min = comm_world.scatter([static_min]*size,root = size-1)
+        ##         static_max = comm_world.scatter([static_max]*size,root = size-1)
+        ##     else:
+        ##         static_min = comm_world.scatter([static_min]*size,root = 0)
+        ##         static_max = comm_world.scatter([static_max]*size,root = 0)
 
     for i, time in enumerate(data.times):
+        current_data = []
+        for field in fields:
+            current_data.append(data.data[field][i,:])
+        imagestack.update(current_data)
         i_fig = data.writes[i]
         logger.info(i_fig)
         # Update time title
