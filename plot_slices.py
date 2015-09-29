@@ -106,9 +106,9 @@ class ImageStack():
             image = Image(field_name,imax,cbax)
             image.add_image(fig,x,y,field[0].T)
             
-            static_min, static_max = image.set_scale(field, percent_cut=0.1)
+            static_min, static_max = image.get_scale(field, percent_cut=0.1)
             
-            image.im.set_clim(static_min, static_max)
+            image.set_scale(static_min, static_max)
 
             images.append(image)
             
@@ -202,8 +202,9 @@ class Image():
             xm, ym = self.create_limits_mesh(x, y)
 
             im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
-            plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]
+            plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]                
             imax.axis(plot_extent)
+            
         else:
             im = imax.imshow(data, zorder=1, aspect='auto',
                              interpolation='none', origin='lower',
@@ -218,7 +219,11 @@ class Image():
         cb.formatter.set_powerlimits((4, 3))
         cb.update_ticks()
         self.im = im
-    
+
+    def set_limits(self, x_limits, y_limits):
+        plot_extent = [x_limits[0], x_limits[1], y_limits[0], y_limits[1]]                
+        self.imax.axis(plot_extent)
+        
     def update_image(self, data):
         im = self.im
         
@@ -228,10 +233,10 @@ class Image():
             im.set_data(data)
 
         #if not self.static_scale or self.float_scale:
-        image_min, image_max = self.set_scale(data, fixed_lim=self.fixed_lim, even_scale=self.even_scale)
-        self.im.set_clim(image_min, image_max)
+        #image_min, image_max = self.get_scale(data, fixed_lim=self.fixed_lim, even_scale=self.even_scale)
+        
 
-    def percent_trim(self, field, percent_cut=0.1):
+    def percent_trim(self, data, percent_cut=0.1):
         if isinstance(percent_cut, list):
             if len(percent_cut) > 1:
                 low_percent_cut  = percent_cut[0]
@@ -244,13 +249,21 @@ class Image():
             high_percent_cut = percent_cut
 
         # trimming method from Ben's ASH analysis package
-        sorted_field = np.sort(field, axis=None)
-        N_elements = len(sorted_field)
-        min_value = sorted_field[low_percent_cut*N_elements]
-        max_value = sorted_field[(1-high_percent_cut)*N_elements-1]
+        sorted_data = np.sort(data, axis=None)
+        N_elements = len(sorted_data)
+        min_value = sorted_data[low_percent_cut*N_elements]
+        max_value = sorted_data[(1-high_percent_cut)*N_elements-1]
         return min_value, max_value
 
-    def set_scale(self, field, fixed_lim=None, even_scale=True, percent_cut=0.03):
+    def set_scale(self, image_min, image_max):
+        self.im.set_clim(image_min, image_max)
+        
+    def get_scale(self, field, fixed_lim=None, even_scale=None, percent_cut=0.03):
+        if even_scale is None:
+            even_scale = self.even_scale
+        if fixed_lim is None:
+            fixed_lim = self.fixed_lim
+            
         if fixed_lim is None:
             if even_scale:
                 image_min, image_max = self.percent_trim(field, percent_cut=percent_cut)
@@ -288,9 +301,8 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=T
     scale_late = True
     if static_scale:
         for i, image in enumerate(imagestack.images):
-            static_min, static_max = image.set_scale(data_list[i], percent_cut=0.1)
+            static_min, static_max = image.get_scale(data_list[i], percent_cut=0.1)
             print(static_min, static_max)
-            image.im.set_clim(static_min, static_max)    
         ##     if fname in log_list:
         ##         static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
         ##     else:
@@ -304,6 +316,12 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=T
                 static_min = comm_world.scatter([static_min]*size,root = 0)
                 static_max = comm_world.scatter([static_max]*size,root = 0)
             print("post comm: {}--{}".format(static_min, static_max))
+            image.set_scale(static_min, static_max)
+
+    zoom = True
+    if zoom:
+        for image in imagestack.images:
+            image.set_limits([0,0.25*max(data.x)], [0.25*max(data.z), 0.5*max(data.z)])
             
     for i, time in enumerate(data.times):
         current_data = []
