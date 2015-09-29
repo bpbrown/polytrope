@@ -96,7 +96,8 @@ class ImageStack():
             bottom = 1 - (t_mar + h_im * (row + 1) - b_pad) / h_total
             width = w_data / w_total
             height = h_data / h_total
-            image_axes.append(fig.add_axes([left, bottom, width, height]))
+            imax = fig.add_axes([left, bottom, width, height])
+            image_axes.append(imax)
             image_axes[j].lastrow = (row == nrows - 1)
             image_axes[j].firstcol = (cindex == 0)
 
@@ -104,7 +105,8 @@ class ImageStack():
             bottom = 1 - (t_mar + h_im * row + t_pad + h_cbar) / h_total
             width = w_cbar / w_total
             height = h_cbar / h_total
-            cbar_axes.append(fig.add_axes([left, bottom, width, height]))
+            cbax = fig.add_axes([left, bottom, width, height])
+            cbar_axes.append(cbax)
 
             cindex+=1
             if cindex%ncols == 0:
@@ -112,18 +114,14 @@ class ImageStack():
                 row += 1
                 cindex = 0
 
-            image = Image(field_name)
+            image = Image(field_name,imax,cbax)
             image.add_image(fig,x,y,field[0].T)
             images.append(image)
             
         # Title
         height = 1 - (0.6 * t_mar) / h_total
-        timestring = fig.suptitle(r'', y=height, size=16)
-        # Set up images and labels
-
-        self.imax = image_axes[j]
-        self.cbax = cbar_axes[j]
-        
+        self.timestring = fig.suptitle(r'', y=height, size=16)
+        # Set up images and labels        
         
 
         #add_labels(fname)
@@ -172,7 +170,10 @@ class ImageStack():
         print("writting {:s}".format(figure_file))
             
 class Image():
-    def __init__(self, field_name, float_scale=False, fixed_lim=None, even_scale=True, units=True):
+    def __init__(self, field_name, imax, cbax, float_scale=False, fixed_lim=None, even_scale=True, units=True):
+
+        self.imax = imax
+        self.cbax = cbax
         
         self.colortable = Colortable(field_name)
         self.field_name = field_name
@@ -202,7 +203,7 @@ class Image():
         cmap = self.colortable.cmap
         
         if self.units:
-            xm, ym = create_limits_mesh(x, y)
+            xm, ym = self.create_limits_mesh(x, y)
 
             im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
             plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]
