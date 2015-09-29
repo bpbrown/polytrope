@@ -3,7 +3,7 @@ Plot slices from joint analysis files.
 
 Usage:
     plot_slices.py join <base_path>
-    plot_slices.py <files>... [--fields=<fields> --output=<output>]
+    plot_slices.py <files>... [options]
 
 Options:
     --output=<output>  Output directory; if blank a guess based on likely case name will be made
@@ -38,7 +38,12 @@ class Colortable():
         self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_scale).mpl_colormap
 
 class ImageStack():
-    def __init__(self, x, y, fields, field_names, true_aspect_ratio=True, vertical_stack=True, scale=3.0):
+    def __init__(self, x, y, fields, field_names,
+                 true_aspect_ratio=True, vertical_stack=True, scale=3.0,
+                 verbose=True):
+
+        self.verbose=verbose
+        
         # Storage
         images = []
         image_axes = []
@@ -70,7 +75,8 @@ class ImageStack():
         w_total = l_mar + ncols * w_im + r_mar
 
         self.dpi_png = int(max(150, len(x)/(w_total*scale)))
-        logger.info("figure size is {:g}x{:g} at {} dpi".format(scale * w_total, scale * h_total, self.dpi_png))
+        if self.verbose:
+            logger.info("figure size is {:g}x{:g} at {} dpi".format(scale * w_total, scale * h_total, self.dpi_png))
         
         # Create figure and axes
         self.fig = fig = plt.figure(1, figsize=(scale * w_total,
@@ -104,7 +110,7 @@ class ImageStack():
                 cindex = 0
 
             image = Image(field_name,imax,cbax)
-            image.add_image(fig,x,y,field[0].T)
+            image.add_image(fig,x,y,field.T)
             
             static_min, static_max = image.get_scale(field, percent_cut=0.1)
             
@@ -131,7 +137,10 @@ class ImageStack():
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
         self.fig.savefig(figure_file, dpi=self.dpi_png)
         logger.info("writting {:s}".format(figure_file))
-            
+
+    def close(self):
+        plt.close(self.fig)
+        
 class Image():
     def __init__(self, field_name, imax, cbax,
                  static_scale = True, float_scale=False, fixed_lim=None, even_scale=False, units=True):
@@ -281,7 +290,7 @@ class Image():
 
     
 
-def main(files, fields, output_path='./', output_name='snapshot', static_scale=True):
+def main(files, fields, output_path='./', output_name='snapshot', static_scale=True, profile_files=None):
     from mpi4py import MPI
 
     comm_world = MPI.COMM_WORLD
@@ -294,7 +303,7 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=T
     data_list = []
     for field in fields:
         logger.info(data.data[field].shape)
-        data_list.append(data.data[field])
+        data_list.append(data.data[field][0,:])
         
     imagestack = ImageStack(data.x, data.z, data_list, fields)
 
@@ -303,12 +312,6 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=T
         for i, image in enumerate(imagestack.images):
             static_min, static_max = image.get_scale(data_list[i], percent_cut=0.1)
             print(static_min, static_max)
-        ##     if fname in log_list:
-        ##         static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
-        ##     else:
-        ##         # center on zero
-        ##         static_min, static_max = set_scale(field, even_scale=even_scale, percent_cut=0.1)
-
             if scale_late:
                 static_min = comm_world.scatter([static_min]*size,root = size-1)
                 static_max = comm_world.scatter([static_max]*size,root = size-1)
@@ -317,23 +320,25 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=T
                 static_max = comm_world.scatter([static_max]*size,root = 0)
             print("post comm: {}--{}".format(static_min, static_max))
             image.set_scale(static_min, static_max)
-
-    zoom = True
-    if zoom:
-        for image in imagestack.images:
-            image.set_limits([0,0.25*max(data.x)], [0.25*max(data.z), 0.5*max(data.z)])
-            
+              
     for i, time in enumerate(data.times):
         current_data = []
         for field in fields:
             current_data.append(data.data[field][i,:])
+            
+        zoom = False #True
+        if zoom:
+            for image in imagestack.images:
+                image.set_limits([0,0.25*max(data.x)], [0.25*max(data.z), 0.5*max(data.z)])
+        
         imagestack.update(current_data)
+                                              
         i_fig = data.writes[i]
         # Update time title
         tstr = 't = {:6.3e}'.format(time)
         imagestack.timestring.set_text(tstr)
         imagestack.write(output_path, output_name, i_fig)
-            
+        imagestack.close()
 
 
 if __name__ == "__main__":
