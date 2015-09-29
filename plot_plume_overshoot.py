@@ -9,6 +9,7 @@ Options:
     --output=<output>         Output directory; if blank a guess based on likely case name will be made
     --fields=<fields>         Comma separated list of fields to plot [default: s',enstrophy]
     --profiles=<profiles>...  Files to use for contour plotting
+    --zoom                    Zoom in on sub-region
 """
 import numpy as np
 
@@ -25,7 +26,9 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 import plot_slices
 
-def main(files, fields, output_path='./', output_name='plume', static_scale=True, profile_files=None):
+def main(files, fields, output_path='./', output_name='plume',
+         static_scale=True, profile_files=None, zoom=False):
+    
     from mpi4py import MPI
 
     comm_world = MPI.COMM_WORLD
@@ -60,7 +63,10 @@ def main(files, fields, output_path='./', output_name='plume', static_scale=True
     if profile_files is not None:
         logger.info(profile_files)
         profile_data = analysis.Profile(profile_files)
-              
+        import plot_overshoot
+        overshoot_depths, std_dev = plot_overshoot.analyze_case(profile_files)
+        print(overshoot_depths)                              
+
     for i, time in enumerate(data.times):
         current_data = []
         for field in fields:
@@ -68,7 +74,6 @@ def main(files, fields, output_path='./', output_name='plume', static_scale=True
 
         # new ImageStack on each image, to clear out all axes when doing contouring.
         imagestack = plot_slices.ImageStack(data.x, data.z, current_data, fields, verbose=False)
-        zoom = True
         if zoom:
             for image in imagestack.images:
                 image.set_limits([0,0.25*max(data.x)], [0.25*max(data.z), 0.5*max(data.z)])
@@ -78,12 +83,23 @@ def main(files, fields, output_path='./', output_name='plume', static_scale=True
             s_mean = profile_data.average['s_mean']
             s_mean = s_mean.reshape(s_mean.shape[0], 1)
             contour_data = data.data['s'][i,:].T + s_mean
-            
+            # plot both the zero level and the level equal to the top entropy in the time average
+            # (slightly less than zero owing to thermal adjustment)
+            levels = [0, profile_data.average['s_tot'][-1]]
+            #print(profile_data.z[-1])
+            #print(levels)
             for j, field in enumerate(fields):
                 imagestack.images[j].imax.contour(data.x, data.z, contour_data,
-                                                  levels=[0], colors='black', linewidths=3,
+                                                  levels=levels,
+                                                  colors='black', linewidths=3,
                                                   antialiased=True)
-                                              
+                for key in overshoot_depths:
+                    color = next(imagestack.images[j].imax._get_lines.color_cycle)
+                    imagestack.images[j].imax.axhline(y=overshoot_depths[key], label=key,
+                                                      color=color, linestyle='dashed', linewidth=3)
+                    
+            imagestack.images[j].imax.legend(loc='lower right')
+                       
         i_fig = data.writes[i]
         # Update time title
         tstr = 't = {:6.3e}'.format(time)
@@ -135,6 +151,7 @@ if __name__ == "__main__":
             profile_file_list = None
             
         if len(file_list) > 0:
-            main(file_list, fields, output_path=str(output_path)+'/', profile_files=profile_file_list)
+            main(file_list, fields, output_path=str(output_path)+'/', profile_files=profile_file_list,
+                 zoom=args['--zoom'])
 
 
