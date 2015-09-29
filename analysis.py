@@ -114,6 +114,38 @@ class Profile(DedalusData):
         for key in self.keys:
             logger.debug("{} shape {} and {}".format(key, self.average[key].shape, self.std_dev[key].shape))
 
+class Slice(DedalusData):
+    def __init__(self, files, *args, keys=None, **kwargs):
+        super(Slice, self).__init__(files, *args,
+                                     keys=keys, **kwargs)
+        self.read_data()
+            
+    def read_data(self):
+        self.times = np.array([])
+        self.writes = np.array([])
+        
+        N = 1
+        for filename in self.files:
+            logger.debug("opening {}".format(filename))
+            f = h5py.File(filename, flag='r')
+            # clumsy
+            for key in self.keys:
+                if N == 1:
+                    self.data[key] = f['tasks'][key][:]
+                    logger.debug("{} shape {}".format(key, self.data[key].shape))
+                else:
+                    self.data[key] = np.append(self.data[key], f['tasks'][key][:], axis=0)
+
+            N += 1
+            self.x = f['scales']['x']['1.0'][:]
+            self.z = f['scales']['z']['1.0'][:]
+
+            self.times = np.append(self.times, f['scales']['sim_time'][:])
+            self.writes = np.append(self.writes, f['scales']['write_number'][:])
+            f.close()
+            
+        for key in self.keys:
+            logger.debug("{} shape {}".format(key, self.data[key].shape))
 
 class APJSingleColumnFigure():
     def __init__(self, aspect_ratio=None, lineplot=True, fontsize=8):
