@@ -80,6 +80,9 @@ class ImageStack():
 
         logger.info("figure size is {:g}x{:g}".format(scale * w_total, scale * h_total))
 
+        self.dpi_png = 150
+        #dpi_png = max(150, len(x)/(w_total*scale))
+        
         # Create figure and axes
         self.fig = fig = plt.figure(1, figsize=(scale * w_total,
                                                 scale * h_total))
@@ -111,13 +114,11 @@ class ImageStack():
         # Title
         height = 1 - (0.6 * t_mar) / h_total
         timestring = fig.suptitle(r'', y=height, size=16)
-            # Set up images and labels
+        # Set up images and labels
 
-        imax = image_axes[j]
+        self.imax = image_axes[j]
         self.cbax = cbar_axes[j]
         
-        cmap = brewer2mpl.get_map(*color_map[j], reverse=reverse_color_map[j]).mpl_colormap
-
         images.append(add_image(fig, imax, cbax, x, y, field[0].T, cmap))
         add_labels(fname)
 
@@ -158,10 +159,21 @@ class ImageStack():
             plt.setp(self.imax.get_yticklabels(), size=10)
         else:
             plt.setp(self.imax.get_yticklabels(), visible=False)
+
+    def write_image_stack(self, data_dir, name, i_fig):
+        figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
+        fig.savefig(figure_file, dpi=self.dpi_png)
+        print("writting {:s}".format(figure_file))
             
 class Image():
-    def __init__(self, field):
-        self.colortable = Colortable(field)
+    def __init__(self, field_name, float_scale=False, fixed_lim=None, even_scale=True, units=True):
+        
+        self.colortable = Colortable(field_name)
+        self.field_name = field_name
+        self.float_scale = float_scale
+        self.fixed_lim = fixed_lim
+        self.even_scale = even_scale
+        self.units = units
         
     def create_limits_mesh(self, x, y):
         xd = np.diff(x)
@@ -178,12 +190,12 @@ class Image():
 
         return xm, ym
            
-    def add_image(self, x, y, data, cmap, units=True):
-        fig = self.fig
+    def add_image(self, fig, x, y, data):
         imax = self.imax
         cbax = self.cbax
+        cmap = self.colortable.cmap
         
-        if units:
+        if self.units:
             xm, ym = create_limits_mesh(x, y)
 
             im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
@@ -201,21 +213,20 @@ class Image():
                           ticks=ticker.MaxNLocator(nbins=5, prune='both'))
 
         cb.formatter.set_powerlimits((4, 3))
-        sci_not_loc = cb.formatter.get_offset()
         cb.update_ticks()
         self.im = im
     
-    def update_image(self, data, float_this_scale=False, fixed_lim=None, even_scale=True, units=True):
+    def update_image(self, data):
         im = self.im
         
-        if units:
+        if self.units:
             im.set_array(np.ravel(data))
         else:
             im.set_data(data)
 
-        if not static_scale or float_this_scale:
+        if not self.static_scale or self.float_scale:
             image_min, image_max = self.set_scale(field, fixed_lim=fixed_lim, even_scale=even_scale)
-            images[j].set_clim(image_min, image_max)
+            self.im.set_clim(image_min, image_max)
 
     def percent_trim(self, field, percent_cut=0.03):
         if isinstance(percent_cut, list):
@@ -254,79 +265,20 @@ class Image():
 
     
 
-def main(filenames, fields, output_path='./'):
+def main(files, fields, output_path='./'):
     data = analysis.Slice(files)
+    
+    for field in fields:
+        logger.info("field {}".format(field))
+        logger.info("shape {}".format(data.data[field].shape))
 
-    even_scale = False
-    units = True
-    static_scale = True
-    sliding_average = False
-    box_size = 30
-    true_aspect_ratio = True
-    vertical_stack = False #True
+        i_fig = data.writes[0]
+    
+        # Update time title
+        tstr = 't = {:6.3e}'.format(data.times[0])
+        #timestring.set_text(tstr)
 
-    print("scaling iteration:", first_read_iteration)
-    fields, x, y, t, writes = read_fields(iteration=first_read_iteration)
-
-    print("times: ",t)
-
-
-
-    first_iteration = iteration        
-    # plot images        
-    print(x.shape)  
-    dpi_png = max(150, len(x)/(w_total*scale))
-
-
-    print("dpi:", dpi_png, " -> ", w_total*scale*dpi_png, "x",h_total*scale*dpi_png)
-    for i_iter in range(n_iter):
-
-        iteration = first_iteration + i_iter*iter_step
-
-        if n_iter > 1:
-            if i_iter > 0 or scale_late:
-                fields, x, y, t, writes = read_fields(iteration=iteration)
-
-        # note, this assumes that all files have the same number of frames.
-        # this breaks if one file (like the last one) is smaller in size.
-        #i_fig = t.size*(rank*n_iter+i_iter)
-
-        for i in range(t.size):
-            for j, field in enumerate(fields):
-                if sliding_average:
-                    if t.size - i > box_size:
-                        i_avg_start = i
-                    else:
-                        # we've run out of elements; fix average
-                        i_avg_start = t.size - box_size
-
-                    i_avg_end = i_avg_start+ box_size
-                    if i < box_size:
-                        # average forward
-                        sliding_min, sliding_max = percent_trim(field[i_avg_start:i_avg_end], percent_cut=0.1)
-                    else:
-                        # do moving average from here forwards
-                        sliding_min_current, sliding_max_current = percent_trim(field[i], percent_cut=0.05)
-                        sliding_min = (box_size-1)/box_size*sliding_min + 1/box_size*sliding_min_current
-                        sliding_max = (box_size-1)/box_size*sliding_max + 1/box_size*sliding_max_current
-
-                        print(sliding_min, sliding_max)
-                        update_image(images[j], field[i].T, fixed_lim=[sliding_min, sliding_max])
-                elif fnames[j] == 's_fluc':
-                    update_image(images[j], field[i].T, even_scale=even_scale)
-                else:
-                    update_image(images[j], field[i].T, float_this_scale=float_this_scale[j])
-
-            # pull the figure label from the writing order
-            i_fig = writes[i]
-
-            # Update time title
-            tstr = 't = {:6.3e}'.format(t[i])
-            timestring.set_text(tstr)
-
-            figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
-            fig.savefig(figure_file, dpi=dpi_png)
-            print("writting {:s}".format(figure_file))
+            
 
 
 if __name__ == "__main__":
@@ -352,7 +304,8 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
+        fields = args['--fields'].split(',')
         logger.info("output to {}".format(output_path))
-        main(args['<files>'], args['--fields'], output_path=str(output_path)+'/')
+        main(args['<files>'], fields, output_path=str(output_path)+'/')
 
 
