@@ -268,7 +268,7 @@ class Image():
 
     
 
-def main(files, fields, output_path='./', output_name='snapshot'):
+def main(files, fields, output_path='./', output_name='snapshot', static_scale=True):
     from mpi4py import MPI
 
     comm_world = MPI.COMM_WORLD
@@ -284,20 +284,27 @@ def main(files, fields, output_path='./', output_name='snapshot'):
         data_list.append(data.data[field])
         
     imagestack = ImageStack(data.x, data.z, data_list, fields)
-    ##if static_scale:
+
+    scale_late = True
+    if static_scale:
+        for i, image in enumerate(imagestack.images):
+            static_min, static_max = image.set_scale(data_list[i], percent_cut=0.1)
+            print(static_min, static_max)
+            image.im.set_clim(static_min, static_max)    
         ##     if fname in log_list:
         ##         static_min, static_max = set_scale(field, even_scale=False, percent_cut=[0.4, 0.0])
         ##     else:
         ##         # center on zero
         ##         static_min, static_max = set_scale(field, even_scale=even_scale, percent_cut=0.1)
 
-        ##     if scale_late:
-        ##         static_min = comm_world.scatter([static_min]*size,root = size-1)
-        ##         static_max = comm_world.scatter([static_max]*size,root = size-1)
-        ##     else:
-        ##         static_min = comm_world.scatter([static_min]*size,root = 0)
-        ##         static_max = comm_world.scatter([static_max]*size,root = 0)
-
+            if scale_late:
+                static_min = comm_world.scatter([static_min]*size,root = size-1)
+                static_max = comm_world.scatter([static_max]*size,root = size-1)
+            else:
+                static_min = comm_world.scatter([static_min]*size,root = 0)
+                static_max = comm_world.scatter([static_max]*size,root = 0)
+            print("post comm: {}--{}".format(static_min, static_max))
+            
     for i, time in enumerate(data.times):
         current_data = []
         for field in fields:
@@ -337,14 +344,15 @@ if __name__ == "__main__":
         fields = args['--fields'].split(',')
         logger.info("output to {}".format(output_path))
         
-        def accumulate_files(filename,*args,file_list):
-            print(filename)
-            file_list.append(filename)
+        def accumulate_files(filename,start,count,file_list):
+            #print(filename, start, count)
+            if start==0:
+                file_list.append(filename)
             
         file_list = []
         post.visit_writes(args['<files>'],  accumulate_files, file_list=file_list)
-        print(file_list)
-        
-        main(file_list, fields, output_path=str(output_path)+'/')
+        #print(file_list)
+        if len(file_list) > 0:
+            main(file_list, fields, output_path=str(output_path)+'/')
 
 
