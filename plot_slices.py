@@ -49,10 +49,6 @@ class ImageStack():
         image_axes = []
         cbar_axes = []
 
-        # Options
-        self.xstr = 'x/H'
-        self.ystr = 'z/H'
-
         # Determine grid size
         if vertical_stack:
             nrows = len(fields)
@@ -78,10 +74,8 @@ class ImageStack():
         h_total = t_mar + nrows * h_im + b_mar
         w_total = l_mar + ncols * w_im + r_mar
 
-        logger.info("figure size is {:g}x{:g}".format(scale * w_total, scale * h_total))
-
-        self.dpi_png = 150
-        #dpi_png = max(150, len(x)/(w_total*scale))
+        self.dpi_png = int(max(150, len(x)/(w_total*scale)))
+        logger.info("figure size is {:g}x{:g} at {} dpi".format(scale * w_total, scale * h_total, self.dpi_png))
         
         # Create figure and axes
         self.fig = fig = plt.figure(1, figsize=(scale * w_total,
@@ -124,7 +118,7 @@ class ImageStack():
         # Set up images and labels        
         
 
-        #add_labels(fname)
+        #
 
         ## if static_scale:
         ##     if fname in log_list:
@@ -143,34 +137,17 @@ class ImageStack():
         ##     images[j].set_clim(static_min, static_max)
         ##     print(fname, ": +- ", -static_min, static_max)
 
-    def add_labels(self, fname):
-        # Title
-        title = self.imax.set_title('{:s}'.format(fname), size=14)
-        title.set_y(1.1)
 
-        # Colorbar
-        self.cbax.xaxis.set_ticks_position('top')
-        plt.setp(self.cbax.get_xticklabels(), size=10)
-
-        if self.imax.lastrow:
-            self.imax.set_xlabel(self.xstr, size=12)
-            plt.setp(self.imax.get_xticklabels(), size=10)
-        else:
-            plt.setp(self.imax.get_xticklabels(), visible=False)
-
-        if self.imax.firstcol:
-            self.imax.set_ylabel(self.ystr, size=12)
-            plt.setp(self.imax.get_yticklabels(), size=10)
-        else:
-            plt.setp(self.imax.get_yticklabels(), visible=False)
-
-    def write_image_stack(self, data_dir, name, i_fig):
+    def write(self, data_dir, name, i_fig):
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
-        fig.savefig(figure_file, dpi=self.dpi_png)
+        self.fig.savefig(figure_file, dpi=self.dpi_png)
         print("writting {:s}".format(figure_file))
             
 class Image():
     def __init__(self, field_name, imax, cbax, float_scale=False, fixed_lim=None, even_scale=True, units=True):
+
+        self.xstr = 'x/H'
+        self.ystr = 'z/H'
 
         self.imax = imax
         self.cbax = cbax
@@ -181,7 +158,32 @@ class Image():
         self.fixed_lim = fixed_lim
         self.even_scale = even_scale
         self.units = units
+        self.add_labels(field_name)
         
+    def add_labels(self, fname):
+        imax = self.imax
+        cbax = self.cbax
+        
+        # Title
+        title = imax.set_title('{:s}'.format(fname), size=14)
+        title.set_y(1.1)
+
+        # Colorbar
+        self.cbax.xaxis.set_ticks_position('top')
+        plt.setp(cbax.get_xticklabels(), size=10)
+
+        if imax.lastrow:
+            imax.set_xlabel(self.xstr, size=12)
+            plt.setp(imax.get_xticklabels(), size=10)
+        else:
+            plt.setp(imax.get_xticklabels(), visible=False)
+
+        if imax.firstcol:
+            self.imax.set_ylabel(self.ystr, size=12)
+            plt.setp(imax.get_yticklabels(), size=10)
+        else:
+            plt.setp(imax.get_yticklabels(), visible=False)
+             
     def create_limits_mesh(self, x, y):
         xd = np.diff(x)
         yd = np.diff(y)
@@ -272,24 +274,21 @@ class Image():
 
     
 
-def main(files, fields, output_path='./'):
+def main(files, fields, output_path='./', output_name='snapshot'):
     data = analysis.Slice(files)
     field_data = []
     for field in fields:
         field_data.append(data.data[field])
     
-    images = ImageStack(data.x, data.z, field_data, fields)
-    
-    for field in fields:
-        logger.info("field {}".format(field))
-        logger.info("shape {}".format(data.data[field].shape))
+    imagestack = ImageStack(data.x, data.z, field_data, fields)
 
-        i_fig = data.writes[0]
-    
+    for i, time in enumerate(data.times):
+        i_fig = data.writes[i]
+        logger.info(i_fig)
         # Update time title
-        tstr = 't = {:6.3e}'.format(data.times[0])
-        #timestring.set_text(tstr)
-
+        tstr = 't = {:6.3e}'.format(time)
+        imagestack.timestring.set_text(tstr)
+        imagestack.write(output_path, output_name, i_fig)
             
 
 
