@@ -10,12 +10,14 @@ data_dir = sys.argv[1]
 base_path = os.path.abspath(data_dir)+'/'
 
 logger.info("joining data from Dedalus run {:s}".format(data_dir))
-logger.info("merging checkpoint")
-post.merge_analysis(base_path+'checkpoint')
-logger.info("merging scalar")
-post.merge_analysis(base_path+'scalar')
-logger.info("merging profiles")
-post.merge_analysis(base_path+'profiles')
-logger.info("merging slices")
-post.merge_analysis(base_path+'slices')
+
+data_types = ['checkpoint', 'scalar', 'profiles', 'slices', 'coeffs']
+
+for data_type in data_types:
+    logger.info("merging {}".format(data_type))
+    try:
+        post.merge_analysis(base_path+data_type)
+    except:
+        logger.info("missing {}".format(data_type))
+        
 logger.info("done join operation for {:s}".format(data_dir))

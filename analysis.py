@@ -147,6 +147,50 @@ class Slice(DedalusData):
         for key in self.keys:
             logger.debug("{} shape {}".format(key, self.data[key].shape))
 
+class Coeff(DedalusData):
+    def __init__(self, files, *args, keys=None, **kwargs):
+        super(Coeff, self).__init__(files, *args,
+                                     keys=keys, **kwargs)
+        self.read_data()
+        self.compute_power_spectrum()
+        
+    def read_data(self):
+        self.times = np.array([])
+        self.writes = np.array([], dtype=np.int)
+        
+        N = 1
+        for filename in self.files:
+            logger.debug("opening {}".format(filename))
+            f = h5py.File(filename, flag='r')
+            # clumsy
+            for key in self.keys:
+                if N == 1:
+                    self.data[key] = f['tasks'][key][:]
+                    logger.debug("{} shape {}".format(key, self.data[key].shape))
+                else:
+                    self.data[key] = np.append(self.data[key], f['tasks'][key][:], axis=0)
+
+            N += 1
+            self.kx = f['scales']['kx'][:]
+            try:
+                # single basis
+                self.kz = f['scales']['Tz'][:]
+            except:
+                # single compound basis
+                self.kz = f['scales']['(T,T)z'][:]
+
+            self.times = np.append(self.times, f['scales']['sim_time'][:])
+            self.writes = np.append(self.writes, f['scales']['write_number'][:])
+            f.close()
+            
+        for key in self.keys:
+            logger.debug("{} shape {}".format(key, self.data[key].shape))
+            
+    def compute_power_spectrum(self):
+        self.power_spectrum = OrderedDict()
+        for key in self.keys:
+            self.power_spectrum[key] = np.real(self.data[key]*np.conj(self.data[key]))
+
 class APJSingleColumnFigure():
     def __init__(self, aspect_ratio=None, lineplot=True, fontsize=8):
         import scipy.constants as scpconst

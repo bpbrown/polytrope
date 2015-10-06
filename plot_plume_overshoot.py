@@ -13,13 +13,6 @@ Options:
     --mark=<mark>             Mark special depth
 """
 import numpy as np
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import brewer2mpl
-
 import analysis
 
 import logging

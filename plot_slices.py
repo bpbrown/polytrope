@@ -24,12 +24,16 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 class Colortable():
     def __init__(self, field,
-                 reverse_scale=True, float_scale=False, logscale=False):
-        
-        if field=='enstrophy':
-            self.color_map = ('BuPu', 'sequential', 9)
+                 reverse_scale=True, float_scale=False, logscale=False,
+                 color_map=None):
+
+        if color_map is None:
+            if field=='enstrophy':
+                self.color_map = ('BuPu', 'sequential', 9)
+            else:
+                self.color_map = ('RdYlBu', 'diverging', 11)
         else:
-            self.color_map = ('RdYlBu', 'diverging', 11)
+            self.color_map = color_map
             
         self.reverse_scale = reverse_scale
         self.float_scale = float_scale
@@ -40,7 +44,7 @@ class Colortable():
 class ImageStack():
     def __init__(self, x, y, fields, field_names,
                  true_aspect_ratio=True, vertical_stack=True, scale=3.0,
-                 verbose=True):
+                 verbose=True, **kwargs):
 
         self.verbose=verbose
         
@@ -77,7 +81,7 @@ class ImageStack():
         self.dpi_png = int(max(150, len(x)/(w_total*scale)))
         if self.verbose:
             logger.info("figure size is {:g}x{:g} at {} dpi".format(scale * w_total, scale * h_total, self.dpi_png))
-        
+            logger.info("     and in px {:g}x{:g}".format(scale * w_total*self.dpi_png, scale * h_total*self.dpi_png))
         # Create figure and axes
         self.fig = fig = plt.figure(1, figsize=(scale * w_total,
                                                 scale * h_total))
@@ -109,7 +113,7 @@ class ImageStack():
                 row += 1
                 cindex = 0
 
-            image = Image(field_name,imax,cbax)
+            image = Image(field_name,imax,cbax, **kwargs)
             image.add_image(fig,x,y,field.T)
             
             static_min, static_max = image.get_scale(field, percent_cut=0.1)
@@ -134,6 +138,7 @@ class ImageStack():
             image.update_image(fields[i].T)
             
     def write(self, data_dir, name, i_fig):
+        logger.debug("png size: {}".format(self.fig.get_size_inches()*self.fig.dpi))
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
         self.fig.savefig(figure_file, dpi=self.dpi_png)
         logger.info("writting {:s}".format(figure_file))
@@ -143,15 +148,15 @@ class ImageStack():
         
 class Image():
     def __init__(self, field_name, imax, cbax,
-                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=False, units=True):
+                 xstr='x/H', ystr='z/H',
+                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=False, units=True,
+                 **kwargs):
 
-        self.xstr = 'x/H'
-        self.ystr = 'z/H'
+        self.xstr = xstr
+        self.ystr = ystr
 
         self.imax = imax
         self.cbax = cbax
-        
-        self.colortable = Colortable(field_name)
         
         self.field_name = field_name
         self.float_scale = float_scale
@@ -161,8 +166,12 @@ class Image():
         
         self.units = units
         
-        self.add_labels(field_name)
-        
+        self.set_colortable(**kwargs)
+        self.add_labels(self.field_name)
+
+    def set_colortable(self, **kwargs):
+        self.colortable = Colortable(self.field_name, **kwargs)
+
     def add_labels(self, fname):
         imax = self.imax
         cbax = self.cbax
@@ -325,12 +334,7 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=T
         current_data = []
         for field in fields:
             current_data.append(data.data[field][i,:])
-            
-        zoom = False #True
-        if zoom:
-            for image in imagestack.images:
-                image.set_limits([0,0.25*max(data.x)], [0.25*max(data.z), 0.5*max(data.z)])
-        
+                    
         imagestack.update(current_data)
                                               
         i_fig = data.writes[i]

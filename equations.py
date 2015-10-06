@@ -1217,6 +1217,15 @@ class FC_equations(Equations):
         analysis_slice.add_task("enstrophy", name="enstrophy")
         analysis_slice.add_task("vorticity", name="vorticity")
         analysis_tasks.append(analysis_slice)
+
+        analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20, parallel=False, **kwargs)
+        analysis_coeff.add_task("s_fluc", name="s", layout='c')
+        analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
+        analysis_coeff.add_task("u", name="u", layout='c')
+        analysis_coeff.add_task("w", name="w", layout='c')
+        analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
+        analysis_coeff.add_task("vorticity", name="vorticity", layout='c')
+
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
         analysis_profile.add_task("plane_avg(T1)", name="T1")
