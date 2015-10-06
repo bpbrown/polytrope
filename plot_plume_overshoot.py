@@ -10,6 +10,7 @@ Options:
     --fields=<fields>         Comma separated list of fields to plot [default: s',enstrophy]
     --profiles=<profiles>...  Files to use for contour plotting
     --zoom                    Zoom in on sub-region
+    --mark=<mark>             Mark special depth
 """
 import numpy as np
 
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__.split('.')[-1])
 import plot_slices
 
 def main(files, fields, output_path='./', output_name='plume',
-         static_scale=True, profile_files=None, zoom=False):
+         static_scale=True, profile_files=None, zoom=False, mark_depth=None):
     
     from mpi4py import MPI
 
@@ -76,7 +77,7 @@ def main(files, fields, output_path='./', output_name='plume',
         imagestack = plot_slices.ImageStack(data.x, data.z, current_data, fields, verbose=False)
         if zoom:
             for image in imagestack.images:
-                image.set_limits([0,0.25*max(data.x)], [0.25*max(data.z), 0.5*max(data.z)])
+                image.set_limits([0,0.25*max(data.x)], [0.5*max(data.z), 0.7*max(data.z)])
         
         contour = True
         if contour:
@@ -97,7 +98,12 @@ def main(files, fields, output_path='./', output_name='plume',
                     color = next(imagestack.images[j].imax._get_lines.color_cycle)
                     imagestack.images[j].imax.axhline(y=overshoot_depths[key], label=key,
                                                       color=color, linestyle='dashed', linewidth=3)
-                    
+
+                if mark_depth is not None:
+                    color = next(imagestack.images[j].imax._get_lines.color_cycle)
+                    imagestack.images[j].imax.axhline(y=float(mark_depth), label="predicted",
+                                                      color=color, linestyle='dashed', linewidth=3)
+                
             imagestack.images[j].imax.legend(loc='lower right')
                        
         i_fig = data.writes[i]
@@ -152,6 +158,6 @@ if __name__ == "__main__":
             
         if len(file_list) > 0:
             main(file_list, fields, output_path=str(output_path)+'/', profile_files=profile_file_list,
-                 zoom=args['--zoom'])
+                 zoom=args['--zoom'], mark_depth=float(args['--mark']))
 
 
