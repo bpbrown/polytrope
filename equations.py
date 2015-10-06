@@ -554,7 +554,7 @@ class Multitrope(MultiLayerAtmosphere):
         # see page 139 of lab-book 15, 9/1/15 (Brown)
         T_bcz = Lz_cz+1
         L_ov = ((T_bcz)**((stiffness+1)/stiffness) - T_bcz)*(self.m_rz+1)/(self.m_cz+1)
-        overshoot_pad = L_ov
+        overshoot_pad = 2*L_ov # add a safety factor of 2x for timestepping for now
         if overshoot_pad >= Lz_rz:
             # if we go past the bottom or top of the domain,
             # put the matching region in the middle of the stable layer.
@@ -567,8 +567,10 @@ class Multitrope(MultiLayerAtmosphere):
             self.match_center = self.Lz_cz
             
         # this is going to widen the tanh and move the location of del(s)=0 as n_rho_cz increases...
-        self.match_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
-
+        # match_width = 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
+        erf_v_tanh = 18.5/(np.sqrt(np.pi)*6.5/2)
+        self.match_width = 0.02*erf_v_tanh*Lz_cz # adjusted by ~3x for erf() vs tanh()
+        
         logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
         if self.stable_bottom:
             Lz_bottom = Lz_rz - overshoot_pad
