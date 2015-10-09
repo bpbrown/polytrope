@@ -41,9 +41,9 @@ def main(files, fields, output_path='./', output_name='powspec',
     logger.info("min max kz {} {}; shape: {}".format(min(kz), max(kz), kz.shape))
 
 
-    fig_line = plt.figure()
-    ax1 = fig_line.add_subplot(2,1,1)
-    ax2 = fig_line.add_subplot(2,1,2)
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,1,1)
+    ax2 = fig.add_subplot(2,1,2)
     
     # select down to the data you wish to plot
     data_list = []
@@ -55,12 +55,10 @@ def main(files, fields, output_path='./', output_name='powspec',
 
     logger.info("making line plots")
     for i, time in enumerate(data.times):
+        ax1.cla()
+        ax2.cla()
         for field in fields:
-            if i==0:
-                field_label = '$\mathrm{'+'{:s}'.format(field)+'}^*\mathrm{'+'{:s}'.format(field)+'}$'
-            else:
-                field_label = None
-                
+            field_label = '$\mathrm{'+'{:s}'.format(field)+'}^*\mathrm{'+'{:s}'.format(field)+'}$'
             ax1.loglog(data.kz, np.mean(data.power_spectrum[field][i,:], axis=0),
                        label=field_label, color=color_dict[field])
             ax2.loglog(data.kx, np.mean(data.power_spectrum[field][i,:], axis=1),
@@ -74,9 +72,9 @@ def main(files, fields, output_path='./', output_name='powspec',
         ax2.legend(loc='upper right')
         
         i_fig = data.writes[i]
-        fig_line.savefig('{:s}/{:s}_tz_{:06d}'.format(output_path, output_name,i_fig), dpi=600)
+        fig.savefig('{:s}/{:s}_tz_{:06d}'.format(output_path, output_name,i_fig), dpi=600)
         
-    plt.close(fig_line)
+    plt.close(fig)
 
     logger.info("making imagestack")
     imagestack = plot_slices.ImageStack(kx, kz, data_list, fields, xstr='kx/max(kx)', ystr='Tz/Nz')
@@ -141,9 +139,7 @@ if __name__ == "__main__":
         def accumulate_files(filename,start,count,file_list):
             if start==0:
                 file_list.append(filename)
-            print(filename, start, count)
         file_list = []
-        print(args['<files>'])
         post.visit_writes(args['<files>'],  accumulate_files, file_list=file_list)
             
         if len(file_list) > 0:
