@@ -331,14 +331,14 @@ class MultiLayerAtmosphere(Atmosphere):
                         first_subbasis=False
                     else:
                         compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
-                logger.info("compound set shape {}".format(compound_set.shape))
-                logger.info("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
+                logger.debug("compound set shape {}".format(compound_set.shape))
+                logger.debug("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
                 coeff.append(compound_set)
             else:
                 coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
         cc = np.meshgrid(*coeff)
         for i in range(len(cc)):
-            logger.info("cc {} shape {}".format(i, cc[i].shape))
+            logger.debug("cc {} shape {}".format(i, cc[i].shape))
         field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
 
         for i in range(dom.dim):
@@ -606,7 +606,7 @@ class Multitrope(MultiLayerAtmosphere):
             # put the matching region in the middle of the stable layer.
             # should only be a major problem for stiffness ~ O(1)
             overshoot_pad = 0.5*Lz_rz
-            
+        overshoot_pad = 0
         if self.stable_bottom:
             self.match_center = self.Lz_rz
         else:
@@ -1375,12 +1375,14 @@ class FC_multitrope(FC_equations, Multitrope):
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
-            taper = 1-self.match_Phi(z_dealias, center=self.Lz_rz)
+            # set taper safely in the mid-CZ to avoid leakage of coeffs into RZ chebyshev coeffs
+            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2))
             taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
         else:
             taper = self.match_Phi(z_dealias, center=self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
-            
+
+        # this will broadcase power back into relatively high Tz; consider widening taper.
         self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
         self.ln_rho_IC['g'] = 0
         
