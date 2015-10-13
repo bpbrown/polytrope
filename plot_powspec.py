@@ -59,13 +59,21 @@ def main(files, fields, output_path='./', output_name='powspec',
         ax2.cla()
         for field in fields:
             field_label = '$\mathrm{'+'{:s}'.format(field)+'}^*\mathrm{'+'{:s}'.format(field)+'}$'
-            ax1.loglog(data.kz, np.mean(data.power_spectrum[field][i,:], axis=0),
-                       label=field_label, color=color_dict[field])
-            ax2.loglog(data.kx, np.mean(data.power_spectrum[field][i,:], axis=1),
-                       label=field_label, color=color_dict[field])
+            kx_mean = np.mean(data.power_spectrum[field][i,:], axis=0)
+            ax1.plot(data.kz, kx_mean,
+                     label=field_label, color=color_dict[field])
+            ax1.axhline(np.max(kx_mean)*1e-32, linestyle='dashed', color=color_dict[field])
+    
+            Tz_mean = np.mean(data.power_spectrum[field][i,:], axis=1)
+            ax2.plot(data.kx, Tz_mean,
+                     label=field_label, color=color_dict[field])
+            ax2.axhline(np.max(Tz_mean)*1e-32, linestyle='dashed', color=color_dict[field])
 
         ax1.set_xlabel('Tz')
+        ax1.set_yscale('log')
         ax2.set_xlabel('kx')
+        ax2.set_xscale('log')
+        ax2.set_yscale('log')
         ax1.set_ylabel(r'$\langle \mathrm{power}\rangle_{\mathrm{kx}}$')
         ax2.set_ylabel(r'$\langle \mathrm{power}\rangle_{\mathrm{Tz}}$')
         ax1.legend(loc='upper right')

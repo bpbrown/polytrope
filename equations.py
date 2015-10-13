@@ -38,7 +38,22 @@ class Atmosphere:
         self.nz = self.domain.bases[-1].coeff_size
 
         self.z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
-        
+
+    def filter_field(self, field,frac=0.25):
+        logger.info("filtering field with frac={}".format(frac))
+        dom = field.domain
+        local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
+        coeff = []
+        for i in range(dom.dim)[::-1]:
+            coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+        cc = np.meshgrid(*coeff)
+
+        field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+
+        for i in range(dom.dim):
+            field_filter = field_filter | (cc[i][local_slice] > frac)
+        field['c'][field_filter] = 0j
+
     def _new_ncc(self):
         field = self.domain.new_field()
         field.meta['x']['constant'] = True
@@ -296,8 +311,39 @@ class MultiLayerAtmosphere(Atmosphere):
         self.z = self.domain.grid(-1) # need to access globally-sized z-basis
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
         self.nz = self.domain.bases[-1].coeff_size
-
+        self.nz_set = nz
+        
         self.z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+
+    def filter_field(self, field,frac=0.25):
+        logger.info("compound domain: filtering field with frac={}".format(frac))
+        dom = field.domain
+        local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
+        coeff = []
+        first_subbasis = True
+        for i in range(dom.dim)[::-1]:
+            if i == np.max(dom.dim)-1:
+                # special operation on the compound basis
+                for nz in self.nz_set:
+                    logger.info("nz: {} out of {}".format(nz, self.nz_set))
+                    if first_subbasis:
+                        compound_set = np.linspace(0,1,nz,endpoint=False)
+                        first_subbasis=False
+                    else:
+                        compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
+                logger.info("compound set shape {}".format(compound_set.shape))
+                logger.info("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
+                coeff.append(compound_set)
+            else:
+                coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+        cc = np.meshgrid(*coeff)
+        for i in range(len(cc)):
+            logger.info("cc {} shape {}".format(i, cc[i].shape))
+        field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+
+        for i in range(dom.dim):
+            field_filter = field_filter | (cc[i][local_slice] > frac)
+        field['c'][field_filter] = 0j
 
 class Polytrope(Atmosphere):
     '''
@@ -1000,21 +1046,6 @@ class Equations():
 
         return noise_field['g']
     
-    def filter_field(self, field,frac=0.5):
-        logger.info("filtering field with frac={}".format(frac))
-        dom = field.domain
-        local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-        coeff = []
-        for i in range(dom.dim)[::-1]:
-            coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
-        cc = np.meshgrid(*coeff)
-
-        field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
-
-        for i in range(dom.dim):
-            field_filter = field_filter | (cc[i][local_slice] > frac)
-        field['c'][field_filter] = 0j
-
 class FC_equations(Equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
@@ -1212,6 +1243,8 @@ class FC_equations(Equations):
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False, **kwargs)
         analysis_slice.add_task("s_fluc", name="s")
         analysis_slice.add_task("s_fluc - plane_avg(s_fluc)", name="s'")
+        analysis_slice.add_task("T1", name="T")
+        analysis_slice.add_task("ln_rho1", name="ln_rho")
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
@@ -1221,6 +1254,8 @@ class FC_equations(Equations):
         analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20, parallel=False, **kwargs)
         analysis_coeff.add_task("s_fluc", name="s", layout='c')
         analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
+        analysis_coeff.add_task("T1", name="T", layout='c')
+        analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
         analysis_coeff.add_task("u", name="u", layout='c')
         analysis_coeff.add_task("w", name="w", layout='c')
         analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
@@ -1339,9 +1374,17 @@ class FC_multitrope(FC_equations, Multitrope):
         noise = self.global_noise(**kwargs)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
-        self.T_IC['g'] = self.epsilon*A0*noise*np.sin(np.pi*z_dealias/self.Lz)*self.T0['g']
-
-        logger.info("Starting with T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
+        if self.stable_bottom:
+            taper = 1-self.match_Phi(z_dealias, center=self.Lz_rz)
+            taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
+        else:
+            taper = self.match_Phi(z_dealias, center=self.Lz_cz)
+            taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
+            
+        self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.ln_rho_IC['g'] = 0
+        
+        logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 
 class FC_multitropedense(FC_equations, MultitropeDense):
     def __init__(self, *args, **kwargs):
