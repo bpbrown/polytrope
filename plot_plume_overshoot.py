@@ -61,6 +61,11 @@ def main(files, fields, output_path='./', output_name='plume',
         overshoot_depths, std_dev = plot_overshoot.analyze_case(profile_files)
         print(overshoot_depths)                              
 
+    if zoom:
+        print("zoom: possible ranges {}--{}".format(0.5*max(data.z), 0.7*max(data.z)))
+        y_min = float(input("zoom: min y? "))
+        y_max = float(input("zoom: max y? "))
+
     for i, time in enumerate(data.times):
         current_data = []
         for field in fields:
@@ -70,7 +75,7 @@ def main(files, fields, output_path='./', output_name='plume',
         imagestack = plot_slices.ImageStack(data.x, data.z, current_data, fields, verbose=False)
         if zoom:
             for image in imagestack.images:
-                image.set_limits([0,0.25*max(data.x)], [0.5*max(data.z), 0.7*max(data.z)])
+                image.set_limits([0,max(data.x)], [y_min, y_max])
         
         contour = True
         if contour:
@@ -86,6 +91,7 @@ def main(files, fields, output_path='./', output_name='plume',
                 imagestack.images[j].imax.contour(data.x, data.z, contour_data,
                                                   levels=levels,
                                                   colors='black', linewidths=3,
+                                                  linestyles=['solid', 'dashed'],
                                                   antialiased=True)
                 for key in overshoot_depths:
                     color = next(imagestack.images[j].imax._get_lines.color_cycle)
@@ -149,8 +155,13 @@ if __name__ == "__main__":
         else:
             profile_file_list = None
             
+        if args['--mark'] is not None:
+            mark_depth = float(args['--mark'])
+        else:
+            mark_depth = None
+            
         if len(file_list) > 0:
             main(file_list, fields, output_path=str(output_path)+'/', profile_files=profile_file_list,
-                 zoom=args['--zoom'], mark_depth=float(args['--mark']))
+                 zoom=args['--zoom'], mark_depth=mark_depth)
 
 

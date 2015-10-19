@@ -104,7 +104,11 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
-    #CFL.add_velocities(('u', 'w'))
+    CFL_traditional = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
+                         max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
+
+    CFL_traditional.add_velocities(('u', 'w'))
+    
     vel_u = FutureField.parse('u', CFL.solver.evaluator.vars, CFL.solver.domain)
     delta_x = atmosphere.Lx/nx
     CFL.add_frequency(vel_u/delta_x)
@@ -121,12 +125,13 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         while solver.ok:
 
             dt = CFL.compute_dt()
+            dt_traditional = CFL_traditional.compute_dt()
             # advance
             solver.step(dt)
 
             # update lists
             if solver.iteration % report_cadence == 0:
-                log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, dt)
+                log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e} (vs {:8.3e}), '.format(solver.iteration, solver.sim_time, dt, dt_traditional)
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 logger.info(log_string)
     except:

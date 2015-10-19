@@ -1243,8 +1243,8 @@ class FC_equations(Equations):
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False, **kwargs)
         analysis_slice.add_task("s_fluc", name="s")
         analysis_slice.add_task("s_fluc - plane_avg(s_fluc)", name="s'")
-        analysis_slice.add_task("T1", name="T")
-        analysis_slice.add_task("ln_rho1", name="ln_rho")
+        #analysis_slice.add_task("T1", name="T")
+        #analysis_slice.add_task("ln_rho1", name="ln_rho")
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
@@ -1376,7 +1376,7 @@ class FC_multitrope(FC_equations, Multitrope):
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
             # set taper safely in the mid-CZ to avoid leakage of coeffs into RZ chebyshev coeffs
-            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2))
+            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
         else:
             taper = self.match_Phi(z_dealias, center=self.Lz_cz)
@@ -1384,6 +1384,7 @@ class FC_multitrope(FC_equations, Multitrope):
 
         # this will broadcase power back into relatively high Tz; consider widening taper.
         self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.filter_field(self.T_IC, **kwargs)
         self.ln_rho_IC['g'] = 0
         
         logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))

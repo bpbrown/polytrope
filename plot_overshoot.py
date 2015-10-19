@@ -93,7 +93,7 @@ def plot_overshoot_times(times, overshoot, average_overshoot=None, output_path='
     logger.info("y-lims for overshoot_times: {} -- {}".format(min_z-z_pad, max_z+z_pad))
 
             
-def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=False):
+def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', verbose=False):
 
     def norm(f):
         return f/np.max(np.abs(f))
@@ -126,6 +126,8 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
     # estimate penetration depths
     overshoot_depths = OrderedDict()
     roots = OrderedDict()
+
+    stiff_threshold = stiffness**(-0.5)
     
     def poor_mans_root(z, f):
         i_near = (np.abs(f)).argmin()
@@ -144,7 +146,7 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
             if key=="KE_flux":
                 root_color = 'darkgreen'
         else:
-            threshold = 1e-2
+            threshold = stiff_threshold #1e-2
             root_color = 'red'
             criteria = np.log(norm_diag[key][1])-np.log(threshold)
         logger.info("key {}".format(key))
@@ -170,13 +172,13 @@ def diagnose_overshoot(averages, z, boundary=None, output_path='./', verbose=Fal
         
     return overshoot_depths
 
-def overshoot_time_trace(averages, z, times, average_overshoot=None, output_path='./'):
+def overshoot_time_trace(averages, z, times, stiffness, average_overshoot=None, output_path='./'):
     single_time = OrderedDict()
     overshoot_depths = OrderedDict()
     for i, time in enumerate(times):
         for key in averages:
             single_time[key] = averages[key][i,0,:]
-        single_overshoot_depths = diagnose_overshoot(single_time, z)
+        single_overshoot_depths = diagnose_overshoot(single_time, z, stiffness)
         if i == 0:
             for key in single_overshoot_depths:
                 overshoot_depths[key] = single_overshoot_depths[key]
@@ -204,19 +206,19 @@ def analyze_case(files, verbose=False, output_path=None):
     z = data.z
     delta_t = times[-1]-times[0]
     logger.info("Averaged over interval t = {:g} -- {:g} for total delta_t = {:g}".format(times[0], times[-1], delta_t))
-
     if output_path is None:
         import pathlib
         data_dir = files[0].split('/')[0]
         data_dir += '/'
         output_path = pathlib.Path(data_dir).absolute()
 
-    overshoot_depths = diagnose_overshoot(averages, z, output_path=str(output_path)+'/', verbose=verbose)
+    stiffness = float(input("overshoot: What stiffness is this case?"))
+    overshoot_depths = diagnose_overshoot(averages, z, stiffness, output_path=str(output_path)+'/', verbose=verbose)
     for key in overshoot_depths:
         print("{} --> z={}".format(key, overshoot_depths[key]))
 
     if verbose:
-        avgs, std_dev = overshoot_time_trace(data.data, z, times, average_overshoot=overshoot_depths, output_path=str(output_path)+'/')
+        avgs, std_dev = overshoot_time_trace(data.data, z, times, stiffness, average_overshoot=overshoot_depths, output_path=str(output_path)+'/')
     else:
         std_dev = OrderedDict()
         for key in overshoot_depths:
