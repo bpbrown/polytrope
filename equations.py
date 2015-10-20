@@ -575,6 +575,7 @@ class Multitrope(MultiLayerAtmosphere):
                  m_rz=3, stiffness=100,
                  stable_bottom=True,
                  stable_top=False,
+                 overshoot_pad = None,
                  **kwargs):
 
         self.atmosphere_name = 'multitrope'
@@ -600,13 +601,15 @@ class Multitrope(MultiLayerAtmosphere):
         # see page 139 of lab-book 15, 9/1/15 (Brown)
         T_bcz = Lz_cz+1
         L_ov = ((T_bcz)**((stiffness+1)/stiffness) - T_bcz)*(self.m_rz+1)/(self.m_cz+1)
-        overshoot_pad = 2*L_ov # add a safety factor of 2x for timestepping for now
-        if overshoot_pad >= Lz_rz:
-            # if we go past the bottom or top of the domain,
-            # put the matching region in the middle of the stable layer.
-            # should only be a major problem for stiffness ~ O(1)
-            overshoot_pad = 0.5*Lz_rz
-        overshoot_pad = 0
+
+        if overshoot_pad is None:
+            overshoot_pad = 2*L_ov # add a safety factor of 2x for timestepping for now
+            if overshoot_pad >= Lz_rz:
+                # if we go past the bottom or top of the domain,
+                # put the matching region in the middle of the stable layer.
+                # should only be a major problem for stiffness ~ O(1)
+                overshoot_pad = 0.5*Lz_rz
+
         if self.stable_bottom:
             self.match_center = self.Lz_rz
         else:
