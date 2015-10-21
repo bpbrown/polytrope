@@ -575,6 +575,7 @@ class Multitrope(MultiLayerAtmosphere):
                  m_rz=3, stiffness=100,
                  stable_bottom=True,
                  stable_top=False,
+                 width=None,
                  **kwargs):
 
         self.atmosphere_name = 'multitrope'
@@ -615,7 +616,10 @@ class Multitrope(MultiLayerAtmosphere):
         # this is going to widen the tanh and move the location of del(s)=0 as n_rho_cz increases...
         # match_width = 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
         erf_v_tanh = 18.5/(np.sqrt(np.pi)*6.5/2)
-        self.match_width = 0.02*erf_v_tanh*Lz_cz # adjusted by ~3x for erf() vs tanh()
+        if width is None:
+            width = 0.02*erf_v_tanh
+        logger.info("erf width factor is {} of Lz_cz (total: {})".format(width, width*Lz_cz))
+        self.match_width = width*Lz_cz # adjusted by ~3x for erf() vs tanh()
         
         logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
         if self.stable_bottom:

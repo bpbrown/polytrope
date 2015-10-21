@@ -16,6 +16,7 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
     --label=<label>            Additional label for run output directory
+    --width=<width>            Width of matching function (typically erf) as percentage of Lz_cz; if not set a default is chosen in equations.py
     --verbose                  Produce diagnostic plots
 """
 import logging
@@ -32,10 +33,10 @@ except:
     logger.info("No checkpointing available; disabling capability")
     do_checkpointing=False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
+def FC_multi_fast(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
-                      nx = None,
+                      nx = None, width=None,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -54,7 +55,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
-                                         verbose=verbose)
+                                         verbose=verbose, width=width)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -196,6 +197,11 @@ if __name__ == "__main__":
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
+    if args['--width'] is not None:
+        data_dir += "_w{}".format(args['--width'])
+        width = float(args['--width'])
+    else:
+        width = None
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
@@ -205,14 +211,15 @@ if __name__ == "__main__":
     if nx is not None:
         nx = int(nx)
         
-    FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
-                      Prandtl=float(args['--Prandtl']),
-                      stiffness=float(args['--stiffness']),
-                      n_rho_cz=float(args['--n_rho_cz']),
-                      n_rho_rz=float(args['--n_rho_rz']),
-                      nz_rz=int(args['--nz_rz']),
-                      nz_cz=int(args['--nz_cz']),
-                      nx=nx,
-                      restart=(args['--restart']),
-                      data_dir=data_dir,
-                      verbose=args['--verbose'])
+    FC_multi_fast(Rayleigh=float(args['--Rayleigh']),
+                  Prandtl=float(args['--Prandtl']),
+                  stiffness=float(args['--stiffness']),
+                  n_rho_cz=float(args['--n_rho_cz']),
+                  n_rho_rz=float(args['--n_rho_rz']),
+                  nz_rz=int(args['--nz_rz']),
+                  nz_cz=int(args['--nz_cz']),
+                  nx=nx,
+                  width=width,
+                  restart=(args['--restart']),
+                  data_dir=data_dir,
+                  verbose=args['--verbose'])
