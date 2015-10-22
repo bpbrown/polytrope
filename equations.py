@@ -77,11 +77,13 @@ class Atmosphere:
                 logger.info("Likely interpolation error at top boundary; setting field=1")
                 logger.info("orig_scale: {}".format(orig_scale))
                 field_top = 1
+            field_bottom = self.evaluate_at_point(field, z=0)['g'][0][0]
+            field.set_scales(orig_scale, keep_data=True)
         except:
-            logger.error("field at top shape {}".format(field['g'].shape))
-
-        field_bottom = self.evaluate_at_point(field, z=0)['g'][0][0]
-        field.set_scales(orig_scale, keep_data=True)
+            logger.debug("field at top shape {}".format(field['g'].shape))
+            field_top = None
+            field_bottom = None
+        
         return field_bottom, field_top
     
     def _set_atmosphere(self):
@@ -225,10 +227,13 @@ class Atmosphere:
             P_z = self._new_field()
             P.differentiate('z', out=P_z)
             P_z.set_scales(1, keep_data=True)
-                    
+
+        rho_scales = rho.meta[:]['scale']
+        rho.set_scales(1, keep_data=True)
         # error in hydrostatic balance diagnostic
         HS_balance = P_z['g']+self.g*rho['g']
         relative_error = HS_balance/P_z['g']
+        rho.set_scales(rho_scales, keep_data=True)
         
         HS_average = self._new_field()
         HS_average['g'] = HS_balance
@@ -256,7 +261,8 @@ class Atmosphere:
             ax2.set_ylabel(r'$|\nabla P + \rho g |/|\nabla P|$')
             ax2.set_xlabel('z')
             fig.savefig("atmosphere_HS_balance_p{}.png".format(self.domain.distributor.rank), dpi=300)
-
+            
+        #print("rank {} : |{}|".format(self.domain.distributor.rank,np.max(np.abs(relative_error))))
         max_rel_err = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error)), op=MPI.MAX)
         max_rel_err_avg = self.domain.dist.comm_cart.allreduce(np.max(np.abs(relative_error_avg['g'])), op=MPI.MAX)
         logger.info('max error in HS balance: point={} avg={}'.format(max_rel_err, max_rel_err_avg))
@@ -440,12 +446,14 @@ class Polytrope(Atmosphere):
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
         self.phi['g'] = -self.g*(self.z0 - self.z)
-        
+
         rho0_max, rho0_min = self.value_at_boundary(self.rho0)
-        rho0_ratio = rho0_max/rho0_min
-        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
-        logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
-        logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_m)))
+        if rho0_max is not None:
+            rho0_ratio = rho0_max/rho0_min
+            logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+            logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
+            logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_m)))
+            
         H_rho_top = (self.z0-self.Lz)/self.poly_m
         H_rho_bottom = (self.z0)/self.poly_m
         logger.info("   H_rho = {:g} (top)  {:g} (bottom)".format(H_rho_top,H_rho_bottom))
@@ -493,7 +501,7 @@ class Polytrope(Atmosphere):
                 # nu  =  nu_top/(self.rho0['g'])
                 logger.error("   using constant mu, kappa <DISABLED>")
                 raise
-            
+
             chi = chi_top/(self.rho0['g'])
         
             logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top))
@@ -634,7 +642,7 @@ class Multitrope(MultiLayerAtmosphere):
 
         self.z_cz =self.Lz_cz + 1
         self._set_atmosphere()
-
+        logger.info("Done set_atmosphere")
         T0_max, T0_min = self.value_at_boundary(self.T0)
         P0_max, P0_min = self.value_at_boundary(self.P0)
         rho0_max, rho0_min = self.value_at_boundary(self.rho0)
@@ -643,10 +651,11 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
         logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
 
-        rho0_ratio = rho0_max/rho0_min
-        logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
-        logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
-        logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
+        if rho0_max is not None:
+            rho0_ratio = rho0_max/rho0_min
+            logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
+            logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
+            logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
         H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
         H_rho_bottom = (self.z_cz)/self.m_cz
         logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
@@ -659,7 +668,12 @@ class Multitrope(MultiLayerAtmosphere):
         if atmosphere is None:
             atmosphere=self
         # min of global quantity
-        self.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
+        BV_time = np.sqrt(np.abs(self.g*self.del_s0['g']))
+        if BV_time.shape[-1] == 0:
+            logger.debug("BV_time {}, shape {}".format(BV_time, BV_time.shape))
+            BV_time = np.array([np.inf])
+            
+        self.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(BV_time), op=MPI.MIN)
         self.freefall_time = np.sqrt(self.Lz_cz/self.g)
         self.buoyancy_time = np.sqrt(self.Lz_cz/self.g/np.abs(self.epsilon))
         
@@ -667,8 +681,7 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(self.min_BV_time,
                                                                                                self.freefall_time,
                                                                                                self.buoyancy_time))
-
-        
+            
     def _calculate_Lz(self, n_rho_cz, m_cz, n_rho_rz, m_rz):
         '''
         Estimate the depth of the CZ and the RZ.
@@ -834,16 +847,24 @@ class Multitrope(MultiLayerAtmosphere):
 
         self.constant_diffusivities = False
 
+        logger.info("about to access nu")
         self.nu['g'] = self.nu_top
         # rescale kappa to correct values based on Rayleigh number derived chi
+        logger.info("about to access kappa")
+
         self.kappa['g'] *= self.chi_top
-        self.chi['g'] = self.kappa['g']/self.rho0['g']
-        self.chi.differentiate('z', out=self.del_chi)
-        self.chi.set_scales(1, keep_data=True)
-        
+        self.kappa.set_scales(self.domain.dealias, keep_data=True)
+        self.rho0.set_scales(self.domain.dealias, keep_data=True)
+        self.chi.set_scales(self.domain.dealias, keep_data=True)
+        logger.info("about to access chi")
+        if self.rho0['g'].shape[-1] != 0:
+            self.chi['g'] = self.kappa['g']/self.rho0['g']
+            self.chi.differentiate('z', out=self.del_chi)
+            self.chi.set_scales(1, keep_data=True)
+        logger.info("done chi")
         self.top_thermal_time = 1/self.chi_top
         self.thermal_time = self.Lz_cz**2/self.chi_top
-
+        logger.info("done times")
         logger.info("   nu_top = {:g}, chi_top = {:g}".format(self.nu_top, self.chi_top))            
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
@@ -1365,9 +1386,13 @@ class FC_multitrope(FC_equations, Multitrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
+        #print("coming into set_eqns {}".format(self.domain.distributor.rank))
         super(FC_multitrope,self).set_equations(*args, **kwargs)
+        #print("coming out of set_eqns {}".format(self.domain.distributor.rank))
+
         self.problem.meta[:]['z']['dirichlet'] = True
-        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+        logger.info("skipping HS balance check")
+        #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
     
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
