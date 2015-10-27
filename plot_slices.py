@@ -44,7 +44,7 @@ class Colortable():
 class ImageStack():
     def __init__(self, x, y, fields, field_names,
                  true_aspect_ratio=True, vertical_stack=True, scale=3.0,
-                 verbose=True, **kwargs):
+                 verbose=True, percent_cut=0.1, **kwargs):
 
         self.verbose=verbose
         
@@ -116,7 +116,7 @@ class ImageStack():
             image = Image(field_name,imax,cbax, **kwargs)
             image.add_image(fig,x,y,field.T)
             
-            static_min, static_max = image.get_scale(field, percent_cut=0.1)
+            static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
             
             image.set_scale(static_min, static_max)
 
