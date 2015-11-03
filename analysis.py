@@ -28,7 +28,9 @@ class DedalusData():
             
     def get_keys(self, file, keys=None):
         f = h5py.File(file, flag='r')
-        self.keys = np.copy(f['tasks'])
+        self.keys = []
+        for key in f['tasks']:
+            self.keys.append(key)
         f.close()
         logger.debug("tasks to study = {}".format(self.keys))
 
