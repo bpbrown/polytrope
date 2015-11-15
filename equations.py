@@ -635,7 +635,7 @@ class Multitrope(MultiLayerAtmosphere):
         # match_width = 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
         erf_v_tanh = 18.5/(np.sqrt(np.pi)*6.5/2)
         if width is None:
-            width = 0.02*erf_v_tanh
+            width = 0.04*erf_v_tanh
         logger.info("erf width factor is {} of Lz_cz (total: {})".format(width, width*Lz_cz))
         self.match_width = width*Lz_cz # adjusted by ~3x for erf() vs tanh()
         
