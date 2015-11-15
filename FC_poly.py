@@ -9,7 +9,9 @@ Options:
     --Rayleigh=<Rayleigh>               Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>                 Prandtl number = nu/kappa [default: 1]
     --restart=<restart_file>            Restart from checkpoint
-    --nz=<nz>                           vertical z (chebyshev) resolution [default: 128]
+    --nz=<nz>                           vertical z (chebyshev) resolution 
+    --nz_cz=<nz>                        vertical z (chebyshev) resolution
+    --nx=<nx>                           Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>               Density scale heights across unstable layer [default: 3.5]
 
 
@@ -20,9 +22,13 @@ logger = logging.getLogger(__name__)
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
-from dedalus.extras.checkpointing import Checkpoint
+try:
+    from dedalus.extras.checkpointing import Checkpoint
+    do_checkpointing = True
+except:
+    do_checkpointing = False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=128, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=128, nx=None, data_dir='./'):
     import numpy as np
     import time
     import equations
@@ -32,7 +38,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=12
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-    nx = nz*4
+    if nx is None:
+        nx = nz*4
     
     atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
@@ -49,7 +56,6 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=12
     # Build solver
     solver = problem.build_solver(ts)
 
-    do_checkpointing=True
     if do_checkpointing:
         checkpoint = Checkpoint(data_dir)
         checkpoint.set_checkpoint(solver, wall_dt=1800)
@@ -166,9 +172,19 @@ if __name__ == "__main__":
     data_dir += "_Ra{}/".format(args['--Rayleigh'])
     logger.info("saving run in: {}".format(data_dir))
     
+    nx =  args['--nx']
+    if nx is not None:
+        nx = int(nx)
+    nz = args['--nz']
+    if nz is None:
+        nz = args['--nz_cz']
+    if nz is not None:
+        nz = int(nz)
+
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
-                      nz=int(args['--nz']),
+                      nz=nz,
+                      nx=nx, 
                       restart=(args['--restart']),
                       n_rho_cz=float(args['--n_rho_cz']),
                       data_dir=data_dir)

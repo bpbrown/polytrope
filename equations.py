@@ -293,17 +293,24 @@ class MultiLayerAtmosphere(Atmosphere):
                          
         x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
 
-        logger.info("Setting compound basis in vertical (z) direction")
-        z_basis_list = []
-        Lz_interface = 0.
-        for iz, nz_i in enumerate(nz):
-            Lz_top = Lz[iz]+Lz_interface
-            z_basis = de.Chebyshev('z', nz_i, interval=[Lz_interface, Lz_top], dealias=3/2)
-            z_basis_list.append(z_basis)
-            Lz_interface = Lz_top
+        if len(nz)>1:
+            logger.info("Setting compound basis in vertical (z) direction")
+            z_basis_list = []
+            Lz_interface = 0.
+            for iz, nz_i in enumerate(nz):
+                Lz_top = Lz[iz]+Lz_interface
+                z_basis = de.Chebyshev('z', nz_i, interval=[Lz_interface, Lz_top], dealias=3/2)
+                z_basis_list.append(z_basis)
+                Lz_interface = Lz_top
 
-        z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
-
+            z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
+        elif len(nz)==1:
+            logger.info("Setting single chebyshev basis in vertical (z) direction")
+            z_basis = de.Chebyshev('z', nz[0], interval=[0, Lz[0]], dealias=3/2)
+        else:
+            logger.error("error in specification of vertical basis")
+            
+             
         logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
         logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
        
@@ -640,7 +647,12 @@ class Multitrope(MultiLayerAtmosphere):
             Lz_bottom = Lz_cz + overshoot_pad
             Lz_top = Lz_rz - overshoot_pad
 
-        super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
+        if len(nz) == 1:
+            #nz = nz[-1] # grab the last set of points as the full resolution; bit of a hack.
+            # do this at the driving script level.
+            super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom + Lz_top], **kwargs)
+        else:
+            super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
 
         logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
 

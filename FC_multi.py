@@ -12,6 +12,7 @@ Options:
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
+    --single_chebyshev         Use a single chebyshev domain across both stable and unstable regions.  Useful at low stiffness.
     --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
@@ -35,6 +36,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
+                      single_chebyshev=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -46,10 +48,15 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
     
     # Set domain
-    nz = nz_rz+nz_cz
     if nx is None:
         nx = nz_cz*4
-    nz_list = [nz_rz, nz_cz]
+        
+    if single_chebyshev:
+        nz = nz_cz
+        nz_list = [nz_cz]
+    else:
+        nz = nz_rz+nz_cz
+        nz_list = [nz_rz, nz_cz]
     
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
@@ -200,6 +207,7 @@ if __name__ == "__main__":
                       n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
+                      single_chebyshev=args['--single_chebyshev'],
                       nx=nx,
                       restart=(args['--restart']),
                       data_dir=data_dir,
