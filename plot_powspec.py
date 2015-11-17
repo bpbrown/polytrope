@@ -51,7 +51,7 @@ def main(files, fields, output_path='./', output_name='powspec',
     for field in fields:
         logger.info(data.power_spectrum[field].shape)
         data_list.append(np.log10(data.power_spectrum[field][0,:]))
-        color_dict[field] = next(ax1._get_lines.color_cycle)
+        color_dict[field] = next(ax1._get_lines.prop_cycler)['color']
 
     logger.info("making line plots")
     for i, time in enumerate(data.times):

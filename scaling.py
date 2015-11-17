@@ -186,7 +186,7 @@ def plot_scaling_run(data_set, ax_set,
             scale_to_resolution = [128,128,128]
     
     if color is 'None':
-        color=next(ax_set[0]._get_lines.color_cycle)
+        color=next(ax_set[0]._get_lines.prop_cycler)['color']
 
     scale_to_factor = np.prod(np.array(scale_to_resolution))/np.prod(np.array(resolution))
     scale_factor_inverse = np.int(np.rint((1./scale_to_factor)**(1/dim)))

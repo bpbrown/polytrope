@@ -1,5 +1,6 @@
 import numpy as np
 import h5py
+import re
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
@@ -11,6 +12,9 @@ class DedalusData():
                  keys=None, verbose=False, **kwargs):
         
         self.verbose = verbose
+        matches = re.search(r's\d+', '{:}'.format(files)).group()
+        print(matches)
+
         self.files = sorted(files, key=lambda x: int(x.split('.h5')[0].split('_s')[1]))
         logger.debug("opening: {}".format(self.files))
         
@@ -260,7 +264,7 @@ def semilogy_posneg(ax, x, y, color=None,  color_pos=None, color_neg=None, **kwa
     neg_line = np.ma.MaskedArray(y, neg_mask)
 
     if color is None:
-        color = next(ax._get_lines.color_cycle)
+        color = next(ax._get_lines.prop_cycler)['color']
 
     if color_pos is None:
         color_pos = color

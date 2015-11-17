@@ -94,16 +94,16 @@ def main(files, fields, output_path='./', output_name='plume',
                                                   linestyles=['solid', 'dashed'],
                                                   antialiased=True)
                 for key in overshoot_depths:
-                    color = next(imagestack.images[j].imax._get_lines.color_cycle)
+                    color = next(imagestack.images[j].imax._get_lines.prop_cycler)['color']
                     imagestack.images[j].imax.axhline(y=overshoot_depths[key], label=key,
                                                       color=color, linestyle='dashed', linewidth=3)
 
                 if mark_depth is not None:
-                    color = next(imagestack.images[j].imax._get_lines.color_cycle)
+                    color = next(imagestack.images[j].imax._get_lines.prop_cycler)['color']
                     imagestack.images[j].imax.axhline(y=float(mark_depth), label="predicted",
                                                       color=color, linestyle='dashed', linewidth=3)
                 
-            imagestack.images[j].imax.legend(loc='lower right')
+            #imagestack.images[j].imax.legend(loc='lower right')
                        
         i_fig = data.writes[i]
         # Update time title

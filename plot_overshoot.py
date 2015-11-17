@@ -31,7 +31,7 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
     plot_floor = 1e-7
 
     for key in norm_diag:
-        color = next(apjfig.ax._get_lines.color_cycle)
+        color = next(apjfig.ax._get_lines.prop_cycler)['color']
         
         if key=='KE_flux' or key=="grad_s" or key=="grad_s_mean" or key=="grad_s_post" or key=="s_mean" or key=="s_tot":
             analysis.semilogy_posneg(apjfig.ax, z, norm_diag[key][1], label=norm_diag[key][0], color=color)
@@ -70,7 +70,7 @@ def plot_overshoot_times(times, overshoot, average_overshoot=None, output_path='
     logger.info("{} -- {}".format(ref, ref_depth))
     for key in overshoot:
         if key!=ref and key!='grad_s':
-            color = next(apjfig.ax._get_lines.color_cycle)
+            color = next(apjfig.ax._get_lines.prop_cycler)['color']
             logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
             q = overshoot[key] #np.abs(overshoot[key]-ref_depth)
             apjfig.ax.plot(times, q, label=key, color=color)
@@ -260,7 +260,7 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./'):
     logger.info("{} -- {}".format(ref, ref_depth))
     for key in overshoot:
         if key!=ref and key!='grad_s':
-            color = next(apjfig.ax._get_lines.color_cycle)
+            color = next(apjfig.ax._get_lines.prop_cycler)['color']
             logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
             q = np.abs(overshoot[key]-ref_depth)
             
