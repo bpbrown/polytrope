@@ -68,8 +68,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=12
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time,
                                                                       atmosphere.top_thermal_time))
-    logger.info("full atm HS check")
-    atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
+    #logger.info("full atm HS check")
+    #atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
 
     max_dt = atmosphere.buoyancy_time*0.25
 
@@ -169,7 +169,8 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_Ra{}/".format(args['--Rayleigh'])
+    data_dir += "_nrhocz{}__Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
+    data_dir += '/'
     logger.info("saving run in: {}".format(data_dir))
     
     nx =  args['--nx']
