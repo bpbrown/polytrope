@@ -169,7 +169,7 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_nrhocz{}__Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
+    data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
     data_dir += '/'
     logger.info("saving run in: {}".format(data_dir))
     
