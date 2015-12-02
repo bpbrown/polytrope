@@ -12,8 +12,8 @@ class DedalusData():
                  keys=None, verbose=False, **kwargs):
         
         self.verbose = verbose
-        matches = re.search(r's\d+', '{:}'.format(files)).group()
-        print(matches)
+        #matches = re.search(r's\d+', '{:}'.format(files)).group()
+        #print(matches)
 
         self.files = sorted(files, key=lambda x: int(x.split('.h5')[0].split('_s')[1]))
         logger.debug("opening: {}".format(self.files))
