@@ -31,6 +31,8 @@ def plot_energies(data, times, output_path='./'):
     ax1.semilogy(t, data['PE'], label="PE")
     ax1.semilogy(t, data['IE'], label="IE")
     ax1.semilogy(t, data['TE'], label="TE")
+    if 'ME' in data:
+        ax1.semilogy(t, data['ME'], label="ME")
     ax1.legend()
     
     ax2 = fig_energies.add_subplot(2,1,2)
@@ -38,15 +40,10 @@ def plot_energies(data, times, output_path='./'):
     ax2.plot(t, data['PE'], label="PE")
     ax2.plot(t, data['IE'], label="IE")
     ax2.plot(t, data['TE'], label="TE")
+    if 'ME' in data:
+        ax2.plot(t, data['ME'], label="ME")
     ax2.legend()
     figs["energies"]=fig_energies
-
-    fig_relative = plt.figure(figsize=(16,8))
-    ax1 = fig_relative.add_subplot(1,1,1)
-    ax1.plot(t, data['TE']/data['TE'][0]-1)
-    ax1.plot(t, data['IE']/data['IE'][0]-1)
-    ax1.plot(t, data['PE']/data['PE'][0]-1)
-    figs["relative_energies"] = fig_relative
 
     fig_KE = plt.figure(figsize=(16,8))
     ax1 = fig_KE.add_subplot(1,1,1)
@@ -56,6 +53,8 @@ def plot_energies(data, times, output_path='./'):
     #ax1.plot(t, data['IE_fluc'], label="IE$_1$", linestyle='dashed')
     #ax1.plot(t, data['PE_fluc'], label="PE$_1$", linestyle='dashed')
     ax1.plot(t, data['TE']-data['TE'][0], label="TE-TE$_0$", color='black')
+    if 'ME' in data:
+         ax1.plot(t, data['ME'], label="ME")
     ax1.legend()
     ax1.set_xlabel("time")
     ax1.set_ylabel("energy")

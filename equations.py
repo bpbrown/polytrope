@@ -1585,7 +1585,7 @@ class FC_MHD_equations(FC_equations):
         self.Jy_IC = solver.state['Jy']
 
         # not in HS balance
-        B0 = 1e-2
+        B0 = 1
         self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
 
         self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
