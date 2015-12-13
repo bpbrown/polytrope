@@ -67,6 +67,11 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
     ts = de.timesteppers.RK443
     cfl_safety_factor = 0.2*4
 
+    # memory problems at high RA for LU decomp storing runs with RK443
+    ts = de.timesteppers.RK222
+    cfl_safety_factor = 0.2*2
+
+
     # Build solver
     solver = problem.build_solver(ts)
 
