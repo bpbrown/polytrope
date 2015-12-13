@@ -1195,9 +1195,9 @@ class FC_equations(Equations):
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
                stress_free=None, no_slip=None):
 
-        if fixed_flux is None and fixed_temperature is None and mixed_temperature_flux is None:
+        if not(fixed_flux) and not(fixed_temperature) and not(mixed_temperature_flux):
             mixed_flux_temperature = True
-        if stress_free is None and no_slip is None:
+        if not(stress_free) and not(no_slip):
             stress_free = True
 
         # thermal boundary conditions
@@ -1360,6 +1360,7 @@ class FC_equations(Equations):
         self.problem.namespace['enstrophy'].store_last = True
 
         return self.analysis_tasks
+        
 class FC_polytrope(FC_equations, Polytrope):
     def __init__(self, *args, **kwargs):
         super(FC_polytrope, self).__init__() 
@@ -1455,7 +1456,160 @@ class FC_multitropedense(FC_equations, MultitropeDense):
 
         logger.info("Starting with T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 
+
+
+class FC_MHD_equations(FC_equations):
+    def __init__(self):
+        self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD'
+        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 'Bx', 'Bz', 'Jy']
+
+        # possible boundary condition values for a normal system
+        self.T1_left  = 0
+        self.T1_right = 0
+        self.T1_z_left  = 0
+        self.T1_z_right = 0
+
+    def _set_subs(self):
+        super(FC_MHD_equations, self)._set_subs()
+
+        self.problem.parameters['pi'] = np.pi
+        self.problem.substitutions['BdotGrad(f, f_z)'] = "(Bx*dx(f) + Bz*(f_z))"
+        self.problem.substitutions['ME'] = '1/(8*pi)*(Bx**2+Bz**2)'
+
+        self.problem.substitutions['J_squared'] = "(Jy*Jy)"
+
+    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, **kwargs):
+        super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
         
+        self.eta = self._new_ncc()
+        self.eta.set_scales(self.domain.dealias, keep_data=False)
+        self.necessary_quantities['eta'] = self.eta
+        
+        self.eta['g'] = self.nu['g']/MagneticPrandtl
+
+    def _set_parameters(self):
+        super(FC_MHD_equations, self)._set_parameters()
+    
+        self.problem.parameters['eta'] = self.eta
+        
+    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True):
+        # DOES NOT YET INCLUDE Ohmic heating, variable eta.
+        
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl)
+        self._set_parameters()
+        # thermal boundary conditions
+        self.problem.parameters['T1_left']  = self.T1_left
+        self.problem.parameters['T1_right'] = self.T1_right
+        self.problem.parameters['T1_z_left']  = self.T1_z_left
+        self.problem.parameters['T1_z_right'] = self.T1_z_right
+
+        self._set_subs()
+                
+        # here, nu and chi are constants        
+        self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
+        self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
+        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
+        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
+
+        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
+        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
+        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
+        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
+
+        # double check implementation of variabile chi and background coupling term.
+        self.problem.substitutions['Q_z'] = "(-T1_z)"
+        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z)     + T1_z*del_ln_rho0 "
+                                       "              + T0_z*dz(ln_rho1)) + del_chi*dz(T1)) ")
+        self.nonlinear_thermal_diff =  " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.source =                  " Cv_inv*(chi*(T0_zz             + T0_z*del_ln_rho0) + del_chi*T0_z)"
+                
+        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
+        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
+        self.problem.substitutions['source_terms'] = self.source
+        
+        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
+        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
+
+        self.problem.substitutions['Bx_z'] = '(Jy + dx(Bz))'
+    
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
+        self.problem.add_equation("Jy + (dx(Bz) - dz(Bx)) = 0")
+        self.problem.add_equation("dx(Bx) + dz(Bz) = 0")
+        
+        self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  - 1/(4*pi*rho_full)*Jy*Bx)"))
+
+        self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  + 1/(4*pi*rho_full)*Jy*Bz)"))
+
+        self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+
+        # assumes constant eta; no NCCs here to rescale.
+        self.problem.add_equation("dt(Bx) - eta*dz(Jy)                  = -UdotGrad(Bx, Bx_z) - Bx*Div_u + BdotGrad(u, u_z)")
+        
+        logger.info("using nonlinear EOS for entropy, via substitution")
+    
+    def set_BC(self, **kwargs):
+        
+        super(FC_MHD_equations, self).set_BC(**kwargs)
+
+        # perfectly conducting boundary conditions, plus flux condition on bottom boundary.
+        self.problem.add_bc( "left(Jy) = 0")
+        self.problem.add_bc( "left(Bz) = 0")
+        self.problem.add_bc("right(Jy) = 0")
+
+    def set_IC(self, solver, A0=1e-6, **kwargs):
+        super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
+    
+        self.Bx_IC = solver.state['Bx']
+        self.Jy_IC = solver.state['Jy']
+
+        # not in HS balance
+        B0 = 1e-2
+        self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
+
+        self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
+        self.Bx_IC.differentiate('z', out=self.Jy_IC)
+
+
+    def initialize_output(self, solver, data_dir, **kwargs):
+        super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
+
+        # make analysis_tasks a dictionary!
+        analysis_slice = self.analysis_tasks[0]
+        analysis_slice.add_task("Jy", name="Jy")
+        analysis_slice.add_task("Bx", name="Bx")
+        analysis_slice.add_task("Bz", name="Bz")
+        analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
+        analysis_slice.add_task("J_squared", name="J_squared")
+            
+        analysis_profile = self.analysis_tasks[2]
+        analysis_profile.add_task("plane_avg(ME)", name="ME")
+        analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
+
+        analysis_scalar = self.analysis_tasks[3]
+        analysis_profile.add_task("vol_avg(ME)", name="ME")
+        analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
+
+        return self.analysis_tasks
+
+class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
+    def __init__(self, *args, **kwargs):
+        super(FC_MHD_polytrope, self).__init__() 
+        Polytrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+    def set_equations(self, *args, **kwargs):
+        super(FC_MHD_polytrope, self).set_equations(*args, **kwargs)
+        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+    
+
 # needs to be tested again and double-checked
 class AN_equations(Equations):
     def __init__(self):

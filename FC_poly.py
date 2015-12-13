@@ -6,14 +6,22 @@ Usage:
     FC_poly.py [options] 
 
 Options:
-    --Rayleigh=<Rayleigh>               Rayleigh number [default: 1e6]
-    --Prandtl=<Prandtl>                 Prandtl number = nu/kappa [default: 1]
-    --restart=<restart_file>            Restart from checkpoint
-    --nz=<nz>                           vertical z (chebyshev) resolution 
-    --nz_cz=<nz>                        vertical z (chebyshev) resolution
-    --nx=<nx>                           Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
-    --n_rho_cz=<n_rho_cz>               Density scale heights across unstable layer [default: 3.5]
+    --Rayleigh=<Rayleigh>                Rayleigh number [default: 1e6]
+    --Prandtl=<Prandtl>                  Prandtl number = nu/kappa [default: 1]
+    
+    --restart=<restart_file>             Restart from checkpoint
 
+    --nz=<nz>                            vertical z (chebyshev) resolution 
+    --nz_cz=<nz>                         vertical z (chebyshev) resolution
+    --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
+    --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
+
+    --MHD                                Do MHD run
+    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
+
+    --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
+    
+    --label=<label>                      Additional label for run output directory
 
 """
 import logging
@@ -28,7 +36,9 @@ try:
 except:
     do_checkpointing = False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=128, nx=None, data_dir='./'):
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
+                      fixed_T=False, 
+                      restart=None, nz=128, nx=None, data_dir='./'):
     import numpy as np
     import time
     import equations
@@ -40,10 +50,14 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=12
 
     if nx is None:
         nx = nz*4
-    
-    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
-    atmosphere.set_BC()
+
+    if MHD:
+        atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True)
+    else:
+        atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+    atmosphere.set_BC(fixed_temperature=fixed_T)        
     problem = atmosphere.get_problem()
 
     if atmosphere.domain.distributor.rank == 0:
@@ -89,10 +103,15 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=12
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
     CFL.add_velocities(('u', 'w'))
+    if MHD:
+        CFL.add_velocities(('Bx/sqrt(4*pi*rho_full)', 'Bz/sqrt(4*pi*rho_full)'))
 
     # Flow properties
     flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
     flow.add_property("Re_rms", name='Re')
+    if MHD:
+        #flow.add_property("sqrt(Bx*Bx + Bz*Bz) / Rm", name='Lu')
+        flow.add_property("abs(dx(Bx) + dz(Bz))", name='divB')
 
     try:
         start_time = time.time()
@@ -106,6 +125,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, restart=None, nz=12
             if solver.iteration % report_cadence == 0:
                 log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, dt)
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                if MHD:
+                     log_string += 'divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
                 logger.info(log_string)
     except:
         logger.error('Exception raised, triggering end of main loop.')
@@ -169,7 +190,13 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
+    if args['--fixed_T']:
+        data_dir +='_fixed'
     data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
+    if args['--MHD']:
+        data_dir+= '_MHD'
+    if args['--label'] is not None:
+        data_dir += "_{}".format(args['--label'])
     data_dir += '/'
     logger.info("saving run in: {}".format(data_dir))
     
@@ -184,8 +211,11 @@ if __name__ == "__main__":
 
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
+                      MagneticPrandtl=float(args['--MagneticPrandtl']),
                       nz=nz,
-                      nx=nx, 
+                      nx=nx,
+                      fixed_T=args['--fixed_T'],
+                      MHD=args['--MHD'],
                       restart=(args['--restart']),
                       n_rho_cz=float(args['--n_rho_cz']),
                       data_dir=data_dir)
