@@ -1200,23 +1200,31 @@ class FC_equations(Equations):
         if not(stress_free) and not(no_slip):
             stress_free = True
 
+        self.dirichlet_set = []
+        
         # thermal boundary conditions
         if fixed_flux:
             logger.info("Thermal BC: fixed flux (T1_z)")
             self.problem.add_bc( "left(T1_z) = T1_z_left")
             self.problem.add_bc("right(T1_z) = T1_z_right")
+            self.dirichlet_set.append('T1_z')
         elif fixed_temperature:
             logger.info("Thermal BC: fixed temperature (T1)")
             self.problem.add_bc( "left(T1) = T1_left")
             self.problem.add_bc("right(T1) = T1_right")
+            self.dirichlet_set.append('T1')
         elif mixed_flux_temperature:
             logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
             self.problem.add_bc("left(T1_z) = T1_z_left")
             self.problem.add_bc("right(T1)  = T1_right")
+            self.dirichlet_set.append('T1_z')
+            self.dirichlet_set.append('T1')
         elif mixed_temperature_flux:
             logger.info("Thermal BC: mixed temperature/flux (T1/T1_z)")
             self.problem.add_bc("left(T1)    = T1_left")
             self.problem.add_bc("right(T1_z) = T1_z_right")
+            self.dirichlet_set.append('T1_z')
+            self.dirichlet_set.append('T1')
         else:
             logger.error("Incorrect thermal boundary conditions specified")
             raise
@@ -1226,10 +1234,12 @@ class FC_equations(Equations):
             logger.info("Horizontal velocity BC: stress free")
             self.problem.add_bc( "left(u_z) = 0")
             self.problem.add_bc("right(u_z) = 0")
+            self.dirichlet_set.append('u_z')
         elif no_slip:
             logger.info("Horizontal velocity BC: no slip")
             self.problem.add_bc( "left(u) = 0")
             self.problem.add_bc("right(u) = 0")
+            self.dirichlet_set.append('u')
         else:
             logger.error("Incorrect horizontal velocity boundary conditions specified")
             raise
@@ -1238,6 +1248,7 @@ class FC_equations(Equations):
         logger.info("Vertical velocity BC: impenetrable")
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
+        self.dirichlet_set.append('w')
 
     def set_IC(self, solver, A0=1e-6, **kwargs):
         # initial conditions
@@ -1278,7 +1289,7 @@ class FC_equations(Equations):
         self.check_atmosphere(T=T, rho=rho, **kwargs)
 
     def initialize_output(self, solver, data_dir, **kwargs):
-        analysis_tasks = []
+        analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False, **kwargs)
         analysis_slice.add_task("s_fluc", name="s")
@@ -1289,7 +1300,7 @@ class FC_equations(Equations):
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
         analysis_slice.add_task("vorticity", name="vorticity")
-        analysis_tasks.append(analysis_slice)
+        analysis_tasks['slice'] = analysis_slice
 
         analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20, parallel=False, **kwargs)
         analysis_coeff.add_task("s_fluc", name="s", layout='c')
@@ -1300,7 +1311,7 @@ class FC_equations(Equations):
         analysis_coeff.add_task("w", name="w", layout='c')
         analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
         analysis_coeff.add_task("vorticity", name="vorticity", layout='c')
-
+        analysis_tasks['coeff'] = analysis_coeff
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
         analysis_profile.add_task("plane_avg(T1)", name="T1")
@@ -1338,7 +1349,7 @@ class FC_equations(Equations):
         analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
                                   name="T1_source_terms")
         
-        analysis_tasks.append(analysis_profile)
+        analysis_tasks['profile'] = analysis_profile
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
         analysis_scalar.add_task("vol_avg(KE)", name="KE")
@@ -1354,7 +1365,7 @@ class FC_equations(Equations):
         analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
         analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
 
-        analysis_tasks.append(analysis_scalar)
+        analysis_tasks['scalar'] = analysis_scalar
 
         # workaround for issue #29
         self.problem.namespace['enstrophy'].store_last = True
@@ -1564,6 +1575,9 @@ class FC_MHD_equations(FC_equations):
         self.problem.add_bc( "left(Bz) = 0")
         self.problem.add_bc("right(Jy) = 0")
 
+        self.dirichlet_set.append('Jy')
+        self.dirichlet_set.append('Bz')
+        
     def set_IC(self, solver, A0=1e-6, **kwargs):
         super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
     
@@ -1582,19 +1596,19 @@ class FC_MHD_equations(FC_equations):
         super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
         # make analysis_tasks a dictionary!
-        analysis_slice = self.analysis_tasks[0]
+        analysis_slice = self.analysis_tasks['slice']
         analysis_slice.add_task("Jy", name="Jy")
         analysis_slice.add_task("Bx", name="Bx")
         analysis_slice.add_task("Bz", name="Bz")
         analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
         analysis_slice.add_task("J_squared", name="J_squared")
             
-        analysis_profile = self.analysis_tasks[2]
+        analysis_profile = self.analysis_tasks['profile']
         analysis_profile.add_task("plane_avg(ME)", name="ME")
         analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
 
-        analysis_scalar = self.analysis_tasks[3]
-        analysis_profile.add_task("vol_avg(ME)", name="ME")
+        analysis_scalar = self.analysis_tasks['scalar']
+        analysis_scalar.add_task("vol_avg(ME)", name="ME")
         analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
 
         return self.analysis_tasks
@@ -1608,7 +1622,12 @@ class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
     def set_equations(self, *args, **kwargs):
         super(FC_MHD_polytrope, self).set_equations(*args, **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-    
+
+    def set_BC(self, *args, **kwargs):
+        super(FC_MHD_polytrope, self).set_BC(*args, **kwargs)
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+
 
 # needs to be tested again and double-checked
 class AN_equations(Equations):
@@ -1699,8 +1718,9 @@ class AN_equations(Equations):
         logger.info("Starting with s perturbations of amplitude A0 = {:g}".format(A0))
 
     def initialize_output(self, solver, data_dir, **kwargs):
-        analysis_tasks = []
+        analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
+        
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False, **kwargs)
         analysis_slice.add_task("s", name="s")
         analysis_slice.add_task("s - plane_avg(s)", name="s'")
@@ -1708,7 +1728,7 @@ class AN_equations(Equations):
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
         analysis_slice.add_task("vorticity", name="vorticity")
-        analysis_tasks.append(analysis_slice)
+        analysis_tasks['slice'] = analysis_slice
         
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
         analysis_profile.add_task("plane_avg(KE)", name="KE")
@@ -1744,7 +1764,7 @@ class AN_equations(Equations):
         analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
                                   name="T1_source_terms")
         
-        analysis_tasks.append(analysis_profile)
+        analysis_tasks['profile'] = analysis_profile
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
         analysis_scalar.add_task("vol_avg(KE)", name="KE")
@@ -1760,7 +1780,7 @@ class AN_equations(Equations):
         analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
         analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
 
-        analysis_tasks.append(analysis_scalar)
+        analysis_tasks['scalar'] = analysis_scalar
 
         # workaround for issue #29
         self.problem.namespace['enstrophy'].store_last = True

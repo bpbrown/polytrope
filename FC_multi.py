@@ -150,8 +150,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             post.merge_analysis(data_dir+'/checkpoint/')
 
         for task in analysis_tasks:
-            logger.info(task.base_path)
-            post.merge_analysis(task.base_path)
+            logger.info(analysis_tasks[task].base_path)
+            post.merge_analysis(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
 

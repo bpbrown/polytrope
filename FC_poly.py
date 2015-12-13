@@ -123,10 +123,10 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
 
             # update lists
             if solver.iteration % report_cadence == 0:
-                log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, dt)
+                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time, dt)
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 if MHD:
-                     log_string += 'divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
+                     log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
                 logger.info(log_string)
     except:
         logger.error('Exception raised, triggering end of main loop.')
@@ -149,8 +149,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
             post.merge_analysis(data_dir+'/checkpoint/')
 
         for task in analysis_tasks:
-            logger.info(task.base_path)
-            post.merge_analysis(task.base_path)
+            logger.info(analysis_tasks[task].base_path)
+            post.merge_analysis(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
 
