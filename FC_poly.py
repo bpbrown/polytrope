@@ -117,7 +117,15 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
     if MHD:
         #flow.add_property("sqrt(Bx*Bx + Bz*Bz) / Rm", name='Lu')
         flow.add_property("abs(dx(Bx) + dz(Bz))", name='divB')
-
+        Tobias_gambit = True
+        Did_gambit = False
+        Repeat_gambit = False
+        import scipy.special as scp
+        def sheet_of_B(z, sheet_center=0.5, sheet_width=0.1, **kwargs):
+            def match_Phi(z, f=scp.erf, center=0.5, width=0.025):
+                return 1/2*(1-f((z-center)/width))
+            return (1-match_Phi(z, center=sheet_center-sheet_width/2, **kwargs))*(match_Phi(z, center=sheet_center+sheet_width/2, **kwargs))
+        
     try:
         start_time = time.time()
         while solver.ok:
@@ -133,6 +141,15 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
                 if MHD:
                      log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
                 logger.info(log_string)
+
+                if MHD and Tobias_gambit:
+                    if solver.sim_time/atmosphere.buoyancy_time >= 30 and not Did_gambit:
+                        logger.info("Enacting Tobias Gambit")
+                        Bx = solver.state['Bx']
+                        Bx.set_scales(1, keep_data=True)
+                        B0 = np.sqrt(atmosphere.epsilon)
+                        Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz/2, sheet_width=atmosphere.Lz*0.1)
+                        Did_gambit = True
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
