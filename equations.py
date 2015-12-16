@@ -1438,7 +1438,7 @@ class FC_multitrope(FC_equations, Multitrope):
             taper = self.match_Phi(z_dealias, center=self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
-        # this will broadcase power back into relatively high Tz; consider widening taper.
+        # this will broadcast power back into relatively high Tz; consider widening taper.
         self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
         self.filter_field(self.T_IC, **kwargs)
         self.ln_rho_IC['g'] = 0
@@ -1495,7 +1495,7 @@ class FC_MHD_equations(FC_equations):
         self.eta = self._new_ncc()
         self.eta.set_scales(self.domain.dealias, keep_data=False)
         self.necessary_quantities['eta'] = self.eta
-        
+        self.nu.set_scales(self.domain.dealias, keep_data=True)        
         self.eta['g'] = self.nu['g']/MagneticPrandtl
 
     def _set_parameters(self):
@@ -1625,6 +1625,58 @@ class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
 
     def set_BC(self, *args, **kwargs):
         super(FC_MHD_polytrope, self).set_BC(*args, **kwargs)
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+
+class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
+    def __init__(self, *args, **kwargs):
+        super(FC_MHD_multitrope, self).__init__() 
+        Multitrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+    def set_equations(self, *args, **kwargs):
+        super(FC_MHD_multitrope, self).set_equations(*args, **kwargs)
+        self.problem.meta[:]['z']['dirichlet'] = True
+        logger.info("skipping HS balance check")
+        #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+    
+    def set_IC(self, solver, A0=1e-3, **kwargs):
+        # initial conditions
+        self.T_IC = solver.state['T1']
+        self.ln_rho_IC = solver.state['ln_rho1']
+
+        noise = self.global_noise(**kwargs)
+        self.T_IC.set_scales(self.domain.dealias, keep_data=True)
+        z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+        if self.stable_bottom:
+            # set taper safely in the mid-CZ to avoid leakage of coeffs into RZ chebyshev coeffs
+            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
+            taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
+        else:
+            taper = self.match_Phi(z_dealias, center=self.Lz_cz)
+            taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
+
+        # this will broadcast power back into relatively high Tz; consider widening taper.
+        self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.filter_field(self.T_IC, **kwargs)
+        self.ln_rho_IC['g'] = 0
+
+        self.Bx_IC = solver.state['Bx']
+        self.Jy_IC = solver.state['Jy']
+
+        # not in HS balance
+        B0 = 1
+        self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
+
+        self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)*taper
+        self.Bx_IC.differentiate('z', out=self.Jy_IC)
+
+        
+        logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
+
+
+    def set_BC(self, *args, **kwargs):
+        super(FC_MHD_multitrope, self).set_BC(*args, **kwargs)
         for key in self.dirichlet_set:
             self.problem.meta[key]['z']['dirichlet'] = True
 

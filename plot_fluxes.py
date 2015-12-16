@@ -89,7 +89,10 @@ def plot_profiles(data, z, output_path='./'):
             'T1', 'ln_rho1',
             'kappa_flux_fluc_z', 'kappa_flux_mean_z', 'kappa_flux_z',
             'T1_source_terms']
-    
+
+    if "ME" in data:
+        keys.append("ME")
+        
     for key in keys:
         try:
             fig_flow = plt.figure(figsize=(16,8))

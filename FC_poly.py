@@ -142,14 +142,14 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
                      log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
                 logger.info(log_string)
 
-                if MHD and Tobias_gambit:
-                    if solver.sim_time/atmosphere.buoyancy_time >= 30 and not Did_gambit:
-                        logger.info("Enacting Tobias Gambit")
-                        Bx = solver.state['Bx']
-                        Bx.set_scales(1, keep_data=True)
-                        B0 = np.sqrt(atmosphere.epsilon)
-                        Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz/2, sheet_width=atmosphere.Lz*0.1)
-                        Did_gambit = True
+            if MHD and Tobias_gambit:
+                if solver.sim_time/atmosphere.buoyancy_time >= 30 and not Did_gambit:
+                    logger.info("Enacting Tobias Gambit")
+                    Bx = solver.state['Bx']
+                    Bx.set_scales(1, keep_data=True)
+                    B0 = np.sqrt(atmosphere.epsilon)
+                    Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz/2, sheet_width=atmosphere.Lz*0.1)
+                    Did_gambit = True
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise

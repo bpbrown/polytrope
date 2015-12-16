@@ -16,6 +16,11 @@ Options:
     --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
+
+    --MHD                                Do MHD run
+    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
+
+    
     --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
 """
@@ -32,7 +37,8 @@ except:
     logger.info("No checkpointing available; disabling capability")
     do_checkpointing=False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4, 
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
+                      MagneticPrandtl=1, MHD=False, 
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
@@ -57,11 +63,18 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     else:
         nz = nz_rz+nz_cz
         nz_list = [nz_rz, nz_cz]
-    
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+
+    if MHD:
+        atmosphere = equations.FC_MHD_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+                                                n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
+                                                verbose=verbose)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=False) #false?
+    else:
+        atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose)
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
+        
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
 
@@ -111,10 +124,23 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
     CFL.add_velocities(('u', 'w'))
+    if MHD:
+        CFL.add_velocities(('Bx/sqrt(4*pi*rho_full)', 'Bz/sqrt(4*pi*rho_full)'))
 
     # Flow properties
     flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
     flow.add_property("Re_rms", name='Re')
+    if MHD:
+        #flow.add_property("sqrt(Bx*Bx + Bz*Bz) / Rm", name='Lu')
+        flow.add_property("abs(dx(Bx) + dz(Bz))", name='divB')
+        Tobias_gambit = True
+        Did_gambit = False
+        Repeat_gambit = False
+        import scipy.special as scp
+        def sheet_of_B(z, sheet_center=0.5, sheet_width=0.1, **kwargs):
+            def match_Phi(z, f=scp.erf, center=0.5, width=0.025):
+                return 1/2*(1-f((z-center)/width))
+            return (1-match_Phi(z, center=sheet_center-sheet_width/2, **kwargs))*(match_Phi(z, center=sheet_center+sheet_width/2, **kwargs))
 
     try:
         start_time = time.time()
@@ -126,9 +152,20 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
             # update lists
             if solver.iteration % report_cadence == 0:
-                log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, dt)
+                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time, dt)
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                if MHD:
+                     log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
                 logger.info(log_string)
+
+            if MHD and Tobias_gambit:
+                if solver.sim_time/atmosphere.buoyancy_time >= 30 and not Did_gambit:
+                    logger.info("Enacting Tobias Gambit")
+                    Bx = solver.state['Bx']
+                    Bx.set_scales(1, keep_data=True)
+                    B0 = np.sqrt(atmosphere.epsilon)
+                    Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz_cz/2, sheet_width=atmosphere.Lz_cz*0.1)
+                    Did_gambit = True
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
@@ -191,6 +228,8 @@ if __name__ == "__main__":
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
+    if args['--MHD']:
+        data_dir+= '_MHD'
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
@@ -203,6 +242,8 @@ if __name__ == "__main__":
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
+                      MHD=args['--MHD'],
+                      MagneticPrandtl=float(args['--MagneticPrandtl']),
                       n_rho_cz=float(args['--n_rho_cz']),
                       n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
