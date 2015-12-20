@@ -1421,7 +1421,7 @@ class FC_multitrope(FC_equations, Multitrope):
         self.problem.meta[:]['z']['dirichlet'] = True
         logger.info("skipping HS balance check")
         #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-    
+
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
         self.T_IC = solver.state['T1']
@@ -1472,7 +1472,7 @@ class FC_multitropedense(FC_equations, MultitropeDense):
 class FC_MHD_equations(FC_equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD'
-        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 'Bx', 'Bz', 'Jy']
+        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 'Ay', 'Bx']
 
         # possible boundary condition values for a normal system
         self.T1_left  = 0
@@ -1484,6 +1484,9 @@ class FC_MHD_equations(FC_equations):
         super(FC_MHD_equations, self)._set_subs()
 
         self.problem.parameters['pi'] = np.pi
+        self.problem.substitutions['Bz'] = '(dx(Ay))'
+        self.problem.substitutions['Jy'] = '(dz(Bx) - dx(dx(Ay)))'
+
         self.problem.substitutions['BdotGrad(f, f_z)'] = "(Bx*dx(f) + Bz*(f_z))"
         self.problem.substitutions['ME'] = '1/(8*pi)*(Bx**2+Bz**2)'
 
@@ -1596,14 +1599,11 @@ class FC_MHD_equations(FC_equations):
         
         self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
         self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
-
-        self.problem.substitutions['Bx_z'] = '(Jy + dx(Bz))'
     
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
-        self.problem.add_equation("Jy + (dx(Bz) - dz(Bx)) = 0")
-        self.problem.add_equation("dx(Bx) + dz(Bz) = 0")
+        self.problem.add_equation("Bx + dz(Ay) = 0")
         
         self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
                                    "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  - 1/(4*pi*rho_full)*Jy*Bx)"))
@@ -1617,36 +1617,37 @@ class FC_MHD_equations(FC_equations):
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
-        # assumes constant eta; no NCCs here to rescale.
-        self.problem.add_equation("dt(Bx) - eta*dz(Jy)                  = -UdotGrad(Bx, Bx_z) - Bx*Div_u + BdotGrad(u, u_z)")
+        # assumes constant eta; no NCCs here to rescale.  Easy to modify.
+        self.problem.add_equation("dt(Ay) + eta*Jy = w*Bx-u*dx(Ay)")
         
         logger.info("using nonlinear EOS for entropy, via substitution")
+
+        # workaround for issue #29
+        self.problem.namespace['Bz'].store_last = True
+        self.problem.namespace['Jy'].store_last = True
+
     
     def set_BC(self, **kwargs):
         
         super(FC_MHD_equations, self).set_BC(**kwargs)
 
-        # perfectly conducting boundary conditions, plus flux condition on bottom boundary.
-        self.problem.add_bc( "left(Jy) = 0")
-        self.problem.add_bc( "left(Bz) = 0")
-        self.problem.add_bc("right(Jy) = 0")
-
-        self.dirichlet_set.append('Jy')
-        self.dirichlet_set.append('Bz')
+        # perfectly conducting boundary conditions.
+        self.problem.add_bc( "left(Ay) = 0")
+        self.problem.add_bc("right(Ay) = 0")
+        self.dirichlet_set.append('Ay')
         
     def set_IC(self, solver, A0=1e-6, **kwargs):
         super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
     
         self.Bx_IC = solver.state['Bx']
-        self.Jy_IC = solver.state['Jy']
+        self.Ay_IC = solver.state['Ay']
 
         # not in HS balance
         B0 = 1
         self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
 
         self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
-        self.Bx_IC.differentiate('z', out=self.Jy_IC)
-
+        self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
 
     def initialize_output(self, solver, data_dir, **kwargs):
         super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
@@ -1718,15 +1719,14 @@ class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
         self.ln_rho_IC['g'] = 0
 
         self.Bx_IC = solver.state['Bx']
-        self.Jy_IC = solver.state['Jy']
+        self.Ay_IC = solver.state['Ay']
 
         # not in HS balance
         B0 = 1
         self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
 
         self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)*taper
-        self.Bx_IC.differentiate('z', out=self.Jy_IC)
-
+        self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
         
         logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 

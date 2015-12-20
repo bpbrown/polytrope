@@ -12,7 +12,7 @@ Options:
     --restart=<restart_file>             Restart from checkpoint
 
     --nz=<nz>                            vertical z (chebyshev) resolution 
-    --nz_cz=<nz>                         vertical z (chebyshev) resolution
+    --nz_cz=<nz>                         vertical z (chebyshev) resolution [default: 128]
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
 
@@ -149,6 +149,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
                     Bx.set_scales(1, keep_data=True)
                     B0 = np.sqrt(atmosphere.epsilon)
                     Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz/2, sheet_width=atmosphere.Lz*0.1)
+                    Bx.antidifferentiate('z',('left',0), out=Ay)
                     Did_gambit = True
     except:
         logger.error('Exception raised, triggering end of main loop.')
