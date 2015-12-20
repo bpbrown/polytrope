@@ -1489,24 +1489,80 @@ class FC_MHD_equations(FC_equations):
 
         self.problem.substitutions['J_squared'] = "(Jy*Jy)"
 
-    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, **kwargs):
-        super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
-        
+    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, Q=None, B0=None, use_Q=False, **kwargs):
+        logger.info("use_Q {}".format(use_Q))
+        if not use_Q:
+            super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
+        else:
+            logger.info("using Q-based vs Ra-based diffusivities")
+            self._set_diffusivities_Q(Q=Q, B0=B0,Prandtl=Prandtl)
         self.eta = self._new_ncc()
         self.eta.set_scales(self.domain.dealias, keep_data=False)
         self.necessary_quantities['eta'] = self.eta
         self.nu.set_scales(self.domain.dealias, keep_data=True)        
         self.eta['g'] = self.nu['g']/MagneticPrandtl
 
+    def _set_diffusivities_Q(self, Q=1e6, B0=None, Prandtl=1):
+        
+        logger.info("problem parameters:")
+        logger.info("   Q = {:g}, Pr = {:g}".format(Q, Prandtl))
+
+        # set nu and chi at top based on Rayleigh number
+        # wrong Prandtl number here (should be magnetic prandtl)
+        nu_top = np.sqrt(Prandtl*(self.Lz**2*B0**2)/(4*np.pi*Q))
+        chi_top = nu_top/Prandtl
+
+        if self.constant_diffusivities:
+            # take constant nu, chi
+            nu = nu_top
+            chi = chi_top
+
+            logger.info("   using constant nu, chi")
+            logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
+        else:
+            self.constant_kappa = True
+
+            if self.constant_kappa:
+                # take constant nu, constant kappa (non-constant chi); Prandtl changes.
+                nu  = nu_top
+                logger.info("   using constant nu, kappa")
+            else:
+                # take constant mu, kappa based on setting a top-of-domain Rayleigh number
+                # nu  =  nu_top/(self.rho0['g'])
+                logger.error("   using constant mu, kappa <DISABLED>")
+                raise
+
+            chi = chi_top/(self.rho0['g'])
+        
+            logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top))
+                    
+        #Allows for atmosphere reuse
+        self.chi.set_scales(1, keep_data=True)
+        self.nu['g'] = nu
+        self.chi['g'] = chi
+
+        self.chi.differentiate('z', out=self.del_chi)
+        self.chi.set_scales(1, keep_data=True)
+
+        # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
+        self.thermal_time = self.Lz**2/self.chi.interpolate(z=self.Lz/2)['g'][0][0]
+        self.top_thermal_time = 1/chi_top
+
+        self.viscous_time = self.Lz**2/self.nu.interpolate(z=self.Lz/2)['g'][0][0]
+        self.top_viscous_time = 1/nu_top
+
+        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
+                                                                          self.top_thermal_time))
+
     def _set_parameters(self):
         super(FC_MHD_equations, self)._set_parameters()
     
         self.problem.parameters['eta'] = self.eta
         
-    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True):
+    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True,  **kwargs):
         # DOES NOT YET INCLUDE Ohmic heating, variable eta.
         
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl)
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs)
         self._set_parameters()
         # thermal boundary conditions
         self.problem.parameters['T1_left']  = self.T1_left
