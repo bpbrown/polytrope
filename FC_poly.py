@@ -150,6 +150,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
                     B0 = np.sqrt(atmosphere.epsilon)
                     Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz/2, sheet_width=atmosphere.Lz*0.1)
                     Bx.antidifferentiate('z',('left',0), out=Ay)
+                    Ay['g'] *= -1
                     Did_gambit = True
     except:
         logger.error('Exception raised, triggering end of main loop.')

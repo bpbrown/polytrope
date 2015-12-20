@@ -1648,7 +1648,8 @@ class FC_MHD_equations(FC_equations):
 
         self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
         self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
-
+        self.Ay_IC['g'] *= -1
+        
     def initialize_output(self, solver, data_dir, **kwargs):
         super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
@@ -1727,6 +1728,7 @@ class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
 
         self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)*taper
         self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
+        self.Ay_IC['g'] *= -1
         
         logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 
