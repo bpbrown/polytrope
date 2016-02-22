@@ -20,7 +20,8 @@ Options:
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
 
     --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
-    
+    --fixed_Tz                           Fixed Temperature gradient boundary conditions (top and bottom)
+        
     --label=<label>                      Additional label for run output directory
 
 """
@@ -37,7 +38,7 @@ except:
     do_checkpointing = False
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
-                      fixed_T=False, 
+                      fixed_T=False, fixed_Tz=False, 
                       restart=None, nz=128, nx=None, data_dir='./'):
     import numpy as np
     import time
@@ -57,7 +58,13 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
     else:
         atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
-    atmosphere.set_BC(fixed_temperature=fixed_T)        
+    if fixed_T:
+        atmosphere.set_BC(fixed_temperature=fixed_T)
+    elif fixed_Tz:
+        atmosphere.set_BC(fixed_flux=fixed_Tz)
+    else:
+        atmosphere.set_BC()
+
     problem = atmosphere.get_problem()
 
     if atmosphere.domain.distributor.rank == 0:
@@ -94,7 +101,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
 
     report_cadence = 1
     output_time_cadence = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time = 0.25*atmosphere.thermal_time
+    solver.stop_sim_time = 100*atmosphere.thermal_time
     solver.stop_iteration= np.inf
     solver.stop_wall_time = 23.5*3600
 
@@ -117,6 +124,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
     if MHD:
         #flow.add_property("sqrt(Bx*Bx + Bz*Bz) / Rm", name='Lu')
         flow.add_property("abs(dx(Bx) + dz(Bz))", name='divB')
+        flow.add_property("abs(dx(Ax) + dz(Az))", name='divA')
+
         Tobias_gambit = True
         Did_gambit = False
         Repeat_gambit = False
@@ -140,6 +149,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 if MHD:
                      log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
+                     log_string += ', divA: {:8.3e}/{:8.3e}'.format(flow.grid_average('divA'), flow.max('divA'))
                 logger.info(log_string)
 
             if MHD and Tobias_gambit:
@@ -216,6 +226,8 @@ if __name__ == "__main__":
     data_dir = sys.argv[0].split('.py')[0]
     if args['--fixed_T']:
         data_dir +='_fixed'
+    if args['--fixed_Tz']:
+        data_dir +='_flux'
     data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
     if args['--MHD']:
         data_dir+= '_MHD'
@@ -239,6 +251,7 @@ if __name__ == "__main__":
                       nz=nz,
                       nx=nx,
                       fixed_T=args['--fixed_T'],
+                      fixed_Tz=args['--fixed_Tz'],                      
                       MHD=args['--MHD'],
                       restart=(args['--restart']),
                       n_rho_cz=float(args['--n_rho_cz']),

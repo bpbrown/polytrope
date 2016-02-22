@@ -1032,7 +1032,7 @@ class Equations():
         self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='omega')
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
-    
+
     def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
         if derivative or dz:
             f_bc=self._new_ncc()
@@ -1097,6 +1097,11 @@ class FC_equations(Equations):
         self.T1_z_left  = 0
         self.T1_z_right = 0
 
+    def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
+        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
+        self.problem.substitutions['dt(f)'] = "(0*f)"
+        self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
+        
     def _set_subs(self):
         super(FC_equations, self)._set_subs()
         
@@ -1131,9 +1136,15 @@ class FC_equations(Equations):
         self.problem.substitutions['kappa_flux'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
         self.problem.substitutions['KE_flux'] = 'w*KE'
 
-    def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
+    def set_equations(self, Rayleigh, Prandtl, EVP_2 = False, include_background_flux=True):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
+        if EVP_2:
+            self.problem.substitutions['chi'] = "(Prandtl*nu)"
+            self.problem.parameters['Prandtl'] = Prandtl
+            self.problem.parameters.pop('nu')
+            self.problem.parameters.pop('chi')
+ 
         # thermal boundary conditions
         self.problem.parameters['T1_left']  = self.T1_left
         self.problem.parameters['T1_right'] = self.T1_right
@@ -1195,7 +1206,7 @@ class FC_equations(Equations):
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
                stress_free=None, no_slip=None):
 
-        if not(fixed_flux) and not(fixed_temperature) and not(mixed_temperature_flux):
+        if not(fixed_flux) and not(fixed_temperature) and not(mixed_temperature_flux) and not(mixed_flux_temperature):
             mixed_flux_temperature = True
         if not(stress_free) and not(no_slip):
             stress_free = True
@@ -1469,10 +1480,11 @@ class FC_multitropedense(FC_equations, MultitropeDense):
 
 
 
+
 class FC_MHD_equations(FC_equations):
     def __init__(self):
-        self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD'
-        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1', 'Ay', 'Bx']
+        self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD, 2.5D'
+        self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1','Ax','Ay','Az','Bx','By','Phi']
 
         # possible boundary condition values for a normal system
         self.T1_left  = 0
@@ -1484,13 +1496,15 @@ class FC_MHD_equations(FC_equations):
         super(FC_MHD_equations, self)._set_subs()
 
         self.problem.parameters['pi'] = np.pi
-        self.problem.substitutions['Bz'] = '(dx(Ay))'
-        self.problem.substitutions['Jy'] = '(dz(Bx) - dx(dx(Ay)))'
-
+        self.problem.substitutions['Bz'] = '(dx(Ay) )'
+        self.problem.substitutions['Jx'] = '( -dz(By))'
+        self.problem.substitutions['Jy'] = '(dz(Bx) - dx(Bz))'
+        self.problem.substitutions['Jz'] = '(dx(By) )'
+        
         self.problem.substitutions['BdotGrad(f, f_z)'] = "(Bx*dx(f) + Bz*(f_z))"
-        self.problem.substitutions['ME'] = '1/(8*pi)*(Bx**2+Bz**2)'
+        self.problem.substitutions['ME'] = '1/(8*pi)*(Bx**2+By**2+Bz**2)'
 
-        self.problem.substitutions['J_squared'] = "(Jy*Jy)"
+        self.problem.substitutions['J_squared'] = "(Jx**2 + Jy**2 + Jz**2)"
 
     def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, Q=None, B0=None, use_Q=False, **kwargs):
         logger.info("use_Q {}".format(use_Q))
@@ -1578,13 +1592,19 @@ class FC_MHD_equations(FC_equations):
         # here, nu and chi are constants        
         self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
         self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_v = " nu*(Lap(v, v_z) )" # work through this properly
+
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u
-
+        self.problem.substitutions['L_visc_v'] = self.viscous_term_v
+                
         self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
         self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
+        self.nonlinear_viscous_v = " 0 " # work through this properly
+
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
+        self.problem.substitutions['NL_visc_v'] = self.nonlinear_viscous_v
 
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
@@ -1601,16 +1621,22 @@ class FC_MHD_equations(FC_equations):
         self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
     
         self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(v) - v_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
         self.problem.add_equation("Bx + dz(Ay) = 0")
-        
+        self.problem.add_equation("By - dz(Ax) + dx(Az) = 0")
+
         self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  - 1/(4*pi*rho_full)*Jy*Bx)"))
+                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  + 1/(4*pi*rho_full)*(Jx*By - Jy*Bx))"))
 
         self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  + 1/(4*pi*rho_full)*Jy*Bz)"))
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  + 1/(4*pi*rho_full)*(Jy*Bz - Jz*By))"))
 
+        self.problem.add_equation(("(scale)*( dt(v) +                                          - L_visc_v) = "
+                                   "(scale)*(- UdotGrad(v, v_z) + NL_visc_v  + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz))"))
+
+        
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
@@ -1618,23 +1644,40 @@ class FC_MHD_equations(FC_equations):
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
         # assumes constant eta; no NCCs here to rescale.  Easy to modify.
-        self.problem.add_equation("dt(Ay) + eta*Jy = w*Bx-u*dx(Ay)")
+        self.problem.add_equation("dt(Ax) + eta*Jx + dx(Phi)            =  v*Bz - w*By")
+        self.problem.add_equation("dt(Ay) + eta*Jy                      =  w*Bx - u*Bz")
+        self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi)            =  u*By - v*Bx")
+        self.problem.add_equation("dx(Ax) + dz(Az) = 0")
         
         logger.info("using nonlinear EOS for entropy, via substitution")
 
         # workaround for issue #29
         self.problem.namespace['Bz'].store_last = True
+        self.problem.namespace['Jx'].store_last = True
         self.problem.namespace['Jy'].store_last = True
+        self.problem.namespace['Jz'].store_last = True
 
     
     def set_BC(self, **kwargs):
         
         super(FC_MHD_equations, self).set_BC(**kwargs)
 
+        self.problem.add_bc( "left(v_z) = 0")
+        self.problem.add_bc("right(v_z) = 0")
+ 
         # perfectly conducting boundary conditions.
-        self.problem.add_bc( "left(Ay) = 0")
+        self.problem.add_bc("left(Ax) = 0")
+        self.problem.add_bc("left(Ay) = 0")
+        self.problem.add_bc("left(Az) = 0")
+        self.problem.add_bc("right(Ax) = 0")
         self.problem.add_bc("right(Ay) = 0")
+        self.problem.add_bc("right(Az) = 0", condition="(nx != 0)")
+        self.problem.add_bc("right(Phi) = 0", condition="(nx == 0)")
+
+        self.dirichlet_set.append('Ax')
         self.dirichlet_set.append('Ay')
+        self.dirichlet_set.append('Az')
+        self.dirichlet_set.append('Phi')
         
     def set_IC(self, solver, A0=1e-6, **kwargs):
         super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
@@ -1670,6 +1713,7 @@ class FC_MHD_equations(FC_equations):
         analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
 
         return self.analysis_tasks
+    
 
 class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
     def __init__(self, *args, **kwargs):
