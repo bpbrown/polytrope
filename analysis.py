@@ -332,6 +332,38 @@ def cheby_newton_root(z, f, z0=None, degree=512):
 
     return z_root_2
 
+def interp_bisect_root(z, f, z0=None, a=None, b=None):
+    import scipy.optimize as scpop
+    import scipy.interpolate as scpint
+    
+    Lz = np.max(z)-np.min(z) 
+    
+    int_f = scpint.interp1d(z, f)
+
+    # root find with bisect; this is working more robustly.
+    if a is None:
+        a = Lz/4
+    if b is None:
+        b = Lz*3/4
+        
+    logger.debug("bisecting between z=[{},{}]".format(a, b))
+    logger.debug("f(a) = {}  and f(b) = {}".format(int_f(a), int_f(b)))
+    try:
+        z_root = scpop.bisect(int_f, a, b)
+    except:
+        try:
+            logger.debug("f(a/2) = {}  and f(b) = {}".format(int_f(a/2), int_f(b)))
+            z_root = scpop.bisect(int_f, a/2, b)
+        except:
+            try:
+                logger.debug("f(a/10) = {}  and f(b) = {}".format(int_f(a/10), int_f(b)))
+                z_root = scpop.bisect(int_f, a/10, b)
+            except:
+                z_root = np.nan
+
+    logger.debug("bisect: found root z={}".format(z_root))        
+    return z_root
+
 def interp_newton_root(z, f, z0=None, a=None, b=None):
     import scipy.optimize as scpop
     import scipy.interpolate as scpint

@@ -9,7 +9,7 @@ Options:
     --verbose          Make diagnostic plots of each sim
 """
 import numpy as np
-from analysis import cheby_newton_root, interp_newton_root
+from analysis import interp_bisect_root
 
 from collections import OrderedDict
 
@@ -159,19 +159,16 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         logger.info("key {}".format(key))
         
         z_root_poor, f, i = poor_mans_root(z, criteria)
-        #i_sort = np.argsort(z)
-        #z_search = np.copy(z[i_sort])
-        #criteria_search = np.copy(criteria[i_sort])
+        
         z_search = np.copy(z)
         criteria_search = np.copy(criteria)
-        z_root = interp_newton_root(z_search, criteria_search, z0=None)
-        #z_root = cheby_newton_root(z, criteria, z0=None)
+        z_root = interp_bisect_root(z_search, criteria_search)
  
         overshoot_depths[key] = z_root
         roots[key] = (z_root, root_color)
         
-        logger.info("poor man: {:>10s} : found root z={}".format(key, z_root_poor))
-        logger.info("  newton: {:>10s} : found root z={}".format(key, z_root))
+        logger.debug("poor man: {:>10s} : found root z={}".format(key, z_root_poor))
+        logger.debug("  bisect: {:>10s} : found root z={}".format(key, z_root))
 
     if verbose:
         logger.info("Plotting diagnostics in {}".format(output_path))
@@ -204,6 +201,8 @@ def overshoot_time_trace(averages, z, times, stiffness, average_overshoot=None, 
     return avgs, std_dev
     
 def analyze_case(files, verbose=False, output_path=None):
+    import re
+    
     data = analysis.Profile(files)
     logger.info("read in data from {}".format(data.files))
 
@@ -219,7 +218,10 @@ def analyze_case(files, verbose=False, output_path=None):
         data_dir += '/'
         output_path = pathlib.Path(data_dir).absolute()
 
-    stiffness = float(input("overshoot: What stiffness is this case?"))
+    stiffness_string = re.search(r'_S\d+e\d+', '{:}'.format(files)).group()
+    stiffness = float(stiffness_string.split('_S')[1])
+    logger.info("overshoot: case has stiffness of {}".format(stiffness))
+    
     overshoot_depths = diagnose_overshoot(averages, z, stiffness, output_path=str(output_path)+'/', verbose=verbose)
     for key in overshoot_depths:
         print("{} --> z={}".format(key, overshoot_depths[key]))
