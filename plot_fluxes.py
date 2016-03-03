@@ -88,7 +88,7 @@ def plot_profiles(data, z, output_path='./'):
             's_mean', 's_fluc', 's_tot', 's_fluc_std',
             'T1', 'ln_rho1',
             'kappa_flux_fluc_z', 'kappa_flux_mean_z', 'kappa_flux_z',
-            'T1_source_terms']
+            'T1_source_terms', 'enstrophy']
 
     if "ME" in data:
         keys.append("ME")
@@ -97,10 +97,20 @@ def plot_profiles(data, z, output_path='./'):
         try:
             fig_flow = plt.figure(figsize=(16,8))
             ax1 = fig_flow.add_subplot(1,1,1)
-            logger.info(data[key].shape)
+            logger.info("{} : {}".format(key, data[key].shape))
             for i in range(data[key].shape[0]):
                 ax1.plot(z, data[key][i,0,:])
 
+            if key == 'enstrophy':
+                # hard coded brunt^2
+                ax1.plot(z, (1.5+1)*data['grad_s_mean'][0,0,:], color='black')
+                for i in range(data[key].shape[0]):
+                    ax1.plot(z, (1.5+1)*data['grad_s_tot'][i,0,:], color='black', linestyle='dashed')
+                ax1.axhline(y=0, color='black')
+                ax1.plot(z, data['s_mean'][0,0,:], color='red')
+                ax1.plot(z, data['s_tot'][0,0,:],  color='red', linestyle='dashed')
+                # hard coded
+                ax1.set_ylim(-0.5,2)
             ax1.set_xlabel("z")
             ax1.set_ylabel(key)
             figs[key]=fig_flow

@@ -101,11 +101,15 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     norm_diag = OrderedDict()
     norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
     norm_diag['KE'] = ('KE', norm(averages['KE']))
+    
     #norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
 
     try:
         #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
+        # hard coded
+        norm_diag['brunt'] = ('$\omega^2/N^2$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot'])))
+
     except:
         logger.info("Missing grad_s from outputs; trying numeric gradient option")
         dz = np.gradient(z)
@@ -118,8 +122,12 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     norm_diag['s_mean'] = (r'$s_0$', norm(averages['s_mean']))
     norm_diag['s_tot'] = (r'$s_0+s_1$', norm(averages['s_tot']))
 
+    stiff_threshold = stiffness**(-0.5)
+
     try:
         norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
+        stiff_threshold = np.max(norm(averages['s_fluc_std'])) # max value
+        logger.info("std dev thresh: {}".format(stiff_threshold))
     except:
         logger.info("Missing s_fluc_std from outputs")
         
@@ -127,14 +135,13 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     overshoot_depths = OrderedDict()
     roots = OrderedDict()
 
-    stiff_threshold = stiffness**(-0.5)
     
     def poor_mans_root(z, f):
         i_near = (np.abs(f)).argmin()
         return z[i_near], f[i_near], i_near
     
     for key in norm_diag:
-        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot' or key=="s_mean" or key=="s_tot":
+        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot' or key=="s_mean" or key=="s_tot" or key=="brunt":
             threshold = 0
             if key=="s_tot" or key=="s_mean":
                 # grab the top of the atmosphere value

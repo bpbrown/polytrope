@@ -12,10 +12,15 @@ class DedalusData():
                  keys=None, verbose=False, **kwargs):
         
         self.verbose = verbose
-        #matches = re.search(r's\d+', '{:}'.format(files)).group()
-        #print(matches)
 
-        self.files = sorted(files, key=lambda x: int(x.split('.h5')[0].split('_s')[1]))
+        # properly order files for read in based on set number
+        matches = re.findall(r'_s\d+.h5', '{:}'.format(files))
+        # strip out pre and post fix for sorting
+        for i, match in enumerate(matches):
+            matches[i] = int(match.split('.h5')[0].split('_s')[1])
+
+        self.files = [x for (y,x) in sorted(zip(matches,files), key=lambda pair: pair[0])]
+        #self.files = sorted(files, key=lambda x: int(x.split('.h5')[0].split('_s')[1]))
         logger.debug("opening: {}".format(self.files))
         
         if keys is None:

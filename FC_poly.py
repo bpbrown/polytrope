@@ -149,7 +149,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 if MHD:
                      log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
-                     log_string += ', divA: {:8.3e}/{:8.3e}'.format(flow.grid_average('divA'), flow.max('divA'))
+                     #log_string += ', divA: {:8.3e}/{:8.3e}'.format(flow.grid_average('divA'), flow.max('divA'))
                 logger.info(log_string)
 
             if MHD and Tobias_gambit:
