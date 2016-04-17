@@ -17,6 +17,8 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
+    --width=<width>            Width of erf transition between two polytropes
+    
     --MHD                                Do MHD run
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
 
@@ -42,6 +44,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
+                      width=None,
                       single_chebyshev=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
@@ -72,12 +75,16 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     else:
         atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
-                                         verbose=verbose)
+                                         verbose=verbose, width=width)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
         
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
 
+    #atmosphere.plot_atmosphere()
+    #atmosphere.plot_scaled_atmosphere()
+
+        
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
             os.mkdir('{:s}/'.format(data_dir))
@@ -87,7 +94,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     # Build solver
     solver = problem.build_solver(ts)
- 
+
     if do_checkpointing:
         checkpoint = Checkpoint(data_dir)
         checkpoint.set_checkpoint(solver, wall_dt=1800)
@@ -230,6 +237,11 @@ if __name__ == "__main__":
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
+    if args['--width'] is not None:
+        data_dir += "_erf{}".format(args['--width'])
+        width = float(args['--width'])
+    else:
+        width = None
     if args['--MHD']:
         data_dir+= '_MHD'
     if args['--label'] is not None:
@@ -251,6 +263,7 @@ if __name__ == "__main__":
                       nz_rz=int(args['--nz_rz']),
                       nz_cz=int(args['--nz_cz']),
                       single_chebyshev=args['--single_chebyshev'],
+                      width=width,
                       nx=nx,
                       restart=(args['--restart']),
                       data_dir=data_dir,

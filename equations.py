@@ -168,17 +168,28 @@ class Atmosphere:
     def plot_atmosphere(self):
 
         for key in self.necessary_quantities:
-            logger.debug("plotting atmosphereic quantity {}".format(key))
+            logger.debug("plotting atmospheric quantity {}".format(key))
             fig_q = plt.figure()
-            ax = fig_q.add_subplot(1,1,1)
+            ax = fig_q.add_subplot(2,1,1)
             quantity = self.necessary_quantities[key]
             quantity.set_scales(1, keep_data=True)
             ax.plot(self.z[0,:], quantity['g'][0,:])
             ax.set_xlabel('z')
             ax.set_ylabel(key)
+
+            ax = fig_q.add_subplot(2,1,2)
+            power_spectrum = np.abs(quantity['c'][0,:]*np.conj(quantity['c'][0,:]))
+            ax.plot(np.arange(len(quantity['c'][0,:])), power_spectrum)
+            ax.axhline(y=1e-20, color='black', linestyle='dashed') # ncc_cutoff = 1e-10
+            ax.set_xlabel('z')
+            ax.set_ylabel("Tn power spectrum: {}".format(key))
+            ax.set_yscale("log", nonposy='clip')
+            ax.set_xscale("log", nonposx='clip')
+            
             fig_q.savefig("atmosphere_{}_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
             plt.close(fig_q)
 
+            
         fig_atm = plt.figure()
         axT = fig_atm.add_subplot(2,2,1)
         axT.plot(self.z[0,:], self.T0['g'][0,:])
@@ -194,7 +205,30 @@ class Atmosphere:
         
         axS.set_ylabel(r'$\nabla s0$')
         fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
-                
+
+    def plot_scaled_atmosphere(self):
+
+        for key in self.necessary_quantities:
+            logger.debug("plotting atmospheric quantity {}".format(key))
+            fig_q = plt.figure()
+            ax = fig_q.add_subplot(2,1,1)
+            quantity = self.necessary_quantities[key]
+            quantity['g'] *= self.scale['g']
+            quantity.set_scales(1, keep_data=True)
+            ax.plot(self.z[0,:], quantity['g'][0,:])
+            ax.set_xlabel('z')
+            ax.set_ylabel(key+'*scale')
+
+            ax = fig_q.add_subplot(2,1,2)
+            ax.plot(np.arange(len(quantity['c'][0,:])), np.abs(quantity['c'][0,:]*np.conj(quantity['c'][0,:])))
+            ax.set_xlabel('z')
+            ax.set_ylabel("Tn power spectrum: {}*scale".format(key))
+            ax.set_yscale("log", nonposy='clip')
+            ax.set_xscale("log", nonposx='clip')
+            
+            fig_q.savefig("atmosphere_{}scale_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
+            plt.close(fig_q)
+                        
     def check_that_atmosphere_is_set(self):
         for key in self.necessary_quantities:
             quantity = self.necessary_quantities[key]['g']
@@ -803,7 +837,9 @@ class Multitrope(MultiLayerAtmosphere):
         #self.scale['g'] = (self.z_cz - self.z)
         # this seems to work fine; bandwidth only a few terms worse.
         self.scale['g'] = 1.
-                                
+        #self.scale['g'] = self.T0['g']
+        #self.scale['g'] = (self.Lz+1 - self.z)/(self.Lz+1)
+         
         self._compute_kappa_profile(kappa_ratio)
 
         logger.info("Solving for T0")
@@ -815,6 +851,8 @@ class Multitrope(MultiLayerAtmosphere):
         self.T0_z.differentiate('z', out=self.T0_zz)
         self.T0['g'] += 1
         self.T0.set_scales(1, keep_data=True)
+        #self.scale['g'] = self.T0['g']
+
     
         self.del_ln_P0 = self._new_ncc()
         self.ln_P0 = self._new_ncc()

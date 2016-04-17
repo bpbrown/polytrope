@@ -99,8 +99,8 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         return f/np.max(np.abs(f))
 
     norm_diag = OrderedDict()
-    norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
-    norm_diag['KE'] = ('KE', norm(averages['KE']))
+    #norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
+    #norm_diag['KE'] = ('KE', norm(averages['KE']))
     
     #norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
 
@@ -125,9 +125,10 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     stiff_threshold = stiffness**(-0.5)
 
     try:
-        norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
-        stiff_threshold = np.max(norm(averages['s_fluc_std'])) # max value
-        logger.info("std dev thresh: {}".format(stiff_threshold))
+        #norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
+        #stiff_threshold = np.max(norm(averages['s_fluc_std'])) # max value
+        #logger.info("std dev thresh: {}".format(stiff_threshold))
+        logger.info("skipping s_fluc_std")
     except:
         logger.info("Missing s_fluc_std from outputs")
         
@@ -259,7 +260,12 @@ def analyze_all_cases(stiffness_file_list, **kwargs):
     return stiffness_array, overshoot, std_dev
     
 
-def plot_overshoot(stiffness, overshoot, std_dev, output_path='./'):
+def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False):
+
+    if linear:
+        x = 1/stiffness
+    else:
+        x = stiffness
     apjfig = analysis.APJSingleColumnFigure()
     ref = 'grad_s_mean'
     ref_depth = overshoot[ref]
@@ -274,9 +280,9 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./'):
             q = np.abs(overshoot[key]-ref_depth)
             
             if std_dev[key][0] is not None:
-                apjfig.ax.errorbar(stiffness, q, yerr=std_dev[key], label=key, marker='o', color=color)
+                apjfig.ax.errorbar(x, q, yerr=std_dev[key], label=key, marker='o', color=color)
             else:
-                apjfig.ax.plot(stiffness, q, label=key, marker='o', color=color)
+                apjfig.ax.plot(x, q, label=key, marker='o', color=color)
 
             if key=='enstrophy':
                 # powerlaw fitting to the lower stiffness regime
@@ -284,21 +290,32 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./'):
                 a = np.polyfit(np.log(stiffness[ii]), np.log(q[ii]), deg=1)
                 powerlaw_label = r'$\mathrm{S}^\mathrm{p}$'+', p={:6.3g}'.format(a[0])
                 logger.info(a)
-                apjfig.ax.plot(stiffness, np.exp(a[1])*stiffness**a[0], label=powerlaw_label, color=color, linestyle='dotted')
+                apjfig.ax.plot(x, np.exp(a[1])*x**a[0], label=powerlaw_label, color=color, linestyle='dotted')
                 logger.info("low stiffness fit: {}".format(a))
                 
-        min_z = min(min_z, np.min(q))
-        max_z = max(max_z, np.max(q))
+            min_z = min(min_z, np.min(q))
+            max_z = max(max_z, np.max(q))
 
-    apjfig.ax.set_xscale("log", nonposx='clip')
+    if linear:
+        apjfig.ax.set_xscale("linear")
+        apjfig.ax.set_xlabel("Inverse stiffness 1/S")
+        apjfig.legend(loc="lower right", title="diagnostics", fontsize=6)
+    else:
+        apjfig.ax.set_xscale("log", nonposx='clip')
+        apjfig.ax.set_xlabel("Stiffness S")
+        apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
+
     apjfig.ax.set_yscale("log", nonposy='clip')
 
     apjfig.ax.set_ylim(0.9*min_z, 1.1*max_z)
-    apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
-    apjfig.ax.set_xlabel("Stiffness S")
-    apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
-    apjfig.savefig(output_path+"overshoot.png", dpi=600)
     
+    apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
+    if linear:
+        apjfig.savefig(output_path+"overshoot_linear.png", dpi=600)
+    else:
+        apjfig.savefig(output_path+"overshoot.png", dpi=600)
+    
+ 
 def main(output_path='./', **kwargs):
     import glob
 
@@ -315,14 +332,20 @@ def main(output_path='./', **kwargs):
                  (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s[1,2]??.h5')),
                  (3e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S3e4/profiles/profiles_s[1,2]??.h5')),
                  (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s[1,2]??.h5'))]
-    
-#    file_list = [(1e3, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e3/profiles/profiles_s8?.h5')),
-#                 (1e4, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e4/profiles/profiles_s8?.h5')),
-#                 (1e5, glob.glob('FC_multi_nrhocz3.5_Ra1e6_S1e5/profiles/profiles_s8?.h5'))]
 
+    file_list = [(3e0, glob.glob('FC_multi_nrhocz1_Ra1e8_S3e0_single/profiles/profiles_s1[0,1]?.h5')),
+                 (5e0, glob.glob('FC_multi_nrhocz1_Ra1e8_S5e0_single/profiles/profiles_s1[0,1]?.h5')),
+                 (1e1, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e1_single/profiles/profiles_s1[0,1]?.h5')),
+                 (3e1, glob.glob('FC_multi_nrhocz1_Ra1e8_S3e1_single/profiles/profiles_s1[0,1]?.h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e2_single/profiles/profiles_s1[0,1]?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s1[0,1]?.h5'))]
+                 #(1e4, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e4/profiles/profiles_s[8,9]?.h5')),
+                 #(1e5, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e5/profiles/profiles_s[8,9]?.h5'))]
+                     
 
     stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path)
+    plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True)
      
 if __name__ == "__main__":
 
