@@ -847,7 +847,7 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("   m_cz = {:g}, epsilon = {:g}, gamma = {:g}".format(self.m_cz, self.epsilon, self.gamma))
         logger.info("   m_rz = {:g}, stiffness = {:g}".format(self.m_rz, self.stiffness))
     
-    def _set_atmosphere(self):
+    def _set_atmosphere(self, atmosphere_type2=False):
         super(MultiLayerAtmosphere, self)._set_atmosphere()
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
@@ -865,13 +865,26 @@ class Multitrope(MultiLayerAtmosphere):
         self.scale['g'] = 1.
         #self.scale['g'] = self.T0['g']
         #self.scale['g'] = (self.Lz+1 - self.z)/(self.Lz+1)
-         
-        self._compute_kappa_profile(kappa_ratio)
 
-        logger.info("Solving for T0")
-        # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
-        flux_top = -1
-        self.T0_z['g'] = flux_top/self.kappa['g']
+        if atmosphere_type2:
+            # specify T0_z as smoothly matched profile
+            # for now, hijack compute_kappa_profile (this could be cleaned up),
+            # but grad T ratio has inverse relationship to kappa_ratio
+            self._compute_kappa_profile(1/kappa_ratio)
+            flux_top = -1
+            # copy out kappa profile, which is really grad T
+            self.T0_z['g'] = self.kappa['g']/flux_top
+            # now invert grad T for kappa
+            logger.info("Solving for kappa")
+            self.kappa['g'] = flux_top/self.T0_z['g']
+        else:
+            # specify kappa as smoothly matched profile
+            self._compute_kappa_profile(kappa_ratio)
+            logger.info("Solving for T0")
+            # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
+            flux_top = -1
+            self.T0_z['g'] = flux_top/self.kappa['g']
+            
         self.T0_z.antidifferentiate('z',('right',0), out=self.T0)
         # need T0_zz in multitrope
         self.T0_z.differentiate('z', out=self.T0_zz)
@@ -1088,12 +1101,12 @@ class Equations():
     def __init__(self):
         pass
     
-    def set_IVP_problem(self, *args, **kwargs):
-        self.problem = de.IVP(self.domain, variables=self.variables)
+    def set_IVP_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
+        self.problem = de.IVP(self.domain, variables=self.variables, ncc_cutoff=ncc_cutoff)
         self.set_equations(*args, **kwargs)
 
-    def set_eigenvalue_problem(self, *args, **kwargs):
-        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='omega')
+    def set_eigenvalue_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
+        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff)
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
@@ -1324,6 +1337,8 @@ class FC_equations(Equations):
         self.problem.add_bc( "left(w) = 0")
         self.problem.add_bc("right(w) = 0")
         self.dirichlet_set.append('w')
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
 
     def set_IC(self, solver, A0=1e-6, **kwargs):
         # initial conditions
@@ -1492,11 +1507,9 @@ class FC_multitrope(FC_equations, Multitrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        #print("coming into set_eqns {}".format(self.domain.distributor.rank))
         super(FC_multitrope,self).set_equations(*args, **kwargs)
-        #print("coming out of set_eqns {}".format(self.domain.distributor.rank))
 
-        self.problem.meta[:]['z']['dirichlet'] = True
+        #self.problem.meta[:]['z']['dirichlet'] = True
         logger.info("skipping HS balance check")
         #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 

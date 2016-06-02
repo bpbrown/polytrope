@@ -29,6 +29,8 @@ Options:
 import logging
 logger = logging.getLogger(__name__)
 
+import matplotlib.pyplot as plt
+
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
@@ -38,6 +40,7 @@ try:
 except:
     logger.info("No checkpointing available; disabling capability")
     do_checkpointing=False
+
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       MagneticPrandtl=1, MHD=False, 
@@ -74,15 +77,39 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False, ncc_cutoff=1e-8)
         
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
 
     atmosphere.plot_atmosphere()
     #atmosphere.plot_scaled_atmosphere()
+
+    ts = de.timesteppers.RK443
+    # Build solver (to check NCCs)
+    solver = problem.build_solver(ts)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.spy(solver.pencils[0].L, markersize=1, markeredgewidth=0.0)
+    fig.savefig("sparsity_pattern.png", dpi=600)
+
+    atmosphere.set_IC(solver)
+    dt = 1e-6
+    solver.step(dt)
     
- 
+    import scipy.sparse.linalg as sla
+    LU = sla.splu(solver.pencils[0].LHS.tocsc(), permc_spec='MMD_ATA')
+    fig = plt.figure()
+    ax = fig.add_subplot(1,2,1)
+    ax.spy(LU.L.A, markersize=1, markeredgewidth=0.0)
+    ax = fig.add_subplot(1,2,2)
+    ax.spy(LU.U.A, markersize=1, markeredgewidth=0.0)
+    fig.savefig("sparsity_pattern_LU.png", dpi=1200)
+    logger.info("{} nonzero entries in LU".format(LU.nnz))
+    logger.info("{} nonzero entries in LHS".format(solver.pencils[0].LHS.tocsc().nnz))
+    logger.info("{} fill in factor".format(LU.nnz/solver.pencils[0].LHS.tocsc().nnz))
+
 if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
