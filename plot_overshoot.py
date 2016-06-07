@@ -163,7 +163,13 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         
         z_search = np.copy(z)
         criteria_search = np.copy(criteria)
-        z_root = interp_bisect_root(z_search, criteria_search)
+        if key=='grad_s_mean':
+            a = np.min(z)
+            b = np.max(z)
+        else:
+            a = None
+            b = None
+        z_root = interp_bisect_root(z_search, criteria_search, a=a, b=b)
  
         overshoot_depths[key] = z_root
         roots[key] = (z_root, root_color)
@@ -296,11 +302,19 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
             min_z = min(min_z, np.min(q))
             max_z = max(max_z, np.max(q))
 
+    m_ad = 1.5
+    m_rz = 3
+    H_rho = 1
+    n_rho = 3
     if linear:
+        m_cz = m_ad-(x)*(m_rz-m_ad)
+        apjfig.ax.plot(x, m_cz*H_rho*(np.exp(n_rho*x/(m_cz))-1), label="prediction")
         apjfig.ax.set_xscale("linear")
         apjfig.ax.set_xlabel("Inverse stiffness 1/S")
         apjfig.legend(loc="lower right", title="diagnostics", fontsize=6)
     else:
+        m_cz = m_ad-(1/x)*(m_rz-m_ad)
+        apjfig.ax.plot(x, m_cz*H_rho*(np.exp(n_rho/(m_cz*x))-1), label="prediction")
         apjfig.ax.set_xscale("log", nonposx='clip')
         apjfig.ax.set_xlabel("Stiffness S")
         apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
@@ -341,7 +355,48 @@ def main(output_path='./', **kwargs):
                  (1e3, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s1[0,1]?.h5'))]
                  #(1e4, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e4/profiles/profiles_s[8,9]?.h5')),
                  #(1e5, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e5/profiles/profiles_s[8,9]?.h5'))]
-                     
+
+    file_list = [(0.2,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.2_single/profiles/profiles_s2[0,1,2,3]?.h5')),
+                 (0.12, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2[0,1,2,3]?.h5'))]
+
+    file_list = [(1, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2?.h5')),
+                 (3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e3_single/profiles/profiles_s2?.h5')),
+                 (5, glob.glob('FC_multi_nrhocz5_Ra1e8_S1e3_single/profiles/profiles_s2?.h5'))]
+
+    file_list = [(1e8,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2?.h5')),
+                 (5e8,  glob.glob('FC_multi_nrhocz1_Ra5e8_S1e3_shallow_single/profiles/profiles_s2?.h5')),
+                 (1e10, glob.glob('FC_multi_nrhocz1_Ra1e10_S1e3_shallow_single/profiles/profiles_s2?.h5'))]
+
+    file_list = [(0.2,   glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.2_single/profiles/profiles_s5?.h5')),
+                 (0.1,   glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s5?.h5')),
+                 (0.05,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.05_single/profiles/profiles_s5?.h5')),
+                 (0.01,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.01_single/profiles/profiles_s5?.h5'))]
+
+
+    file_list = [(1, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s[5,6,7]?.h5')),
+                 (3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e3_single/profiles/profiles_s[5,6,7]?.h5'))]
+
+
+    file_list = [(3e0, glob.glob('FC_multi_nrhocz1_Ra1e8_S3e0_single/profiles/profiles_s5?.h5')),
+                 (5e0, glob.glob('FC_multi_nrhocz1_Ra1e8_S5e0_single/profiles/profiles_s5?.h5')),
+                 (1e1, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e1_single/profiles/profiles_s5?.h5')),
+                 (3e1, glob.glob('FC_multi_nrhocz1_Ra1e8_S3e1_single/profiles/profiles_s5?.h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e2_single/profiles/profiles_s5?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s5?.h5')),
+                 (3e0, glob.glob('FC_multi_nrhocz3_Ra1e8_S3e0_single/profiles/profiles_s5?.h5')),
+                 (1e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e1_single/profiles/profiles_s5?.h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s5?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e3_single/profiles/profiles_s5?.h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e4_single/profiles/profiles_s5?.h5')),
+                 (1e5, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e5_single/profiles/profiles_s5?.h5'))]
+
+    file_list = [(3e0, glob.glob('FC_multi_nrhocz3_Ra1e8_S3e0_single/profiles/profiles_s[5,6]?.h5')),
+                 (1e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e1_single/profiles/profiles_s[5,6]?.h5')),
+                 (1e2, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6]?.h5')),
+                 (1e3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e3_single/profiles/profiles_s[5,6]?.h5')),
+                 (1e4, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e4_single/profiles/profiles_s[5,6]?.h5'))]
+#                 (1e5, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e5_single/profiles/profiles_s5?.h5'))]
+    
 
     stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
     plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path)
