@@ -1436,9 +1436,9 @@ class FC_equations(Equations):
         analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
         analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
         analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")
-        analysis_profile.add_task("plane_avg(g*dz(s_fluc))", name="brunt_squared_fluc")        
-        analysis_profile.add_task("plane_avg(g*dz(s_mean))", name="brunt_squared_mean")        
-        analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean))", name="brunt_squared_tot")        
+        analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cv_inv/gamma))", name="brunt_squared_fluc")        
+        analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cv_inv/gamma))", name="brunt_squared_mean")        
+        analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cv_inv/gamma))", name="brunt_squared_tot")        
         analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
                                   name="T1_source_terms")
         

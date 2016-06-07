@@ -76,8 +76,8 @@ def plot_overshoot_times(times, overshoot, average_overshoot=None, output_path='
             apjfig.ax.plot(times, q, label=key, color=color)
             if average_overshoot is not None:
                 apjfig.ax.axhline(average_overshoot[key], linestyle='dashed', color=color)
-        min_z = min(min_z, np.min(q))
-        max_z = max(max_z, np.max(q))
+            min_z = min(min_z, np.min(q))
+            max_z = max(max_z, np.max(q))
 
     min_z = min(min_z, np.min(ref_depth))
     max_z = max(max_z, np.max(ref_depth))
@@ -107,8 +107,15 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     try:
         #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
-        # hard coded
-        norm_diag['brunt'] = ('$\omega^2/N^2$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot'])))
+        try:
+            # note: this currently divides an extra factor of cp=(gamma-1)/gamma,
+            # as this was missing from the brunt calculation in equations.py
+            # This has been fixed in equations.py and may result in double-counting.
+            gamma = 5/3.
+            norm_diag['brunt'] = (r'$\nabla (s_0)$', norm(averages['enstrophy'] - averages['brunt_squared_tot']*(gamma-1)/gamma))
+        except:
+            # hard coded and not correct for low stiffness (when m_cz !~ 1.5)
+            norm_diag['brunt'] = ('$\omega^2/N^2_{HC}$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot']*(gamma-1)/gamma)))
 
     except:
         logger.info("Missing grad_s from outputs; trying numeric gradient option")
@@ -290,6 +297,9 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
             else:
                 apjfig.ax.plot(x, q, label=key, marker='o', color=color)
 
+            min_z = min(min_z, np.min(q))
+            max_z = max(max_z, np.max(q))
+
             if key=='enstrophy':
                 # powerlaw fitting to the lower stiffness regime
                 ii = (stiffness < 1e4)
@@ -299,8 +309,6 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
                 apjfig.ax.plot(x, np.exp(a[1])*x**a[0], label=powerlaw_label, color=color, linestyle='dotted')
                 logger.info("low stiffness fit: {}".format(a))
                 
-            min_z = min(min_z, np.min(q))
-            max_z = max(max_z, np.max(q))
 
     m_ad = 1.5
     m_rz = 3
