@@ -245,7 +245,7 @@ def analyze_case(files, verbose=False, output_path=None):
     else:
         std_dev = OrderedDict()
         for key in overshoot_depths:
-            std_dev[key] = None
+            std_dev[key] = np.nan
     
     return overshoot_depths, std_dev
 
@@ -273,29 +273,53 @@ def analyze_all_cases(stiffness_file_list, **kwargs):
     return stiffness_array, overshoot, std_dev
     
 
-def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False):
+def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False, fig=None, marker='o'):
 
     if linear:
         x = 1/stiffness
     else:
         x = stiffness
-    apjfig = analysis.APJSingleColumnFigure()
+        
+    if fig is None:
+        apjfig = analysis.APJSingleColumnFigure()
+        min_z = 100
+        max_z = 0
+    else:
+        logger.info("Appending to figure")
+        apjfig = fig
+        apjfig.ax.set_color_cycle(None)
+        min_z, max_z = apjfig.ax.get_ylim()
+        
     ref = 'grad_s_mean'
+    compare = 'brunt'
     ref_depth = overshoot[ref]
-    min_z = 100
-    max_z = 0
+
+    m_ad = 1.5
+    m_rz = 3
+    m_cz = m_ad-(m_rz-m_ad)/stiffness
+    # the following assume that T(ref_depth)=ref_depth (namely, grad_T=-1 and we're probably in the CZ)
+    H_rho = (ref_depth/m_cz) # estimate for H_rho at ref depth; H_rho = (T/m_cz)
+    n_rho = m_cz*np.log(ref_depth) # estimate for n_rho at ref depth
+    logger.info("T={}".format(ref_depth))
+    logger.info("m_cz={}".format(m_cz))
+    logger.info("H_rho={}".format(H_rho))
+    logger.info("n_rho={}".format(n_rho))
+    
+    
     logger.info("reference depth:")
     logger.info("{} -- {}".format(ref, ref_depth))
     for key in overshoot:
         if key!=ref and key!='grad_s':
             color = next(apjfig.ax._get_lines.prop_cycler)['color']
-            logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
-            q = np.abs(overshoot[key]-ref_depth)
+            logger.info("{:10s} -- OV: {} ({})".format(key, ref_depth - overshoot[key],
+                                                       (ref_depth - overshoot[key])/(ref_depth-overshoot[compare])))
+            q = np.abs(overshoot[key]-ref_depth)            
+            q = q/H_rho
             
-            if std_dev[key][0] is not None:
-                apjfig.ax.errorbar(x, q, yerr=std_dev[key], label=key, marker='o', color=color)
+            if np.any(np.isfinite(std_dev[key])):
+                apjfig.ax.errorbar(x, q, yerr=std_dev[key], label=key, marker=marker, color=color)
             else:
-                apjfig.ax.plot(x, q, label=key, marker='o', color=color)
+                apjfig.ax.plot(x, q, label=key, marker=marker, color=color)
 
             min_z = min(min_z, np.min(q))
             max_z = max(max_z, np.max(q))
@@ -308,35 +332,38 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
                 logger.info(a)
                 apjfig.ax.plot(x, np.exp(a[1])*x**a[0], label=powerlaw_label, color=color, linestyle='dotted')
                 logger.info("low stiffness fit: {}".format(a))
-                
 
-    m_ad = 1.5
-    m_rz = 3
-    H_rho = 1
-    n_rho = 3
+    # plot is now of delta_z/H_rho
+    apjfig.ax.plot(x, m_cz*(np.exp(n_rho/(m_cz*stiffness))-1), label="prediction")
+
+    logger.info("overshoot prediction = {}".format(m_cz*(np.exp(n_rho/(m_cz*stiffness))-1)))
     if linear:
-        m_cz = m_ad-(x)*(m_rz-m_ad)
-        apjfig.ax.plot(x, m_cz*H_rho*(np.exp(n_rho*x/(m_cz))-1), label="prediction")
         apjfig.ax.set_xscale("linear")
         apjfig.ax.set_xlabel("Inverse stiffness 1/S")
-        apjfig.legend(loc="lower right", title="diagnostics", fontsize=6)
+        if fig is None:
+            apjfig.legend(loc="lower right", title="diagnostics", fontsize=6)
     else:
-        m_cz = m_ad-(1/x)*(m_rz-m_ad)
-        apjfig.ax.plot(x, m_cz*H_rho*(np.exp(n_rho/(m_cz*x))-1), label="prediction")
         apjfig.ax.set_xscale("log", nonposx='clip')
         apjfig.ax.set_xlabel("Stiffness S")
-        apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
-
+        if fig is None:
+            apjfig.legend(loc="lower left", title="diagnostics", fontsize=6)
+            
+    
     apjfig.ax.set_yscale("log", nonposy='clip')
+    
+    if fig is None:
+        min_z = 0.5*min_z
+        max_z = 1.5*max_z
+        
+    apjfig.ax.set_ylim(min_z, max_z)
+    
+    apjfig.ax.set_ylabel(r"$\Delta z/H_{\rho}$ of overshoot")
+#    if linear:
+#        apjfig.savefig(output_path+"overshoot_linear.png", dpi=600)
+#    else:
+#        apjfig.savefig(output_path+"overshoot.png", dpi=600)
 
-    apjfig.ax.set_ylim(0.9*min_z, 1.1*max_z)
-    
-    apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
-    if linear:
-        apjfig.savefig(output_path+"overshoot_linear.png", dpi=600)
-    else:
-        apjfig.savefig(output_path+"overshoot.png", dpi=600)
-    
+    return apjfig
  
 def main(output_path='./', **kwargs):
     import glob
@@ -364,9 +391,6 @@ def main(output_path='./', **kwargs):
                  #(1e4, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e4/profiles/profiles_s[8,9]?.h5')),
                  #(1e5, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e5/profiles/profiles_s[8,9]?.h5'))]
 
-    file_list = [(0.2,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.2_single/profiles/profiles_s2[0,1,2,3]?.h5')),
-                 (0.12, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2[0,1,2,3]?.h5'))]
-
     file_list = [(1, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2?.h5')),
                  (3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e3_single/profiles/profiles_s2?.h5')),
                  (5, glob.glob('FC_multi_nrhocz5_Ra1e8_S1e3_single/profiles/profiles_s2?.h5'))]
@@ -374,6 +398,10 @@ def main(output_path='./', **kwargs):
     file_list = [(1e8,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2?.h5')),
                  (5e8,  glob.glob('FC_multi_nrhocz1_Ra5e8_S1e3_shallow_single/profiles/profiles_s2?.h5')),
                  (1e10, glob.glob('FC_multi_nrhocz1_Ra1e10_S1e3_shallow_single/profiles/profiles_s2?.h5'))]
+
+    file_list = [(0.2,  glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.2_single/profiles/profiles_s2[0,1,2,3]?.h5')),
+                 (0.12, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s2[0,1,2,3]?.h5'))]
+
 
     file_list = [(0.2,   glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_erf0.2_single/profiles/profiles_s5?.h5')),
                  (0.1,   glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s5?.h5')),
@@ -407,8 +435,19 @@ def main(output_path='./', **kwargs):
     
 
     stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
-    plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path)
-    plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True)
+    
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True)
+    fig_linear.savefig(output_path+"overshoot_linear.png", dpi=600)
+
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path)
+    file_list = [(0.8*1e3, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s[5,6,7]?.h5'))]
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='s')
+    #file_list = [(1.2*1e3, glob.glob('FC_multi_nrhocz5_Ra1e8_S1e3_single_high/profiles/profiles_s2?.h5'))]
+    #stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+    #fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig)
+    fig.savefig(output_path+"overshoot.png", dpi=600)
+
      
 if __name__ == "__main__":
 
