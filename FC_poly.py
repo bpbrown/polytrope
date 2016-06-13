@@ -1,6 +1,6 @@
 """
 Dedalus script for 2D compressible convection in a polytrope,
-with 3.5 density scale heights of stratification.
+with 3.5 density scale heights of stratification and mixed BCs.
 
 Usage:
     FC_poly.py [options] 
