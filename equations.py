@@ -590,7 +590,7 @@ class Polytrope(Atmosphere):
             self.scale_energy['g'] = (self.z0 - self.z)
         else:
             # consider whether to scale nccs involving chi differently (e.g., energy equation)
-            self.scale['g'] = (self.z0 - self.z)*self.rho0['g']
+            self.scale['g'] = (self.z0 - self.z)
             self.scale_continuity['g'] = (self.z0 - self.z)
             self.scale_momentum['g'] = (self.z0 - self.z)
             self.scale_energy['g'] = (self.z0 - self.z)
@@ -1286,16 +1286,10 @@ class Equations():
         return noise_field['g']
     
 class FC_equations(Equations):
-    def __init__(self, T1_left=0, T1_right=0, T1_z_left=0, T1_z_right=0, **kwargs):
+    def __init__(self, **kwargs):
         super(FC_equations, self).__init__(**kwargs)
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-        
-        # possible boundary condition values for a normal system
-        self.T1_left  = 0
-        self.T1_right = 0
-        self.T1_z_left  = 0
-        self.T1_z_right = 0
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
         self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
@@ -1361,11 +1355,11 @@ class FC_equations(Equations):
         self._set_subs()
                 
         # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*(dx(u_z) + dz(w_z)))"
+        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(u_z,   dz(w_z)))"
         self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
         if not easy_rho:
             self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * (2*w_z - 2/3*Div_u)"
-            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (u_z + dx(w))"
+            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (  u_z +     dx(w))"
 
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u
@@ -1377,12 +1371,12 @@ class FC_equations(Equations):
 
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))")
+        self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                  " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
+        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
         if not easy_rho:
-            self.linear_thermal_diff += '+ Cv_inv*(del_ln_rho0*chi + del_chi)*T1_z'
-            self.source              += '+ Cv_inv*(del_ln_rho0*chi + del_chi)*T0_z'
+            self.linear_thermal_diff += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T1_z'
+            self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
                 
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
         self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
@@ -1628,15 +1622,15 @@ class FC_polytrope(FC_equations, Polytrope):
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
     def set_BC(self, T1_left=0, T1_z_left=0, T1_right=0, T1_z_right=0, **kwargs):
-        self.T1_left = T1_left
-        self.T1_right= T1_right
-        self.T1_z_left=T1_z_left
-        self.T1_z_right=T1_z_right
+        self.T1_left        = T1_left
+        self.T1_right       = T1_right
+        self.T1_z_left      = T1_z_left
+        self.T1_z_right     = T1_z_right
         #Decrease flux factor is 1 - sqrt(Pr2/Pr1)
-        self.problem.parameters['T1_z_left'] = T1_z_left
-        self.problem.parameters['T1_z_right'] = T1_z_right
-        self.problem.parameters['T1_left'] = T1_left
-        self.problem.parameters['T1_right'] = T1_right
+        self.problem.parameters['T1_z_left']    = self.T1_z_left
+        self.problem.parameters['T1_z_right']   = self.T1_z_right
+        self.problem.parameters['T1_left']      = self.T1_left
+        self.problem.parameters['T1_right']     = self.T1_right
         super(FC_polytrope, self).set_BC(**kwargs)
 
 class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
