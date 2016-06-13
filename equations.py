@@ -1290,6 +1290,10 @@ class FC_equations(Equations):
         super(FC_equations, self).__init__(**kwargs)
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
+        self.T1_left = 0
+        self.T1_right = 0
+        self.T1_z_left = 0
+        self.T1_z_right = 0
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
         self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
