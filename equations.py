@@ -160,9 +160,11 @@ class Atmosphere:
         if self.dimensions > 1:
             self.problem.parameters['Lx'] = self.Lx
 
-        self.problem.parameters['Cv_inv'] = self.gamma-1
         self.problem.parameters['gamma'] = self.gamma
         self.problem.parameters['Cv'] = 1/(self.gamma-1)
+        self.problem.parameters['Cv_inv'] = self.gamma-1
+        self.problem.parameters['Cp'] = self.gamma/(self.gamma-1)
+        self.problem.parameters['Cp_inv'] = (self.gamma-1)/self.gamma
 
         # the following quantities must be calculated and are missing
         # from the atmosphere stub.
@@ -512,10 +514,9 @@ class Polytrope(Atmosphere):
                 logger.error("Either Lz or n_rho must be set")
                 raise
         if Lx is None:
-            Lx = 4*(1 + Lz)/np.abs(m_cz) #number of density scale heights at bot of domain
-            #Abs allows for negative m_cz.
+            #Lx = 4*(1 + Lz)/np.abs(m_cz) #number of density scale heights at bot of domain
        
-            #Lx = Lz*aspect_ratio
+            Lx = Lz*aspect_ratio
 
         super(Polytrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
         logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
@@ -542,6 +543,8 @@ class Polytrope(Atmosphere):
     def _set_atmosphere_parameters(self, gamma=5/3, epsilon=0, poly_m=None, g=None):
         # polytropic atmosphere characteristics
         self.gamma = gamma
+        self.Cv = 1/(self.gamma-1)
+        self.Cp = self.gamma*self.Cv
         self.epsilon = epsilon
 
         self.m_ad = 1/(self.gamma-1)
@@ -567,7 +570,7 @@ class Polytrope(Atmosphere):
         self.del_ln_rho0['g'] = self.del_ln_rho_factor/(self.z0 - self.z)
         self.rho0['g'] = (self.z0 - self.z)**self.poly_m
 
-        self.del_s0_factor = - self.epsilon*(self.gamma-1)/self.gamma
+        self.del_s0_factor = - self.epsilon 
         self.delta_s = self.del_s0_factor*np.log(self.z0)
         self.del_s0['g'] = self.del_s0_factor/(self.z0 - self.z)
  
@@ -615,7 +618,7 @@ class Polytrope(Atmosphere):
             atmosphere=self
             
         # min of global quantity
-        atmosphere.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']))), op=MPI.MIN)
+        atmosphere.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']/self.Cp))), op=MPI.MIN)
         atmosphere.freefall_time = np.sqrt(self.Lz/self.g)
         atmosphere.buoyancy_time = np.sqrt(self.Lz/self.g/np.abs(self.epsilon))
         
@@ -629,7 +632,7 @@ class Polytrope(Atmosphere):
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
 
         # set nu and chi at top based on Rayleigh number
-        nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
+        nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
         chi_top = nu_top/Prandtl
 
         if self.constant_diffusivities:
@@ -840,7 +843,7 @@ class Multitrope(MultiLayerAtmosphere):
         if atmosphere is None:
             atmosphere=self
         # min of global quantity
-        BV_time = np.sqrt(np.abs(self.g*self.del_s0['g']))
+        BV_time = np.sqrt(np.abs(self.g*self.del_s0['g']/self.Cp))
         if BV_time.shape[-1] == 0:
             logger.debug("BV_time {}, shape {}".format(BV_time, BV_time.shape))
             BV_time = np.array([np.inf])
@@ -924,6 +927,8 @@ class Multitrope(MultiLayerAtmosphere):
         # stiffness = (m_rz - m_ad)/(m_ad - m_cz) = (m_rz - m_ad)/epsilon
 
         self.gamma = gamma
+        self.Cv = 1/(self.gamma-1)
+        self.Cp = self.gamma*self.Cv
 
         self.m_ad = 1/(gamma-1)
         self.m_rz = m_rz
@@ -948,7 +953,7 @@ class Multitrope(MultiLayerAtmosphere):
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
 
-        self.delta_s = self.epsilon*(self.gamma-1)/self.gamma*np.log(self.z_cz)
+        self.delta_s = self.epsilon*np.log(self.z_cz)
         logger.info("Atmosphere delta s is {}".format(self.delta_s))
 
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
@@ -1026,7 +1031,7 @@ class Multitrope(MultiLayerAtmosphere):
         # inputs:
         # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
         # Prandtl_top = nu_top/chi_top
-        self.chi_top = np.sqrt((self.g*self.delta_s*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
+        self.chi_top = np.sqrt((self.g*(self.delta_s/self.Cp)*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
             
         if not self.stable_bottom:
             # try to rescale chi appropriately so that the
@@ -1180,7 +1185,7 @@ class PolytropeFlux(Polytrope):
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
 
         # take constant nu, chi
-        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s)*self.g)/Rayleigh)
+        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
         chi = nu/Prandtl
 
         logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
@@ -1308,8 +1313,8 @@ class FC_equations(Equations):
         self.problem.substitutions['s_fluc'] = '(1/Cv_inv*log(1+T1/T0) - 1/Cv_inv*(gamma-1)*ln_rho1)'
         self.problem.substitutions['s_mean'] = '(1/Cv_inv*log(T0) - 1/Cv_inv*(gamma-1)*ln_rho0)'
 
-        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm/(nu*chi)'
-        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
+        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
+        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
         
         self.problem.substitutions['KE'] = 'rho_full*(u**2+w**2)/2'
         self.problem.substitutions['PE'] = 'rho_full*phi'
@@ -2036,8 +2041,8 @@ class AN_equations(Equations):
         self.problem.substitutions['s_fluc'] = 's'
         self.problem.substitutions['s_mean'] = '(1/Cv_inv*log(T0) - 1/Cv_inv*(gamma-1)*ln_rho0)'
 
-        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm/(nu*chi)'
-        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)/(nu*chi)'
+        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
+        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
 
         self.problem.substitutions['KE'] = 'rho_full*(u**2+w**2)/2'
         self.problem.substitutions['PE'] = 'rho_full*phi'
