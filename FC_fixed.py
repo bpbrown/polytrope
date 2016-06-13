@@ -31,7 +31,6 @@ import numpy as np
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
-from tools.bootstrapping import Bootstrapper
 
 checkpointing_installed=True
 CHECKPOINT_MIN=30*60 #30 min checkpoints
@@ -81,51 +80,48 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, epsilon=1e-4, resta
     
     atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
     max_dt = atmosphere.buoyancy_time*0.25
-  
+    
     if checkpointing_installed:
         logger.info('checkpointing in {}'.format(data_dir))
         do_checkpointing=True
-        checkpoint = Checkpoint(data_dir)
+        try:
+            checkpoint = Checkpoint(data_dir, allowed_dirs=['slices', 'profiles', 'scalar', 'coeffs'])
+        except:
+            checkpoint = Checkpoint(data_dir)
         chk_write = chk_set = 1
         if restart is None:
             atmosphere.set_IC(solver)
             dt = max_dt
-            slices_count    = 1
-            slices_set      = 1
-            profiles_count  = 1
-            profiles_set    = 1
-            scalar_count    = 1
-            scalar_set      = 1 
+            slices_count, slices_set    = 1, 1
+            profiles_count, profiles_set  = 1, 1
+            scalar_count, scalar_set    = 1, 1
+            coeffs_count, coeffs_set = 1,1
         else:
             logger.info("restarting from {}".format(restart))
             chk_write, chk_set, dt = checkpoint.restart(restart, solver)
             if not start_new_files:
                 counts, sets = checkpoint.find_output_counts()
-                slices_count    = counts['slices']
-                slices_set      = sets['slices']
-                profiles_count  = counts['profiles']
-                profiles_set    = sets['profiles']
-                scalar_count    = counts['scalar']
-                scalar_set      = sets['scalar']
+                slices_count, slices_set    = counts['slices'], sets['slices']
+                profiles_count, profiles_set  = counts['profiles'], sets['profiles']
+                scalar_count, scalar_set    = counts['scalar'], sets['scalar']
+                try:
+                    coeffs_count, coeffs_set = counts['coeffs'], sets['coeffs']
+                except:
+                    coeffs_count, coeffs_set = 1, 1
             else:
-                slices_count    = 1
-                slices_set      = 1
-                profiles_count  = 1
-                profiles_set    = 1
-                scalar_count    = 1
-                scalar_set      = 1
+                slices_count, slices_set    = 1, 1
+                profiles_count, profiles_set  = 1, 1
+                scalar_count, scalar_set    = 1, 1
+                coeffs_count, coeffs_set = 1, 1
                 chk_write = chk_set = 1
         checkpoint.set_checkpoint(solver, wall_dt = CHECKPOINT_MIN, write_num=chk_write, set_num=chk_set)
     else:
         dt = max_dt
-        slices_count    = 1
-        slices_set      = 1
-        profiles_count  = 1
-        profiles_set    = 1
-        scalar_count    = 1
-        scalar_set      = 1 
+        slices_count, slices_set    = 1, 1
+        profiles_count, profiles_set  = 1, 1
+        scalar_count, scalar_set    = 1, 1
+        coeffs_count, coeffs_set = 1,1
         chk_write = chk_set = 1
-
 
     report_cadence = 1
     output_time_cadence = out_cadence*atmosphere.buoyancy_time
@@ -139,20 +135,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, epsilon=1e-4, resta
     solver.stop_wall_time = run_time*3600
    
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, full_output=True,\
-                                slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set])
+                                slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set],\
+                                coeffs=[coeffs_count, coeffs_set])
  
-    if bootstrap_file != None:
-        booter = Bootstrapper(bootstrap_file, ['ln_rho1'])
-        booter.bootstrap(atmosphere.z, solver)
-        dt = atmosphere.buoyancy_time/200
-        max_dt = dt
-        noise = atmosphere.global_noise()
-        T_IC = solver.state['T1']
-        T_IC.set_scales(atmosphere.domain.dealias, keep_data=True)
-        atmosphere.T0.set_scales(atmosphere.domain.dealias, keep_data=True)
-        z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-        T_IC['g'] = 1e-6*np.sin(np.pi*z_dealias/atmosphere.Lz)*noise*(atmosphere.T0['g'])#+atmosphere.T_IC['g'])
-   
     if start_dt != None:
         dt = start_dt
     cfl_cadence = 1
@@ -176,6 +161,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, epsilon=1e-4, resta
         w['g'] *= 0
 
     start_iter=solver.iteration
+    start_sim_time = solver.sim_time
     try:
         start_time = time.time()
         while solver.ok:
@@ -186,7 +172,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5, epsilon=1e-4, resta
 
             # update lists
             if solver.iteration % report_cadence == 0:
-                log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:8.3e}, '.format(solver.iteration-start_iter, solver.sim_time, dt)
+                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration-start_iter, solver.sim_time, (solver.sim_time-start_sim_time)/atmosphere.buoyancy_time, dt)
                 log_string += '\n\t\tRe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 log_string += '; Pe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Pe'), flow.max('Pe'))
                 logger.info(log_string)
