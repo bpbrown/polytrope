@@ -1336,7 +1336,8 @@ class FC_equations(Equations):
         self.problem.substitutions['KE_flux'] = 'w*KE'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
 
-    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, include_background_flux=True, easy_rho=False):
+    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, include_background_flux=True, \
+                        easy_rho_momentum=False, easy_rho_energy=False):
 
         if self.dimensions == 1:
             self.problem.parameters['j'] = 1j
@@ -1361,7 +1362,7 @@ class FC_equations(Equations):
         # here, nu and chi are constants        
         self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(u_z,   dz(w_z)))"
         self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        if not easy_rho:
+        if not easy_rho_momentum:
             self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * (2*w_z - 2/3*Div_u)"
             self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (  u_z +     dx(w))"
 
@@ -1378,7 +1379,7 @@ class FC_equations(Equations):
         self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
-        if not easy_rho:
+        if not easy_rho_energy:
             self.linear_thermal_diff += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
                 
@@ -1622,7 +1623,14 @@ class FC_polytrope(FC_equations, Polytrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        super(FC_polytrope, self).set_equations(*args, easy_rho=True, **kwargs)
+        easy_rho_momentum, easy_rho_energy = False, False
+        if self.constant_mu:
+            easy_rho_momentum   = True
+        if self.constant_kappa:
+            easy_rho_energy     = True
+        super(FC_polytrope, self).set_equations(*args,  easy_rho_momentum = easy_rho_momentum,\
+                                                        easy_rho_energy   = easy_rho_energy,\
+                                                        **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
     def set_BC(self, T1_left=0, T1_z_left=0, T1_right=0, T1_z_right=0, **kwargs):
