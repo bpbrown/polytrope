@@ -15,6 +15,7 @@ Options:
     --nz_cz=<nz>                         vertical z (chebyshev) resolution [default: 128]
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
+    --run_time=<run_time>                Run time, in hours [default: 23.5]
 
     --MHD                                Do MHD run
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
@@ -39,7 +40,7 @@ except:
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
                       fixed_T=False, fixed_Tz=False, 
-                      restart=None, nz=128, nx=None, data_dir='./'):
+                      restart=None, nz=128, nx=None, data_dir='./', run_time=23.5):
     import numpy as np
     import time
     import equations
@@ -103,7 +104,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = 100*atmosphere.thermal_time
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.5*3600
+    solver.stop_wall_time = run_time*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -255,4 +256,5 @@ if __name__ == "__main__":
                       MHD=args['--MHD'],
                       restart=(args['--restart']),
                       n_rho_cz=float(args['--n_rho_cz']),
-                      data_dir=data_dir)
+                      data_dir=data_dir,
+                      run_time=float(args['--run_time']))
