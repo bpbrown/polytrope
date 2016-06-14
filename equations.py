@@ -747,7 +747,7 @@ class Multitrope(MultiLayerAtmosphere):
                  stable_top=False,
                  width=None,
                  overshoot_pad = None,
-                 constant_mu=True,
+                 constant_prandtl=True,
                  **kwargs):
 
         self.atmosphere_name = 'multitrope'
@@ -810,7 +810,7 @@ class Multitrope(MultiLayerAtmosphere):
         else:
             super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
 
-        self.constant_mu = constant_mu
+        self.constant_prandtl = constant_prandtl
         self.constant_diffusivities = False
         
         logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
@@ -1060,7 +1060,7 @@ class Multitrope(MultiLayerAtmosphere):
             self.chi.set_scales(1, keep_data=True)
         
         logger.info("setting nu")
-        if self.constant_mu:
+        if self.constant_prandtl:
             self.kappa.set_scales(self.domain.dealias, keep_data=True)
             self.rho0.set_scales(self.domain.dealias, keep_data=True)
             self.nu.set_scales(self.domain.dealias, keep_data=True)
