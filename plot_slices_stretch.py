@@ -162,9 +162,12 @@ class ImageStack():
                 cindex = 0
 
             image = Image(field_name,imax,cbax, **kwargs)
-            image.add_image(fig,x,y,field.T)
-            
             static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
+            cz_min, cz_max = image.get_scale(field[:,np.int(field.shape[-1]/2):], percent_cut=0.5*percent_cut)
+            
+            image.add_image(fig,x,y,field.T,
+                            cz_scale=(cz_min, cz_max),
+                            ct_scale=(static_min, static_max))
             
             image.set_scale(static_min, static_max)
 
@@ -259,7 +262,7 @@ class Image():
 
         return xm, ym
            
-    def add_image(self, fig, x, y, data):
+    def add_image(self, fig, x, y, data, cz_scale=None, ct_scale=None):
         imax = self.imax
         cbax = self.cbax
         cmap = self.colortable.cmap
@@ -268,8 +271,7 @@ class Image():
             xm, ym = self.create_limits_mesh(x, y)
 
             if self.colortable.special_norm:
-                cz_min = -1.5e-4
-                cz_max = 1.5e-4
+                cz_min, cz_max = cz_scale
                 im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1, norm=self.colortable.Normalize(match1=cz_min, match2=cz_max))
             else:
                 im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
@@ -285,14 +287,13 @@ class Image():
             imax.axis(plot_extent)
 
         if self.colortable.special_norm:
-            cz_min = -1.5e-4
-            cz_max = 1.5e-4
+            cz_min, cz_max = cz_scale
             ct_min, ct_max = self.get_scale(data)
             print("image min/max {} {}".format(ct_min, ct_max))
             boundaries=np.hstack([np.linspace(ct_min, cz_min, 100),
                                   np.linspace(cz_min, cz_max, 100),
                                   np.linspace(cz_max, ct_max, 100)])
-            locs = [-8e-4, cz_min, 0, cz_max, 8e-4]
+            locs = [ct_min, cz_min, 0, cz_max, ct_max]
             ticks=ticker.FixedLocator(locs)
             #ticks=ticker.MaxNLocator(nbins=5, prune='both')
             cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
