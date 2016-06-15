@@ -21,9 +21,9 @@ Options:
     --const_chi                          If flagged, use constant chi 
 
     --restart=<restart_file>             Restart from checkpoint
-    --start_new_files=<start_new_files>  Start new files while checkpointing [default: False]
+    --start_new_files=<start_new_files>  Start new files while checkpointing
     --start_dt=<start_dt>                Start timestep, if None set it manually
-    --zero_velocities=<zero_vels>        If True, set all velocities to zero [default: False]
+    --zero_velocities=<zero_vels>        If True, set all velocities to zero
 
     --timestepper=<timestepper>          Runge-Kutta. 2nd or 4th order (rk222/rk443) [default: rk222]
     --safety_factor=<safety_factor>      Determines CFL Danger.  Higher=Faster [default: 0.2]
@@ -43,7 +43,7 @@ from dedalus.extras import flow_tools
 try:
     from dedalus.extras.checkpointing import Checkpoint
     do_checkpointing = True
-    checkpoint_min   = 30
+    checkpoint_min   = 2
 except:
     print('not importing checkpointing')
     do_checkpointing = False
@@ -121,13 +121,17 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
             chk_write, chk_set, dt = checkpoint.restart(restart, solver)
             if not start_new_files:
                 counts, sets = checkpoint.find_output_counts()
-                slices_count, slices_set            = counts['slices'],sets['slices']
-                profiles_count, profiles_count      = counts['profiles'],sets['profiles']
-                scalar_count, scalar_set            = counts['scalar'],sets['scalar']
+                #All of the +1s make it so that we make a new file rather than overwriting the previous.
+                slices_count, slices_set            = counts['slices']+1,sets['slices']+1
+                profiles_count, profiles_set      = counts['profiles']+1,sets['profiles']+1
+                scalar_count, scalar_set            = counts['scalar']+1,sets['scalar']+1
                 try: #Allows for runs without coeffs
-                    coeffs_count, coeffs_set = counts['coeffs'], sets['coeffs']
+                    coeffs_count, coeffs_set = counts['coeffs']+1, sets['coeffs']+1
                 except:
                     coeffs_count, coeffs_set = 1, 1
+                chk_write += 1
+                chk_set   += 1
+            else:
                 chk_write = chk_set = 1
         checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, write_num=chk_write, set_num=chk_set)
     else:
@@ -142,6 +146,8 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
     
     if no_coeffs:
         coeffs_output=False
+    else:
+        coeffs_output=True
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
                                 slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set],\
                                 coeffs=[coeffs_count, coeffs_set])
@@ -280,7 +286,7 @@ if __name__ == "__main__":
         rk443=False
 
     #Restarting options
-    if args['--start_new_files'] == 'True':
+    if args['--start_new_files']:
         start_new_files = True
     else:
         start_new_files = False
@@ -288,7 +294,7 @@ if __name__ == "__main__":
         start_dt = float(args['--start_dt'])
     else:
         start_dt = None
-    if args['--zero_velocities'] == 'True':
+    if args['--zero_velocities']:
         zero_velocities=True
     else:
         zero_velocities=False
