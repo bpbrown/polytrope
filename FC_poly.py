@@ -9,133 +9,165 @@ Options:
     --Rayleigh=<Rayleigh>                Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>                  Prandtl number = nu/kappa [default: 1]
     
-    --restart=<restart_file>             Restart from checkpoint
-
-    --nz=<nz>                            vertical z (chebyshev) resolution 
-    --nz_cz=<nz>                         vertical z (chebyshev) resolution [default: 128]
+    --nz=<nz>                            vertical z (chebyshev) resolution [default: 128]
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
+    --epsilon=<epsilon>                  The level of superadiabaticity of our polytrope background [default: 1e-4]
     --run_time=<run_time>                Run time, in hours [default: 23.5]
-
-    --MHD                                Do MHD run
-    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
 
     --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
     --fixed_Tz                           Fixed Temperature gradient boundary conditions (top and bottom)
-        
-    --label=<label>                      Additional label for run output directory
+    --const_mu                           If flagged, use constant mu 
+    --const_chi                          If flagged, use constant chi 
 
+    --restart=<restart_file>             Restart from checkpoint
+    --start_new_files=<start_new_files>  Start new files while checkpointing [default: False]
+    --start_dt=<start_dt>                Start timestep, if None set it manually
+    --zero_velocities=<zero_vels>        If True, set all velocities to zero [default: False]
+
+    --timestepper=<timestepper>          Runge-Kutta. 2nd or 4th order (rk222/rk443) [default: rk222]
+    --safety_factor=<safety_factor>      Determines CFL Danger.  Higher=Faster [default: 0.2]
+    
+    --root_dir=<root_dir>                Root directory to save data dir in [default: ./]
+    --label=<label>                      Additional label for run output directory
+    --out_cadence=<out_cadence>          The fraction of a buoyancy time to output data at [default: 0.1]
+    --no_coeffs                          If flagged, coeffs will not be output
 """
 import logging
 logger = logging.getLogger(__name__)
 
+import numpy as np
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
 try:
     from dedalus.extras.checkpointing import Checkpoint
     do_checkpointing = True
+    checkpoint_min   = 30
 except:
+    print('not importing checkpointing')
     do_checkpointing = False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
-                      fixed_T=False, fixed_Tz=False, 
-                      restart=None, nz=128, nx=None, data_dir='./', run_time=23.5):
-    import numpy as np
+def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
+                        nz=128, nx=False, n_rho_cz=3.5, epsilon=1e-4, run_time=23.5, \
+                        fixed_T=False, fixed_Tz=False, const_mu=False, const_kappa=True, \
+                        restart=None, start_new_files=False, start_dt=None, zero_velocities=False, \
+                        rk443=False, safety_factor=0.2,\
+                        data_dir='./', out_cadence=0.1, no_coeffs=False):
     import time
     import equations
     import os
+    import sys
     
     initial_time = time.time()
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-    if nx is None:
+    if nx == None:
         nx = nz*4
+    
+    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+                                        epsilon=epsilon, n_rho_cz=n_rho_cz,\
+                                        fig_dir='./FC_poly_atmosphere/')
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
 
-    if MHD:
-        atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True)
-    else:
-        atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, constant_mu=False, n_rho_cz=n_rho_cz)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
     if fixed_T:
-        atmosphere.set_BC(fixed_temperature=fixed_T)
+        atmosphere.set_BC(T1_left=0, T1_right=0, fixed_temperature=True, stress_free=True)
     elif fixed_Tz:
-        atmosphere.set_BC(fixed_flux=fixed_Tz)
+        atmosphere.set_BC(T1_z_left=0, T1_z_right=0, fixed_flux=True, stress_free=True)
     else:
-        atmosphere.set_BC()
+        atmosphere.set_BC(T1_z_left=0, T1_right=0, mixed_flux_temperature=True, stress_free=True)
 
     problem = atmosphere.get_problem()
-
+    
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
             os.mkdir('{:s}/'.format(data_dir))
 
-    ts = de.timesteppers.RK443
-    cfl_safety_factor = 0.2*4
-
-    # memory problems at high RA for LU decomp storing runs with RK443
-    ts = de.timesteppers.RK222
-    cfl_safety_factor = 0.2*2
-
+    if rk443:
+        ts = de.timesteppers.RK443
+        cfl_safety_factor = safety_factor*4
+    else:
+        ts = de.timesteppers.RK222
+        cfl_safety_factor = safety_factor*2
 
     # Build solver
     solver = problem.build_solver(ts)
 
-    if do_checkpointing:
-        checkpoint = Checkpoint(data_dir)
-        checkpoint.set_checkpoint(solver, wall_dt=1800)
-
-    if restart is None:
-        atmosphere.set_IC(solver)        
-    else:
-        logger.info("restarting from {}".format(restart))
-        checkpoint.restart(restart, solver)
-
-    logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time,
-                                                                      atmosphere.top_thermal_time))
-    #logger.info("full atm HS check")
-    #atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
-
-    max_dt = atmosphere.buoyancy_time*0.25
-
-    report_cadence = 1
-    output_time_cadence = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time = 100*atmosphere.thermal_time
-    solver.stop_iteration= np.inf
-    solver.stop_wall_time = run_time*3600
-
-    logger.info("output cadence = {:g}".format(output_time_cadence))
-
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence)
-
+    logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time,\
+                                                                    atmosphere.top_thermal_time))
+    logger.info("full atm HS check")
     
-    cfl_cadence = 1
-    CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
-                         max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
+    atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
+    dt = max_dt = atmosphere.buoyancy_time*0.25
 
+  
+    if restart is None or start_new_files or not do_checkpointing:
+        slices_count, slices_set        = 1,1
+        profiles_count, profiles_set    = 1,1
+        scalar_count, scalar_set        = 1,1
+        coeffs_count, coeffs_set        = 1,1
+        chk_write = chk_set = 1
+    if do_checkpointing:
+        logger.info('checkpointing in {}'.format(data_dir))
+        try:
+            checkpoint = Checkpoint(data_dir, allowed_dirs=['slices', 'profiles', 'scalar', 'coeffs'])
+        except:
+            checkpoint = Checkpoint(data_dir)
+        if restart is None :
+            atmosphere.set_IC(solver)
+        else:
+            logger.info("restarting from {}".format(restart))
+            chk_write, chk_set, dt = checkpoint.restart(restart, solver)
+            if not start_new_files:
+                counts, sets = checkpoint.find_output_counts()
+                slices_count, slices_set            = counts['slices'],sets['slices']
+                profiles_count, profiles_count      = counts['profiles'],sets['profiles']
+                scalar_count, scalar_set            = counts['scalar'],sets['scalar']
+                try: #Allows for runs without coeffs
+                    coeffs_count, coeffs_set = counts['coeffs'], sets['coeffs']
+                except:
+                    coeffs_count, coeffs_set = 1, 1
+                chk_write = chk_set = 1
+        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, write_num=chk_write, set_num=chk_set)
+    else:
+        atmosphere.set_IC(solver)
+    report_cadence = 1
+    output_time_cadence     = out_cadence*atmosphere.buoyancy_time
+    solver.stop_sim_time    = 100*atmosphere.thermal_time
+    solver.stop_iteration   = np.inf
+    solver.stop_wall_time   = run_time*3600
+        
+    logger.info("output cadence = {:g}".format(output_time_cadence))
+    
+    if no_coeffs:
+        coeffs_output=False
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
+                                slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set],\
+                                coeffs=[coeffs_count, coeffs_set])
+ 
+    if start_dt != None:
+        dt = start_dt
+
+    cfl_cadence = 1
+    cfl_threshold=0.1
+    CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=cfl_cadence, safety=cfl_safety_factor,
+                         max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=cfl_threshold)
     CFL.add_velocities(('u', 'w'))
-    if MHD:
-        CFL.add_velocities(('Bx/sqrt(4*pi*rho_full)', 'Bz/sqrt(4*pi*rho_full)'))
 
     # Flow properties
     flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
     flow.add_property("Re_rms", name='Re')
-    if MHD:
-        #flow.add_property("sqrt(Bx*Bx + Bz*Bz) / Rm", name='Lu')
-        flow.add_property("abs(dx(Bx) + dz(Bz))", name='divB')
-        flow.add_property("abs(dx(Ax) + dz(Az))", name='divA')
+    flow.add_property("Pe_rms", name='Pe')
+    
+    if zero_velocities:
+        u = solver.state['u']
+        w = solver.state['w']
+        u['g'] *= 0
+        w['g'] *= 0
 
-        Tobias_gambit = True
-        Did_gambit = False
-        Repeat_gambit = False
-        import scipy.special as scp
-        def sheet_of_B(z, sheet_center=0.5, sheet_width=0.1, **kwargs):
-            def match_Phi(z, f=scp.erf, center=0.5, width=0.025):
-                return 1/2*(1-f((z-center)/width))
-            return (1-match_Phi(z, center=sheet_center-sheet_width/2, **kwargs))*(match_Phi(z, center=sheet_center+sheet_width/2, **kwargs))
-        
+    start_iter=solver.iteration
+    start_sim_time = solver.sim_time
     try:
         start_time = time.time()
         while solver.ok:
@@ -146,23 +178,10 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
 
             # update lists
             if solver.iteration % report_cadence == 0:
-                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time, dt)
-                log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
-                if MHD:
-                     log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
-                     #log_string += ', divA: {:8.3e}/{:8.3e}'.format(flow.grid_average('divA'), flow.max('divA'))
+                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration-start_iter, solver.sim_time, (solver.sim_time-start_sim_time)/atmosphere.buoyancy_time, dt)
+                log_string += '\n\t\tRe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                log_string += '; Pe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Pe'), flow.max('Pe'))
                 logger.info(log_string)
-
-            if MHD and Tobias_gambit:
-                if solver.sim_time/atmosphere.buoyancy_time >= 30 and not Did_gambit:
-                    logger.info("Enacting Tobias Gambit")
-                    Bx = solver.state['Bx']
-                    Bx.set_scales(1, keep_data=True)
-                    B0 = np.sqrt(atmosphere.epsilon)
-                    Bx['g'] = Bx['g'] + B0*sheet_of_B(atmosphere.z, sheet_center=atmosphere.Lz/2, sheet_width=atmosphere.Lz*0.1)
-                    Bx.antidifferentiate('z',('left',0), out=Ay)
-                    Ay['g'] *= -1
-                    Did_gambit = True
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
@@ -183,14 +202,16 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
             logger.info(data_dir+'/checkpoint/')
             post.merge_analysis(data_dir+'/checkpoint/')
 
-        for task in analysis_tasks:
+        for task in analysis_tasks.keys():
             logger.info(analysis_tasks[task].base_path)
             post.merge_analysis(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
 
             logger.info('main loop time: {:e}'.format(elapsed_time))
-            logger.info('Iterations: {:d}'.format(N_iterations))
+            if start_iter > 2:
+                logger.info('Iterations (this run): {:d}'.format(N_iterations - start_iter))
+                logger.info('Iterations (total): {:d}'.format(N_iterations - start_iter))
             logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
@@ -224,37 +245,86 @@ if __name__ == "__main__":
     
     import sys
     # save data in directory named after script
-    data_dir = sys.argv[0].split('.py')[0]
+    #   these lines really are all about setting up the output directory name
+    data_dir = args['--root_dir']
+    if data_dir[-1] != '/':
+        data_dir += '/'
+    data_dir += sys.argv[0].split('.py')[0]
+    #BCs
     if args['--fixed_T']:
-        data_dir +='_fixed'
-    if args['--fixed_Tz']:
-        data_dir +='_flux'
-    data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
-    if args['--MHD']:
-        data_dir+= '_MHD'
-    if args['--label'] is not None:
-        data_dir += "_{}".format(args['--label'])
-    data_dir += '/'
+        data_dir += '_fixed'
+    elif args['--fixed_Tz']:
+        data_dir += '_flux'
+    #Diffusivities
+    if args['--const_mu']:
+        data_dir += '_constMu'
+    else:
+        data_dir += '_constNu'
+    if args['--const_chi']:
+        data_dir += '_constChi'
+    else:
+        data_dir += '_constKappa'
+    #Base atmosphere
+    data_dir += "_nrhocz{}_Ra{}_Pr{}_eps{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'], args['--epsilon'])
+    if args['--label'] == None:
+        data_dir += '/'
+    else:
+        data_dir += '_{}/'.format(args['--label'])
     logger.info("saving run in: {}".format(data_dir))
-    
-    nx =  args['--nx']
-    if nx is not None:
+  
+
+    #Timestepper type
+    if args['--timestepper'] == 'rk443':
+        rk443=True
+    else:
+        rk443=False
+
+    #Restarting options
+    if args['--start_new_files'] == 'True':
+        start_new_files = True
+    else:
+        start_new_files = False
+    if args['--start_dt'] != None:
+        start_dt = float(args['--start_dt'])
+    else:
+        start_dt = None
+    if args['--zero_velocities'] == 'True':
+        zero_velocities=True
+    else:
+        zero_velocities=False
+
+    #Resolution
+    nx = args['--nx']
+    if nx != None:
         nx = int(nx)
-    nz = args['--nz']
-    if nz is None:
-        nz = args['--nz_cz']
-    if nz is not None:
-        nz = int(nz)
+    nz = int(args['--nz'])
+
+    #Diffusivity flags
+    const_mu    = False
+    const_kappa = True
+    if args['--const_mu']:
+        const_mu   = True
+    if args['--const_chi']:
+        const_kappa = False
+
 
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
-                      MagneticPrandtl=float(args['--MagneticPrandtl']),
-                      nz=nz,
-                      nx=nx,
-                      fixed_T=args['--fixed_T'],
-                      fixed_Tz=args['--fixed_Tz'],                      
-                      MHD=args['--MHD'],
-                      restart=(args['--restart']),
+                      nx = nx,
+                      nz = nz,
                       n_rho_cz=float(args['--n_rho_cz']),
+                      epsilon=float(args['--epsilon']),
+                      run_time=float(args['--run_time']),
+                      fixed_T=args['--fixed_T'],
+                      fixed_Tz=args['--fixed_Tz'],
+                      const_mu=const_mu,
+                      const_kappa=const_kappa,
+                      restart=(args['--restart']),
+                      zero_velocities=zero_velocities,
+                      start_new_files=start_new_files,
+                      start_dt = start_dt,
+                      rk443=rk443,
+                      safety_factor=float(args['--safety_factor']),
+                      out_cadence=float(args['--out_cadence']),
                       data_dir=data_dir,
-                      run_time=float(args['--run_time']))
+                      no_coeffs=args['--no_coeffs'])
