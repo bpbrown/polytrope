@@ -108,7 +108,7 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
         try:
-            norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot'])
+            norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot']))
         except:
             # hard coded and not correct for low stiffness (when m_cz !~ 1.5 and our gravity estimate is off)
             logger.info("estimating brunt; this will introduce errors due to gravity estimate")
