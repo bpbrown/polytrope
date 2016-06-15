@@ -108,14 +108,11 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
         try:
-            # note: this currently divides an extra factor of cp=(gamma-1)/gamma,
-            # as this was missing from the brunt calculation in equations.py
-            # This has been fixed in equations.py and may result in double-counting.
-            gamma = 5/3.
-            norm_diag['brunt'] = (r'$\nabla (s_0)$', norm(averages['enstrophy'] - averages['brunt_squared_tot']*(gamma-1)/gamma))
+            norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot'])
         except:
-            # hard coded and not correct for low stiffness (when m_cz !~ 1.5)
-            norm_diag['brunt'] = ('$\omega^2/N^2_{HC}$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot']*(gamma-1)/gamma)))
+            # hard coded and not correct for low stiffness (when m_cz !~ 1.5 and our gravity estimate is off)
+            logger.info("estimating brunt; this will introduce errors due to gravity estimate")
+            norm_diag['brunt'] = (r'$\omega^2/N^2_{HC}$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot']*(gamma-1)/gamma)))
 
     except:
         logger.info("Missing grad_s from outputs; trying numeric gradient option")
