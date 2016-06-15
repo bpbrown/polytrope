@@ -35,7 +35,7 @@ except:
     logger.info("No checkpointing available; disabling capability")
     do_checkpointing=False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
+def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
@@ -64,7 +64,8 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
-                                         verbose=verbose, width=width, constant_prandtl=False)
+                                         verbose=verbose, width=width, constant_Prandtl=True)
+    
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
         
     atmosphere.set_BC()
@@ -214,7 +215,7 @@ if __name__ == "__main__":
     if nx is not None:
         nx = int(nx)
         
-    FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
+    FC_convection(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
                       n_rho_cz=float(args['--n_rho_cz']),
