@@ -225,10 +225,13 @@ class Atmosphere:
             ax.axhline(y=1e-20, color='black', linestyle='dashed') # ncc_cutoff = 1e-10
             ax.set_xlabel('z')
             ax.set_ylabel("Tn power spectrum: {}".format(key))
-            ax.set_yscale("log", nonposy='clip')
+            try:
+                ax.set_yscale("log", nonposy='clip')
+            except:
+                ax.set_yscale("linear")
             ax.set_xscale("log", nonposx='clip')
 
-            fig_q.savefig("atmosphere_{}_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
+            fig_q.savefig(self.fig_dir + "atmosphere_{}_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
             plt.close(fig_q)
 
         for key in self.necessary_quantities:
@@ -262,7 +265,7 @@ class Atmosphere:
         analysis.semilogy_posneg(axS, self.z[0,:], self.del_s0['g'][0,:], color_neg='red')
         
         axS.set_ylabel(r'$\nabla s0$')
-        fig_atm.savefig("atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
+        fig_atm.savefig(self.fig_dir + "atmosphere_quantities_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
         fig_atm = plt.figure()
         axS = fig_atm.add_subplot(2,2,1)
@@ -288,7 +291,7 @@ class Atmosphere:
         
         #axS.legend()
         axS.set_ylabel(r'$s0$')
-        fig_atm.savefig("atmosphere_s0_p{}.png".format(self.domain.distributor.rank), dpi=300)
+        fig_atm.savefig(self.fig_dir + "atmosphere_s0_p{}.png".format(self.domain.distributor.rank), dpi=300)
 
     def plot_scaled_atmosphere(self):
 
@@ -310,7 +313,7 @@ class Atmosphere:
             ax.set_yscale("log", nonposy='clip')
             ax.set_xscale("log", nonposx='clip')
             
-            fig_q.savefig("atmosphere_{}scale_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
+            fig_q.savefig(self.fig_dir + "atmosphere_{}scale_p{}.png".format(key, self.domain.distributor.rank), dpi=300)
             plt.close(fig_q)
                         
     def check_that_atmosphere_is_set(self):
@@ -334,10 +337,6 @@ class Atmosphere:
                 else:
                     T_scales = T.meta[:]['scale']
                     rho_scales = rho.meta[:]['scale']
-                    if rho_scales != 1:
-                        rho.set_scales(1, keep_data=True)
-                    if T_scales != 1:
-                        T.set_scales(1, keep_data=True)
                     P = self._new_field()
                     T.set_scales(self.domain.dealias, keep_data=True)
                     rho.set_scales(self.domain.dealias, keep_data=True)
@@ -349,7 +348,6 @@ class Atmosphere:
             P_z = self._new_field()
             P.differentiate('z', out=P_z)
             P_z.set_scales(1, keep_data=True)
-
         rho_scales = rho.meta[:]['scale']
         rho.set_scales(1, keep_data=True)
         # error in hydrostatic balance diagnostic
@@ -1337,7 +1335,7 @@ class FC_equations(Equations):
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
 
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, include_background_flux=True, \
-                        easy_rho_momentum=False, easy_rho_energy=False):
+                        hs_equilib=True, easy_rho_momentum=False, easy_rho_energy=False):
 
         if self.dimensions == 1:
             self.problem.parameters['j'] = 1j
@@ -1374,6 +1372,12 @@ class FC_equations(Equations):
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
 
+        if hs_equilib:
+            self.hs_equilib_term  = " ( 0 ) "
+        else:
+            self.hs_equilib_term = " - ( T0_z + T0 * del_ln_rho0 - g ) "
+        self.problem.substitutions['HS_equilib'] = self.hs_equilib_term
+
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
         self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
@@ -1396,7 +1400,7 @@ class FC_equations(Equations):
 
         logger.debug("Setting z-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w + HS_equilib)"))
         
         logger.debug("Setting x-momentum equation")
         self.problem.add_equation("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "+\
@@ -1507,7 +1511,10 @@ class FC_equations(Equations):
     def get_full_rho(self, solver):
         ln_rho1 = solver.state['ln_rho1']
         rho_scales = ln_rho1.meta[:]['scale']
+        ln_rho1.set_scales(self.domain.dealias, keep_data=True)
+        self.rho0.set_scales(self.domain.dealias, keep_data=True)
         rho = self._new_field()
+        rho.set_scales(self.domain.dealias, keep_data=False)
         rho['g'] = self.rho0['g']*np.exp(ln_rho1['g'])
         rho.set_scales(rho_scales, keep_data=True)
         ln_rho1.set_scales(rho_scales, keep_data=True)
@@ -1519,7 +1526,7 @@ class FC_equations(Equations):
 
         self.check_atmosphere(T=T, rho=rho, **kwargs)
 
-    def initialize_output(self, solver, data_dir, full_output=False,\
+    def initialize_output(self, solver, data_dir, coeffs_output=True,\
                             slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
         #  slices, profiles, and scalar are all [write_num, set_num]
         analysis_tasks = OrderedDict()
@@ -1536,17 +1543,18 @@ class FC_equations(Equations):
         analysis_slice.add_task("vorticity", name="vorticity")
         analysis_tasks['slice'] = analysis_slice
 
-        analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20,\
-                            parallel=False, write_num=coeffs[0], set_num=coeffs[1], **kwargs)
-        analysis_coeff.add_task("s_fluc", name="s", layout='c')
-        analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
-        analysis_coeff.add_task("T1", name="T", layout='c')
-        analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
-        analysis_coeff.add_task("u", name="u", layout='c')
-        analysis_coeff.add_task("w", name="w", layout='c')
-        analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
-        analysis_coeff.add_task("vorticity", name="vorticity", layout='c')
-        analysis_tasks['coeff'] = analysis_coeff
+        if coeffs_output:
+            analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20,\
+                                parallel=False, write_num=coeffs[0], set_num=coeffs[1], **kwargs)
+            analysis_coeff.add_task("s_fluc", name="s", layout='c')
+            analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
+            analysis_coeff.add_task("T1", name="T", layout='c')
+            analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
+            analysis_coeff.add_task("u", name="u", layout='c')
+            analysis_coeff.add_task("w", name="w", layout='c')
+            analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
+            analysis_coeff.add_task("vorticity", name="vorticity", layout='c')
+            analysis_tasks['coeff'] = analysis_coeff
         
         if self.dimensions != 1:
             analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20,\
