@@ -1375,7 +1375,7 @@ class FC_equations(Equations):
         if hs_equilib:
             self.hs_equilib_term  = " ( 0 ) "
         else:
-            self.hs_equilib_term = " - ( T0_z + T0 * del_ln_rho0 - g ) "
+            self.hs_equilib_term = " - ( T0_z + T0 * del_ln_rho0 + g ) "
         self.problem.substitutions['HS_equilib'] = self.hs_equilib_term
 
         # double check implementation of variabile chi and background coupling term.
