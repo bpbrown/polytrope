@@ -333,9 +333,17 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
                 logger.info("low stiffness fit: {}".format(a))
 
     # plot is now of delta_z/H_rho
-    apjfig.ax.plot(x, m_cz*(np.exp(n_rho/(m_cz*stiffness))-1), label="prediction")
+    z_predicted = m_rz*(np.exp(n_rho/(m_cz*stiffness))-1)
+    Lz_cz = np.exp(n_rho/m_cz)-1
+    L_adjust = (ref_depth-Lz_cz)/H_rho
+    z_total = z_predicted + L_adjust
+    logger.info("z_predicted/H {}".format(z_predicted))
+    logger.info("Lz_cz         {}".format(Lz_cz))
+    logger.info("L_adjust/H    {}".format(L_adjust))
+    logger.info("prediction  = {}".format(z_total))
+    apjfig.ax.plot(x, z_total, label="prediction")
 
-    logger.info("overshoot prediction = {}".format(m_cz*(np.exp(n_rho/(m_cz*stiffness))-1)))
+
     if linear:
         apjfig.ax.set_xscale("linear")
         apjfig.ax.set_xlabel("Inverse stiffness 1/S")
@@ -390,9 +398,17 @@ def main(output_path='./', **kwargs):
     fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='s')
     fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='s')
 
-    #file_list = [(1.2*1e3, glob.glob('FC_multi_nrhocz5_Ra1e8_S1e3_single_high/profiles/profiles_s2?.h5'))]
-    #stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
-    #fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig)
+
+    file_list =[(1e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e1_single/profiles/profiles_s[5,6,7]?.h5')),
+                (3e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S3e1_single/profiles/profiles_s[5,6,7]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6,7]?.h5'))]
+
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='*')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='*')
+
     fig_linear.savefig(output_path+"overshoot_linear.png", dpi=600)
     fig.savefig(output_path+"overshoot.png", dpi=600)
 
