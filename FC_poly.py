@@ -21,9 +21,9 @@ Options:
     --const_chi                          If flagged, use constant chi 
 
     --restart=<restart_file>             Restart from checkpoint
-    --start_new_files=<start_new_files>  Start new files while checkpointing
+    --start_new_files                    Start new files while checkpointing
     --start_dt=<start_dt>                Start timestep, if None set it manually
-    --zero_velocities=<zero_vels>        If True, set all velocities to zero
+    --zero_velocities                    If True, set all velocities to zero
 
     --timestepper=<timestepper>          Runge-Kutta. 2nd or 4th order (rk222/rk443) [default: rk222]
     --safety_factor=<safety_factor>      Determines CFL Danger.  Higher=Faster [default: 0.2]
@@ -43,7 +43,7 @@ from dedalus.extras import flow_tools
 try:
     from dedalus.extras.checkpointing import Checkpoint
     do_checkpointing = True
-    checkpoint_min   = 2
+    checkpoint_min   = 30
 except:
     print('not importing checkpointing')
     do_checkpointing = False
@@ -151,7 +151,7 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
                                 slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set],\
                                 coeffs=[coeffs_count, coeffs_set])
- 
+    
     if start_dt != None:
         dt = start_dt
 
@@ -174,10 +174,12 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
 
     start_iter=solver.iteration
     start_sim_time = solver.sim_time
+
     try:
         start_time = time.time()
+        logger.info('starting main loop')
         while solver.ok:
-
+            
             dt = CFL.compute_dt()
             # advance
             solver.step(dt)

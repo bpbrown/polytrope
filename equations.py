@@ -587,11 +587,14 @@ class Polytrope(Atmosphere):
             self.scale_momentum['g'] = (self.z0 - self.z)
             self.scale_energy['g'] = (self.z0 - self.z)
         else:
-            # consider whether to scale nccs involving chi differently (e.g., energy equation)
+            # consider whether to scale nccs involving chi/nu differently -- **3 collapses some bandwidth at high nrho.
             self.scale['g'] = (self.z0 - self.z)
             self.scale_continuity['g'] = (self.z0 - self.z)
-            self.scale_momentum['g'] = (self.z0 - self.z)
-            self.scale_energy['g'] = (self.z0 - self.z)
+            if self.constant_mu:
+                self.scale_momentum['g'] = (self.z0 - self.z)#**3
+            else:
+                self.scale_momentum['g'] = (self.z0 - self.z)
+            self.scale_energy['g'] = (self.z0 - self.z)#**3
 
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
@@ -1267,6 +1270,10 @@ class Equations():
             self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
             self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
 
+        else:
+            self.problem.substitutions['plane_avg(A)'] = '1*A'
+            
+
 
     def global_noise(self, seed=42, **kwargs):            
         # Random perturbations, initialized globally for same results in parallel
@@ -1306,8 +1313,11 @@ class FC_equations(Equations):
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
 
         self.problem.parameters['delta_s_atm'] = self.delta_s
-        self.problem.substitutions['s_fluc'] = '(1/Cv_inv*log(1+T1/T0) - 1/Cv_inv*(gamma-1)*ln_rho1)'
-        self.problem.substitutions['s_mean'] = '(1/Cv_inv*log(T0) - 1/Cv_inv*(gamma-1)*ln_rho0)'
+        self.problem.substitutions['s_fluc'] = '(1/Cv_inv*log(1+T1/T0) - ln_rho1)'
+
+        self.problem.substitutions['s_fluc_right'] = '(1/Cv_inv*log(1+right(plane_avg(T1))/right(T0)) - right(plane_avg(ln_rho1)))'
+        self.problem.substitutions['s_fluc_left'] = '(1/Cv_inv*log(1+left(plane_avg(T1))/left(T0)) - left(plane_avg(ln_rho1)))'
+        self.problem.substitutions['s_mean'] = '(1/Cv_inv*log(T0) - ln_rho0)'
 
         self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
@@ -1333,6 +1343,9 @@ class FC_equations(Equations):
         self.problem.substitutions['kappa_flux'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
         self.problem.substitutions['KE_flux'] = 'w*KE'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
+
+        self.problem.substitutions['s_fluc_to_adiabatic'] = '0'
+
 
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, include_background_flux=True, \
                         hs_equilib=True, easy_rho_momentum=False, easy_rho_energy=False):
@@ -1486,7 +1499,7 @@ class FC_equations(Equations):
     def set_IC(self, solver, A0=1e-6, **kwargs):
         # initial conditions
         self.T_IC = solver.state['T1']
-        self.ln_rho_IC = solver.state['ln_rho1']
+        #self.ln_rho_IC = solver.state['ln_rho1']
 
         noise = self.global_noise(**kwargs)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
@@ -1527,13 +1540,15 @@ class FC_equations(Equations):
         self.check_atmosphere(T=T, rho=rho, **kwargs)
 
     def initialize_output(self, solver, data_dir, coeffs_output=True,\
-                            slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
+                            slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1],\
+                            **kwargs):
         #  slices, profiles, and scalar are all [write_num, set_num]
         analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20,\
                                 parallel=False, write_num=slices[0], set_num=slices[1], **kwargs)
         analysis_slice.add_task("s_fluc", name="s")
+        analysis_slice.add_task("s_fluc + s_fluc_to_adiabatic", name="s_ad_dev")
         analysis_slice.add_task("s_fluc - plane_avg(s_fluc)", name="s'")
         #analysis_slice.add_task("T1", name="T")
         #analysis_slice.add_task("ln_rho1", name="ln_rho")
@@ -1547,7 +1562,6 @@ class FC_equations(Equations):
             analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20,\
                                 parallel=False, write_num=coeffs[0], set_num=coeffs[1], **kwargs)
             analysis_coeff.add_task("s_fluc", name="s", layout='c')
-            analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
             analysis_coeff.add_task("T1", name="T", layout='c')
             analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
             analysis_coeff.add_task("u", name="u", layout='c')
@@ -1587,6 +1601,7 @@ class FC_equations(Equations):
             analysis_profile.add_task("plane_std(enstrophy)", name="enstrophy_std")        
             analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
             analysis_profile.add_task("plane_avg(Rayleigh_local)", name="Rayleigh_local")
+            analysis_profile.add_task("plane_avg(s_fluc + s_fluc_to_adiabatic)", name="s_ad_dev")
             analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
             analysis_profile.add_task("plane_std(s_fluc)", name="s_fluc_std")
             analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
@@ -1631,27 +1646,35 @@ class FC_polytrope(FC_equations, Polytrope):
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        easy_rho_momentum, easy_rho_energy = False, False
+        easy_rho_momentum, easy_rho_energy, hs_equilib = False, False, True
         if self.constant_mu:
             easy_rho_momentum   = True
         if self.constant_kappa:
             easy_rho_energy     = True
         super(FC_polytrope, self).set_equations(*args,  easy_rho_momentum = easy_rho_momentum,\
                                                         easy_rho_energy   = easy_rho_energy,\
+                                                        hs_equilib        = hs_equilib,\
                                                         **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+            
+    def _set_subs(self):
+        super(FC_polytrope, self)._set_subs()
+        #log(T0**(1/(gamma-1))/rho0) = epsilon*log(T0).  
+        #   So this is epsilon*log(T0) - (eps*log(Lz+1) + s_fluc_right) - (s_fluc_left - s_fluc_right)/2
+        #     The 1st term is the adiabatic curve.  The second adjust for upper BL.  The third for lower BL.
+        self.problem.substitutions['s_fluc_to_adiabatic'] = "(log(T0**(1/(gamma - 1))/rho0)*(1-log(Lz+1)/log(T0)) - s_fluc_right/2 - s_fluc_left/2)"
 
     def set_BC(self, T1_left=0, T1_z_left=0, T1_right=0, T1_z_right=0, **kwargs):
         self.T1_left        = T1_left
         self.T1_right       = T1_right
         self.T1_z_left      = T1_z_left
         self.T1_z_right     = T1_z_right
-        #Decrease flux factor is 1 - sqrt(Pr2/Pr1)
         self.problem.parameters['T1_z_left']    = self.T1_z_left
         self.problem.parameters['T1_z_right']   = self.T1_z_right
         self.problem.parameters['T1_left']      = self.T1_left
         self.problem.parameters['T1_right']     = self.T1_right
         super(FC_polytrope, self).set_BC(**kwargs)
+
 
 class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
     def __init__(self, *args, **kwargs):
