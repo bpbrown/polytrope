@@ -1328,9 +1328,9 @@ class FC_equations(Equations):
         self.problem.substitutions['vel_rms'] = '(u_rms + w_rms)'
         self.problem.substitutions['Re_rms'] = 'vel_rms*Lz/nu'
         self.problem.substitutions['Pe_rms'] = 'vel_rms*Lz/chi'
-        self.problem.substitutions['lambda_microscale'] = 'sqrt(plane_avg(vel_rms)/plane_avg(enstrophy))'
-        self.problem.substitutions['Re_microscale'] = 'vel_rms*lambda_microscale/nu'
-        self.problem.substitutions['Pe_microscale'] = 'vel_rms*lambda_microscale/chi'
+        #self.problem.substitutions['lambda_microscale'] = 'sqrt(plane_avg(vel_rms)/plane_avg(enstrophy))'
+        #self.problem.substitutions['Re_microscale'] = 'vel_rms*lambda_microscale/nu'
+        #self.problem.substitutions['Pe_microscale'] = 'vel_rms*lambda_microscale/chi'
         
         self.problem.substitutions['h_flux'] = 'w*h'
         self.problem.substitutions['kappa_flux_mean'] = '-rho0*chi*dz(T0)'
@@ -1592,9 +1592,9 @@ class FC_equations(Equations):
             analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cp_inv)", name="brunt_squared_fluc")        
             analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cp_inv)", name="brunt_squared_mean")        
             analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cp_inv)", name="brunt_squared_tot")
-            analysis_profile.add_task("lambda_microscale", name="lambda_microscale")
-            analysis_profile.add_task("plane_avg(Re_microscale)",  name="Re_microscale")
-            analysis_profile.add_task("plane_avg(Pe_microscale)",  name="Pe_microscale")
+            #analysis_profile.add_task("lambda_microscale", name="lambda_microscale")
+            #analysis_profile.add_task("plane_avg(Re_microscale)",  name="Re_microscale")
+            #analysis_profile.add_task("plane_avg(Pe_microscale)",  name="Pe_microscale")
             analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
                                       name="T1_source_terms")
             
@@ -1614,16 +1614,16 @@ class FC_equations(Equations):
             analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
             analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
             analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
-            analysis_scalar.add_task("vol_avg(Re_microscale)",  name="Re_microscale")
-            analysis_scalar.add_task("vol_avg(Pe_microscale)",  name="Pe_microscale")
+            #analysis_scalar.add_task("vol_avg(Re_microscale)",  name="Re_microscale")
+            #analysis_scalar.add_task("vol_avg(Pe_microscale)",  name="Pe_microscale")
 
             analysis_tasks['scalar'] = analysis_scalar
 
         # workaround for issue #29
         self.problem.namespace['enstrophy'].store_last = True
-        self.problem.namespace['Re_microscale'].store_last = True
-        self.problem.namespace['Pe_microscale'].store_last = True
-        self.problem.namespace['lambda_microscale'].store_last = True
+        #self.problem.namespace['Re_microscale'].store_last = True
+        #self.problem.namespace['Pe_microscale'].store_last = True
+        #self.problem.namespace['lambda_microscale'].store_last = True
 
         return self.analysis_tasks
         

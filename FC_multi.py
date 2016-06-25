@@ -66,7 +66,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width, constant_Prandtl=True)
     
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False)
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
         
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
