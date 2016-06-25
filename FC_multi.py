@@ -17,6 +17,8 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
+    --oz                       Do system with convection zone on the bottom rather than top (exoplanets)
+
     --width=<width>            Width of erf transition between two polytropes
     
     --label=<label>            Additional label for run output directory
@@ -41,6 +43,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       nx = None,
                       width=None,
                       single_chebyshev=False,
+                      oz=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -50,7 +53,16 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     initial_time = time.time()
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
-    
+
+    if oz:
+        constant_Prandtl=False
+        stable_top=True
+        mixed_temperature_flux=True
+    else:
+        constant_Prandtl=True
+        stable_top=False
+        mixed_temperature_flux=None
+        
     # Set domain
     if nx is None:
         nx = nz_cz*4
@@ -64,11 +76,13 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
-                                         verbose=verbose, width=width, constant_Prandtl=True)
+                                         verbose=verbose, width=width,
+                                         constant_Prandtl=constant_Prandtl,
+                                         stable_top=stable_top)
     
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
         
-    atmosphere.set_BC()
+    atmosphere.set_BC(mixed_temperature_flux=mixed_temperature_flux)
     problem = atmosphere.get_problem()
 
     #atmosphere.plot_atmosphere()
@@ -107,9 +121,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     report_cadence = 1
     output_time_cadence = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time = 0.25*atmosphere.thermal_time
+    solver.stop_sim_time = np.inf
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.75*3600
+    solver.stop_wall_time = 23.5*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -200,6 +214,8 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
+    if args['--oz']:
+        data_dir += '_oz'
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
     if args['--width'] is not None:
         data_dir += "_erf{}".format(args['--width'])
@@ -227,4 +243,5 @@ if __name__ == "__main__":
                       nx=nx,
                       restart=(args['--restart']),
                       data_dir=data_dir,
-                      verbose=args['--verbose'])
+                      verbose=args['--verbose'],
+                      oz=args['--oz'])
