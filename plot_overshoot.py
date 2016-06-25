@@ -391,7 +391,9 @@ def main(output_path='./', **kwargs):
     file_list =[(3e0, glob.glob('FC_multi_nrhocz3_Ra1e6_S3e0_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
                 (1e1, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e1_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
                 (3e1, glob.glob('FC_multi_nrhocz3_Ra1e6_S3e1_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
-                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_single/profiles/profiles_s1[0,1,2,3,4]?.h5'))]
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e3, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e3_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e4, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e4_single/profiles/profiles_s1[0,1,2,3,4]?.h5'))]
 
     stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
 
@@ -401,13 +403,32 @@ def main(output_path='./', **kwargs):
 
     file_list =[(1e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e1_single/profiles/profiles_s[5,6,7]?.h5')),
                 (3e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S3e1_single/profiles/profiles_s[5,6,7]?.h5')),
-                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6,7]?.h5'))]
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6,7]?.h5')),
+                (1e3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6,7]?.h5'))]
 
 
     stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
 
     fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='*')
     fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='*')
+
+    file_list =[(1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_erf0.05_single/profiles/profiles_s[5]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_single/profiles/profiles_s[5]?.h5'))]
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='<')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='<')
+
+
+    file_list =[(1e2, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e2_erf0.05_single/profiles/profiles_s[5]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e2_single/profiles/profiles_s[5]?.h5'))]
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='>')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='>')
+
 
     fig_linear.savefig(output_path+"overshoot_linear.png", dpi=600)
     fig.savefig(output_path+"overshoot.png", dpi=600)
