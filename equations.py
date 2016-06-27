@@ -816,13 +816,13 @@ class Multitrope(MultiLayerAtmosphere):
             else:
                 Lz_bottom = Lz_cz + overshoot_pad
                 Lz_top = Lz_rz - overshoot_pad
-            Lz_set = [Lz_bottom, Lz_top]            
-        if len(nz) == 1:
-            #nz = nz[-1] # grab the last set of points as the full resolution; bit of a hack.
-            # do this at the driving script level.
-            super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom + Lz_top], **kwargs)
-        else:
-            super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz_set, **kwargs)
+                
+            if len(nz) == 1:
+                Lz_set = [Lz_bottom + Lz_top]            
+            else:
+                Lz_set = [Lz_bottom, Lz_top]            
+
+        super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz_set, **kwargs)
 
         self.constant_Prandtl = constant_Prandtl
         self.constant_diffusivities = False
