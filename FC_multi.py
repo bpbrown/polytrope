@@ -17,11 +17,12 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
+    --rk222                    Use RK222 as timestepper
+
     --superstep                Superstep equations by using average rather than actual vertical grid spacing
     --dense                    Oversample matching region with extra chebyshev domain
     --nz_dense=<nz_dense>      Vertical z (chebyshev) resolution in oversampling region   [default: 64]
    
-
     --oz                       Do system with convection zone on the bottom rather than top (exoplanets)
 
     --width=<width>            Width of erf transition between two polytropes
@@ -48,9 +49,10 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       nx = None,
                       width=None,
                       single_chebyshev=False,
+                      rk222=False,
                       superstep=False,
                       dense=False, nz_dense=64,
-                      oz=False,                      
+                      oz=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -81,6 +83,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     else:
         if dense:
             nz = nz_rz+nz_dense+nz_cz
+            #nz_list = [nz_rz, int(nz_dense/2), int(nz_dense/2), nz_cz]
             nz_list = [nz_rz, nz_dense, nz_cz]
         else:
             nz = nz_rz+nz_cz
@@ -105,8 +108,14 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         if not os.path.exists('{:s}/'.format(data_dir)):
             os.mkdir('{:s}/'.format(data_dir))
 
-    ts = de.timesteppers.RK443
-    cfl_safety_factor = 0.2*4
+    if rk222:
+        logger.info("timestepping using RK222")
+        ts = de.timesteppers.RK222
+        cfl_safety_factor = 0.2*2
+    else:
+        logger.info("timestepping using RK443")
+        ts = de.timesteppers.RK443
+        cfl_safety_factor = 0.2*4
 
     # Build solver
     solver = problem.build_solver(ts)
@@ -279,4 +288,5 @@ if __name__ == "__main__":
                       oz=args['--oz'],
                       dense=args['--dense'],
                       nz_dense=int(args['--nz_dense']),
+                      rk222=args['--rk222'],
                       superstep=args['--superstep'])

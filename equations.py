@@ -779,11 +779,10 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("erf width factor is {} of Lz_cz (total: {})".format(width, width*Lz_cz))
         self.match_width = width*Lz_cz # adjusted by ~3x for erf() vs tanh()
         
-        logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
-
         if len(nz) == 3:
             overshoot_pad = self.match_width
-            logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
+            logger.info("dense multitrope: using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
+            logger.info("nz = {}".format(nz))
             if self.stable_bottom:
                 Lz_bottom = Lz_rz - overshoot_pad
                 Lz_mid = 2*overshoot_pad
@@ -793,6 +792,21 @@ class Multitrope(MultiLayerAtmosphere):
                 Lz_mid = 2*overshoot_pad
                 Lz_top = Lz_rz - overshoot_pad
             Lz_set = [Lz_bottom, Lz_mid, Lz_top]
+        elif len(nz) == 4:
+            overshoot_pad = self.match_width
+            logger.info("dense multitrope: using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
+            logger.info("nz = {}".format(nz))
+            if self.stable_bottom:
+                Lz_bottom = Lz_rz - overshoot_pad
+                Lz_mid = overshoot_pad
+                Lz_mid_2 = overshoot_pad
+                Lz_top = Lz_cz + overshoot_pad
+            else:
+                Lz_bottom = Lz_cz + overshoot_pad
+                Lz_mid = overshoot_pad
+                Lz_mid_2 = overshoot_pad
+                Lz_top = Lz_rz - overshoot_pad
+            Lz_set = [Lz_bottom, Lz_mid, Lz_mid_2, Lz_top]
         else:
             # guess at overshoot offset and tanh width
             # current guess for overshoot pad is based off of entropy equilibration
@@ -810,6 +824,8 @@ class Multitrope(MultiLayerAtmosphere):
                     # should only be a major problem for stiffness ~ O(1)
                     overshoot_pad = 0.5*Lz_rz
                     
+            logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
+
             if self.stable_bottom:
                 Lz_bottom = Lz_rz - overshoot_pad
                 Lz_top = Lz_cz + overshoot_pad
@@ -985,6 +1001,7 @@ class Multitrope(MultiLayerAtmosphere):
         #self.scale['g'] = (self.Lz+1 - self.z)/(self.Lz+1)
 
         if atmosphere_type2:
+            logger.info("ATMOSPHERE TYPE 2")
             # specify T0_z as smoothly matched profile
             # for now, hijack compute_kappa_profile (this could be cleaned up),
             # but grad T ratio has inverse relationship to kappa_ratio
