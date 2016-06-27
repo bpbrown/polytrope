@@ -766,22 +766,6 @@ class Multitrope(MultiLayerAtmosphere):
         
         Lx = Lz_cz*aspect_ratio
         
-        # guess at overshoot offset and tanh width
-        # current guess for overshoot pad is based off of entropy equilibration
-        # in a falling plume (location z in RZ where S(z) = S(z_top)), assuming
-        # the plume starts with the entropy of the top of the CZ.
-        # see page 139 of lab-book 15, 9/1/15 (Brown)
-        T_bcz = Lz_cz+1
-        L_ov = ((T_bcz)**((stiffness+1)/stiffness) - T_bcz)*(self.m_rz+1)/(self.m_cz+1)
-
-        if overshoot_pad is None:
-            overshoot_pad = 2*L_ov # add a safety factor of 2x for timestepping for now
-            if overshoot_pad >= Lz_rz:
-                # if we go past the bottom or top of the domain,
-                # put the matching region in the middle of the stable layer.
-                # should only be a major problem for stiffness ~ O(1)
-                overshoot_pad = 0.5*Lz_rz
-
         if self.stable_bottom:
             self.match_center = self.Lz_rz
         else:
@@ -796,19 +780,49 @@ class Multitrope(MultiLayerAtmosphere):
         self.match_width = width*Lz_cz # adjusted by ~3x for erf() vs tanh()
         
         logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
-        if self.stable_bottom:
-            Lz_bottom = Lz_rz - overshoot_pad
-            Lz_top = Lz_cz + overshoot_pad
-        else:
-            Lz_bottom = Lz_cz + overshoot_pad
-            Lz_top = Lz_rz - overshoot_pad
 
+        if len(nz) == 3:
+            overshoot_pad = self.match_width
+            logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
+            if self.stable_bottom:
+                Lz_bottom = Lz_rz - overshoot_pad
+                Lz_mid = 2*overshoot_pad
+                Lz_top = Lz_cz + overshoot_pad
+            else:
+                Lz_bottom = Lz_cz + overshoot_pad
+                Lz_mid = 2*overshoot_pad
+                Lz_top = Lz_rz - overshoot_pad
+            Lz_set = [Lz_bottom, Lz_mid, Lz_top]
+        else:
+            # guess at overshoot offset and tanh width
+            # current guess for overshoot pad is based off of entropy equilibration
+            # in a falling plume (location z in RZ where S(z) = S(z_top)), assuming
+            # the plume starts with the entropy of the top of the CZ.
+            # see page 139 of lab-book 15, 9/1/15 (Brown)
+            T_bcz = Lz_cz+1
+            L_ov = ((T_bcz)**((stiffness+1)/stiffness) - T_bcz)*(self.m_rz+1)/(self.m_cz+1)
+
+            if overshoot_pad is None:
+                overshoot_pad = 2*L_ov # add a safety factor of 2x for timestepping for now
+                if overshoot_pad >= Lz_rz:
+                    # if we go past the bottom or top of the domain,
+                    # put the matching region in the middle of the stable layer.
+                    # should only be a major problem for stiffness ~ O(1)
+                    overshoot_pad = 0.5*Lz_rz
+                    
+            if self.stable_bottom:
+                Lz_bottom = Lz_rz - overshoot_pad
+                Lz_top = Lz_cz + overshoot_pad
+            else:
+                Lz_bottom = Lz_cz + overshoot_pad
+                Lz_top = Lz_rz - overshoot_pad
+            Lz_set = [Lz_bottom, Lz_top]            
         if len(nz) == 1:
             #nz = nz[-1] # grab the last set of points as the full resolution; bit of a hack.
             # do this at the driving script level.
             super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom + Lz_top], **kwargs)
         else:
-            super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_top], **kwargs)
+            super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz_set, **kwargs)
 
         self.constant_Prandtl = constant_Prandtl
         self.constant_diffusivities = False
@@ -1090,87 +1104,6 @@ class Multitrope(MultiLayerAtmosphere):
         flux = self._new_ncc()
         flux['g'] = rho['g']*T_z['g']*chi['g']
         return flux
-
-
-class MultitropeDense(Multitrope):
-    '''
-    Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.
-
-    When specifying the z resolution, use a list, with the stable layer
-    as the first entry and the unstable layer as the second list entry.
-    e.g.,
-    nz = [nz_rz, nz_cz]
-    
-    '''
-    def __init__(self, nx=256, nz=[128, 32, 128],
-                 aspect_ratio=4,
-                 gamma=5/3,
-                 n_rho_cz=3.5, n_rho_rz=2, 
-                 m_rz=3, stiffness=100,
-                 stable_bottom=True,
-                 stable_top=False,
-                 **kwargs):
-
-        self.atmosphere_name = 'multitrope'
-        
-        if stable_top:
-            stable_bottom = False
-            
-        self.stable_bottom = stable_bottom
-
-        self._set_atmosphere_parameters(gamma=gamma, n_rho_cz=n_rho_cz,
-                                        n_rho_rz=n_rho_rz, m_rz=m_rz, stiffness=stiffness)
-        
-        Lz_cz, Lz_rz, Lz = self._calculate_Lz(n_rho_cz, self.m_cz, n_rho_rz, self.m_rz)
-        self.Lz_cz = Lz_cz
-        self.Lz_rz = Lz_rz
-        
-        Lx = Lz_cz*aspect_ratio
-
-        if self.stable_bottom:
-            self.match_center = self.Lz_rz
-        else:
-            self.match_center = self.Lz_cz
-
-        self.match_width = 0.02*Lz_cz # 2% of Lz_cz, somewhat analgous to Rogers & Glatzmaier 2005
-        overshoot_pad = 3*self.match_width
-        
-        logger.info("using overshoot_pad = {} and match_width = {}".format(overshoot_pad, self.match_width))
-        if self.stable_bottom:
-            Lz_bottom = Lz_rz - overshoot_pad
-            Lz_mid = 2*overshoot_pad
-            Lz_top = Lz_cz + overshoot_pad
-        else:
-            Lz_bottom = Lz_cz + overshoot_pad
-            Lz_mid = 2*overshoot_pad
-            Lz_top = Lz_rz - overshoot_pad
-
-        super(Multitrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=[Lz_bottom, Lz_mid, Lz_top], **kwargs)
-
-        logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
-
-        self.z_cz =self.Lz_cz + 1
-        self._set_atmosphere()
-
-        T0_max, T0_min = self.value_at_boundary(self.T0)
-        P0_max, P0_min = self.value_at_boundary(self.P0)
-        rho0_max, rho0_min = self.value_at_boundary(self.rho0)
-
-        logger.info("   temperature: min {}  max {}".format(T0_min, T0_max))
-        logger.info("   pressure: min {}  max {}".format(P0_min, P0_max))
-        logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
-
-        rho0_ratio = rho0_max/rho0_min
-        logger.info("   density scale heights = {:g}".format(np.log(rho0_ratio)))
-        logger.info("   target n_rho_cz = {:g} n_rho_rz = {:g}".format(self.n_rho_cz, self.n_rho_rz))
-        logger.info("   target n_rho_total = {:g}".format(self.n_rho_cz+self.n_rho_rz))
-        H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
-        H_rho_bottom = (self.z_cz)/self.m_cz
-        logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
-        logger.info("   H_rho/delta x = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top/self.delta_x,
-                                                                          H_rho_bottom/self.delta_x))
-
-        self._set_timescales()
 
 # need to implement flux-based Rayleigh number here.
 class PolytropeFlux(Polytrope):
@@ -1715,28 +1648,6 @@ class FC_multitrope(FC_equations, Multitrope):
         self.ln_rho_IC['g'] = 0
         
         logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
-
-class FC_multitropedense(FC_equations, MultitropeDense):
-    def __init__(self, *args, **kwargs):
-        super(FC_multitropedense, self).__init__() 
-        MultitropeDense.__init__(self, *args, **kwargs)
-        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
-
-    def set_equations(self, *args, **kwargs):
-        super(FC_multitropedense,self).set_equations(*args, **kwargs)
-        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-    
-    def set_IC(self, solver, A0=1e-3, **kwargs):
-        # initial conditions
-        self.T_IC = solver.state['T1']
-        self.ln_rho_IC = solver.state['ln_rho1']
-
-        noise = self.global_noise(**kwargs)
-        self.T_IC.set_scales(self.domain.dealias, keep_data=True)
-        z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
-        self.T_IC['g'] = self.epsilon*A0*noise*np.sin(np.pi*z_dealias/self.Lz)*self.T0['g']
-
-        logger.info("Starting with T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 
 class FC_MHD_equations(FC_equations):
     def __init__(self):

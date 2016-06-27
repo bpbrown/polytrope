@@ -18,6 +18,9 @@ Options:
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
     --superstep                Superstep equations by using average rather than actual vertical grid spacing
+    --dense                    Oversample matching region with extra chebyshev domain
+    --nz_dense=<nz_dense>      Vertical z (chebyshev) resolution in oversampling region   [default: 64]
+   
 
     --oz                       Do system with convection zone on the bottom rather than top (exoplanets)
 
@@ -46,6 +49,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       width=None,
                       single_chebyshev=False,
                       superstep=False,
+                      dense=False, nz_dense=64,
                       oz=False,                      
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
@@ -75,8 +79,12 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         nz = nz_cz
         nz_list = [nz_cz]
     else:
-        nz = nz_rz+nz_cz
-        nz_list = [nz_rz, nz_cz]
+        if dense:
+            nz = nz_rz+nz_dense+nz_cz
+            nz_list = [nz_rz, nz_dense, nz_cz]
+        else:
+            nz = nz_rz+nz_cz
+            nz_list = [nz_rz, nz_cz]
 
     atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
@@ -269,4 +277,6 @@ if __name__ == "__main__":
                       data_dir=data_dir,
                       verbose=args['--verbose'],
                       oz=args['--oz'],
+                      dense=args['--dense'],
+                      nz_dense=int(args['--nz_dense']),
                       superstep=args['--superstep'])
