@@ -54,10 +54,10 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
     
     if MHD:
         atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
     else:
         atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl)
     if fixed_T:
         atmosphere.set_BC(fixed_temperature=fixed_T)
     elif fixed_Tz:

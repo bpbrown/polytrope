@@ -92,7 +92,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                                          constant_Prandtl=constant_Prandtl,
                                          stable_top=stable_top)
     
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl)
         
     atmosphere.set_BC(mixed_temperature_flux=mixed_temperature_flux)
     problem = atmosphere.get_problem()

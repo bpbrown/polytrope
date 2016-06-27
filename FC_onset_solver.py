@@ -89,8 +89,7 @@ class FC_onset_solver:
         '''
         Sets up the EVP solver for a given value of ra and Pr.
         '''
-        self.atmosphere.set_eigenvalue_problem(ra, pr,\
-                    include_background_flux=False)
+        self.atmosphere.set_eigenvalue_problem(ra, pr)
         self.atmosphere.set_BC()
         self.problem = self.atmosphere.get_problem()
         self.solver = self.problem.build_solver()

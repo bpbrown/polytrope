@@ -1271,7 +1271,7 @@ class FC_equations(Equations):
         self.problem.substitutions['KE_flux'] = 'w*KE'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
 
-    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, include_background_flux=True,
+    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
                       easy_rho_momentum=False, easy_rho_energy=False):
 
         if self.dimensions == 1:
@@ -1744,7 +1744,7 @@ class FC_MHD_equations(FC_equations):
     
         self.problem.parameters['eta'] = self.eta
         
-    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=True,  **kwargs):
+    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, **kwargs):
         # DOES NOT YET INCLUDE Ohmic heating, variable eta.
         
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs)
@@ -1991,7 +1991,7 @@ class AN_equations(Equations):
         self.problem.substitutions['kappa_flux'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
         self.problem.substitutions['KE_flux'] = 'w*KE'
 
-    def set_equations(self, Rayleigh, Prandtl, include_background_flux=True):
+    def set_equations(self, Rayleigh, Prandtl):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
         self._set_subs()

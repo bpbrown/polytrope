@@ -54,7 +54,7 @@ Prandtl = 1
 n_rho_cz=3
 
 atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+atmosphere.set_IVP_problem(Rayleigh, Prandtl)
 
 atmosphere.set_BC()
 problem = atmosphere.get_problem()
