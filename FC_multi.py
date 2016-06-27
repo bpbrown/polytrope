@@ -17,6 +17,8 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
+    --superstep                Superstep equations by using average rather than actual vertical grid spacing
+
     --oz                       Do system with convection zone on the bottom rather than top (exoplanets)
 
     --width=<width>            Width of erf transition between two polytropes
@@ -43,12 +45,14 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       nx = None,
                       width=None,
                       single_chebyshev=False,
-                      oz=False,
+                      superstep=False,
+                      oz=False,                      
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
     import equations
     import os
+    from dedalus.core.future import FutureField
     
     initial_time = time.time()
 
@@ -134,8 +138,23 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
-    CFL.add_velocities(('u', 'w'))
+    if superstep:
+        CFL_traditional = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
+                                         max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
+        CFL_traditional.add_velocities(('u', 'w'))
+    
+        vel_u = FutureField.parse('u', CFL.solver.evaluator.vars, CFL.solver.domain)
+        delta_x = atmosphere.Lx/nx
+        CFL.add_frequency(vel_u/delta_x)
+        vel_w = FutureField.parse('w', CFL.solver.evaluator.vars, CFL.solver.domain)
+        mean_delta_z_cz = atmosphere.Lz_cz/nz_cz
+        CFL.add_frequency(vel_w/mean_delta_z_cz)
+    else:
+        CFL.add_velocities(('u', 'w'))
+
+
+    
     # Flow properties
     flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
     flow.add_property("Re_rms", name='Re')
@@ -150,7 +169,12 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
             # update lists
             if solver.iteration % report_cadence == 0:
-                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time, dt)
+                log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time)
+                log_string += 'dt: {:8.3e}'.format(dt)
+                if superstep:
+                    dt_traditional = CFL_traditional.compute_dt()
+                    log_string += ' (vs {:8.3e})'.format(dt_traditional)
+                log_string += ', '
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 logger.info(log_string)
     except:
@@ -244,4 +268,5 @@ if __name__ == "__main__":
                       restart=(args['--restart']),
                       data_dir=data_dir,
                       verbose=args['--verbose'],
-                      oz=args['--oz'])
+                      oz=args['--oz'],
+                      superstep=args['--superstep'])
