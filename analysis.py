@@ -187,9 +187,17 @@ class Coeff(DedalusData):
                 # single basis
                 self.kz = f['scales']['Tz'][:]
             except:
-                # single compound basis
-                self.kz = f['scales']['(T,T)z'][:]
-
+                try:
+                    # single compound basis
+                    self.kz = f['scales']['(T,T)z'][:]
+                except:
+                    try:
+                        # tripple compound basis
+                        self.kz = f['scales']['(T,T,T)z'][:]
+                    except:
+                        # quad compound basis
+                        self.kz = f['scales']['(T,T,T,T)z'][:]
+                        
             self.times = np.append(self.times, f['scales']['sim_time'][:])
             self.writes = np.append(self.writes, f['scales']['write_number'][:])
             f.close()
