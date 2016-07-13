@@ -164,6 +164,19 @@ class ImageStack():
             image = Image(field_name,imax,cbax, **kwargs)
             static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
             cz_min, cz_max = image.get_scale(field[:,np.int(field.shape[-1]/2):], percent_cut=0.5*percent_cut)
+            if np.abs(cz_min) > np.abs(static_min):
+                static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
+                cz_min, cz_max = image.get_scale(field[:,0:np.int(field.shape[-1]/2)], percent_cut=0.25*percent_cut, even_scale=True)
+                
+            def order_values(a,b):
+                if np.abs(a) > np.abs(b):
+                    temp_storage = a
+                    a = b
+                    b = temp_storage
+                return a,b
+            
+            cz_min,static_min = order_values(cz_min, static_min)
+            cz_max,static_max = order_values(cz_max, static_max)
             
             image.add_image(fig,x,y,field.T,
                             cz_scale=(cz_min, cz_max),

@@ -233,6 +233,14 @@ def analyze_case(files, verbose=False, output_path=None):
 
     stiffness_string = re.search(r'_S\d+e\d+', '{:}'.format(files)).group()
     stiffness = float(stiffness_string.split('_S')[1])
+    rayleigh_string = re.search(r'_Ra\d+e\d+', '{:}'.format(files)).group()
+    rayleigh = float(rayleigh_string.split('_Ra')[1])
+    erf_string = re.search(r'_erf\d+.\d+', '{:}'.format(files))
+    if erf_string is None:
+        erf = 0.128
+    else:
+        erf = float(erf_string.group().split('_erf')[1])
+        
     logger.info("overshoot: case has stiffness of {}".format(stiffness))
     
     overshoot_depths = diagnose_overshoot(averages, z, stiffness, output_path=str(output_path)+'/', verbose=verbose)
