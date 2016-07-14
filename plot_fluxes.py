@@ -29,9 +29,28 @@ def plot_flows(averages, z, output_path='./'):
     ax1 = fig_flow.add_subplot(1,1,1)
     ax1.semilogy(z, averages['Re_rms'], label="Re", color='darkblue')
     ax1.semilogy(z, averages['Pe_rms'], label="Pe", color='darkred')
+    ymin, ymax = ax1.get_ylim()
+#    ax1.semilogy(z, averages['Re_microscale'], label="Re$_\lambda$", color='darkblue', linestyle='dotted')
+#    ax1.semilogy(z, averages['Pe_microscale'], label="Pe$_\lambda$", color='darkred', linestyle='dotted')
+#    print(min(averages['Re_microscale']), max(averages['Re_microscale']))
+#    print(min(averages['Pe_microscale']), max(averages['Pe_microscale']))
+#    print(min(averages['lambda_microscale']), max(averages['lambda_microscale']))
+#    print(averages['lambda_microscale'])
+    lambda_microscale = np.sqrt(averages['vel_rms']/averages['enstrophy'])
+    ax1.semilogy(z, lambda_microscale*averages['Re_rms']/np.max(z), 
+                 label="Re$_\lambda$", color='darkblue', linestyle='dashed')
+    ax1.semilogy(z, lambda_microscale*averages['Pe_rms']/np.max(z), 
+                 label="Pe$_\lambda$", color='darkred', linestyle='dashed')
+    ax1.set_ylim(ymin,ymax)
     ax1.legend()
     ax1.set_xlabel("z")
     ax1.set_ylabel("Re and Pe")
+    ax2 = ax1.twinx()
+    ax2.semilogy(z, lambda_microscale, color='darkgreen', linestyle='dashed')
+    ax2.set_ylabel(r"$\lambda$ microscale")
+    ymin,ymax = ax2.get_ylim()
+    ax2.set_ylim(ymin, min(ymax, np.max(z)))
+
     figs["Re_Pe"]=fig_flow
 
     fig = plt.figure(figsize=(16,8))

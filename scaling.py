@@ -1,17 +1,55 @@
 #!/usr/bin/env python3
 """
-Perform scaling runs on special scaling scripts.
+Perform scaling runs on special scaling scripts.  This driver script
+should be run serially, and it will then spawn off a series of MPI
+processes to test the scaling performance of a given machine.
+
+The target script <scaling_script> is assumed to take the following
+command line inputs:
+
+2-D scaling script (1-D processor decomposition):
+
+   scaling_script.py --nz=nz --nx=nx
+
+3-D scaling script (1- or 2-D processor decomposition):
+
+   scaling_script.py --nz=nz --nx=nx --ny=ny --mesh=p1,p2
+   
+where nz is the Chebyshev modal resolution, and nx and ny are the
+Fourier modal resolutions.  The mesh keyword should accept the 2-D
+processor mesh, with p1 and p2 the processor mesh values.
+
+If the 3-D scaling script is not passed the mesh keyword, it should default
+to a 1-D domain decomposition.
+
+These scaling scripts should output well formated scaling outputs,
+following the example scripts.  In a future revision, that output will
+be rolled into this scaling.py package.
+
+
 
 Usage:
-    scaling.py run <scaling_script> [<z_resolution> --label=<label> --verbose]
-    scaling.py plot <files>... [--output=<dir> --rescale=<rescale>]
+    scaling.py run <scaling_script> [<z_resolution> options]
+    scaling.py plot <files>... [options]
 
 Options:
-     <z_resolution>  set Z resolution in chebyshev direction; X resolution is 2x larger.
-    --output=<dir>   Output directory [default: ./scaling]
-    --label=<label>  Label for output file
-    --verbose        Print verbose output at end of each run (stdout and stderr)
-    --rescale=<rescale>  rescale plots to particular Z resolution comparison case     
+     <z_resolution>        set Z resolution in chebyshev direction; X resolution is 2x larger.
+    --label=<label>        Label for output file
+    --verbose              Print verbose output at end of each run (stdout and stderr)
+
+    --3D                   Run 3D script with 2D mesh domain decomposition
+    --one-pencil           Push to one pencil per core in coeff space
+    --limit-mem            Limited memory; restrict low end of core count
+    
+    --max-cores=<max-cores>      Max number of available cores
+    --min-cores=<min-cores>      Min number of cores to use
+
+    --output=<dir>         Output directory [default: ./scaling]
+    --rescale=<rescale>    rescale plots to particular Z resolution comparison case
+
+    --OpenMPI              Assume we're in an OpenMPI env; default if nothing else is selected
+    --MPISGI               Assume we're in a SGI-MPT env (e.g., NASA Pleiades)
+    --IntelMPI             Assume we're in an IntelMPI env (e.g., PSC Bridges)
 """
 import os
 import numpy as np
@@ -20,11 +58,14 @@ import subprocess
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+try:
+        plt.style.use('ggplot')
+except:
+        print("Upgrade matplotlib; for now we're falling back to old plot styles")
+
 import time
 import shelve
 import pathlib
-
-from dedalus.tools.parallel import Sync
 
 def num(s):
     try:
@@ -33,15 +74,55 @@ def num(s):
         return float(s)
 
 
-def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpirun='mpirun', verbose=None, label=None):
+def do_scaling_run(scaling_script, resolution, CPU_set, max_cores=None, min_cores=None, 
+                   test_type='exhaustive', verbose=None, label=None, dim=2, 
+                   OpenMPI=None, MPISGI=None, IntelMPI=None):
+    if OpenMPI is None and IntelMPI is None and MPISGI is None:
+        OpenMPI = True
+        
+    if dim == 3:
+        import itertools
+        CPU_set_1 = CPU_set
+        CPU_set_2 = CPU_set
 
-    print('testing {}, from {:d} to {:d} cores'.format(scaling_script, np.min(CPU_set),np.max(CPU_set)))
+        if max_cores is not None:
+            if (np.max(CPU_set_1)**2) < max_cores:
+                # append new element to front of set_2
+                CPU_set_2 = np.append(2*np.max(CPU_set_2), CPU_set_2)
+        if min_cores is not None:
+            if (np.min(CPU_set_1)*np.min(CPU_set_2)) > min_cores:
+                # append new element to end of set_1
+                CPU_set_1 = np.append(CPU_set_1, np.int(np.min(CPU_set_1)/2))
+        print(CPU_set_1)
+        print(CPU_set_2)
+        print('testing from {:d} to {:d} cores'.format(np.min(CPU_set_1)*np.min(CPU_set_2),np.max(CPU_set_1)*np.max(CPU_set_2)))
+        if test_type=='exhaustive':
+            print('doing exhaustive scaling test')
+            scaling_test_set = itertools.product(CPU_set_1, CPU_set_2)
+        elif test_type=='patient':
+            print('doing patient scaling test')
+            scaling_test_set = itertools.combinations_with_replacement(CPU_set, 2)
+        else:
+            # symmetric_cobminations
+            print('doing minimal scaling test')
+            scaling_test_set = zip(CPU_set_1, CPU_set_2)
+                    
+    else:
+        print('testing {}, from {:d} to {:d} cores'.format(scaling_script, np.min(CPU_set),np.max(CPU_set)))
+        scaling_test_set = CPU_set
+        
     start_time = time.time()
-    
-    scaling_test_set = CPU_set
+
     sim_nx = resolution[0] 
-    sim_nz = resolution[1]
-    
+    sim_nz = resolution[-1]
+
+    if dim==3:
+        if len(resolution) == 3:
+            sim_ny = resolution[1]
+        else:
+            sim_ny = sim_nx
+        N_y = []
+
     N_total_cpu = []
     N_x = []
     N_z = []
@@ -51,23 +132,53 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     work = []
     work_per_core = []
     
-    for ENV_N_TOTAL_CPU in scaling_test_set:
-
+    for CPUs in scaling_test_set:
+        if dim == 3:
+            res_string = '{:d}x{:d}x{:d}'.format(sim_nx, sim_ny, sim_nz)
+            ENV_N_TOTAL_CPU = np.prod(CPUs)
+            print(CPUs)
+            if sim_nz >= 128:
+                if ENV_N_TOTAL_CPU <= 256:
+                    print("continuing around this low cpu case")
+                    continue
+        else:
+            res_string = '{:d}x{:d}'.format(sim_nx, sim_nz)
+            ENV_N_TOTAL_CPU = CPUs
+            
         print("scaling test of {}".format(scaling_script),
-              " at {:d}x{:d}".format(sim_nx, sim_nz),
+              " at {:s}".format(res_string),
               " on {:d} cores".format(ENV_N_TOTAL_CPU))
 
         test_env = dict(os.environ, 
                         N_X='{:d}'.format(sim_nx),
                         N_Z='{:d}'.format(sim_nz),
                         N_TOTAL_CPU='{:d}'.format(ENV_N_TOTAL_CPU))
+        if OpenMPI:
+            commands = ["mpirun", "-n","{:d}".format(ENV_N_TOTAL_CPU), 
+                        "--bind-to", "core", "--map-by", "core"] 
+        elif MPISGI:
+            commands = ['mpiexec_mpt', "-n","{:d}".format(ENV_N_TOTAL_CPU)]
+        elif IntelMPI:
+             commands = ['mpirun', "-n","{:d}".format(ENV_N_TOTAL_CPU)]
+        else:
+             commands = ['mpirun', "-n","{:d}".format(ENV_N_TOTAL_CPU)]
 
-        proc = subprocess.Popen([mpirun, "-np","{:d}".format(ENV_N_TOTAL_CPU), 
-                                 "--bind-to", "core", "--map-by", "core", 
-                                 "python3", scaling_script], 
-                                env=test_env,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        stdout, stderr = proc.communicate()
+        commands += ["python3", scaling_script, "--nz={:d}".format(sim_nz), "--nx={:d}".format(sim_nx)]
+        if dim == 3:
+            commands.append("--mesh={:d},{:d}".format(CPUs[0], CPUs[1]))
+            commands.append("--ny={:d}".format(sim_ny))
+            print(" pencils/core (0): {:g}x{:g}={:g}".format(1/2*sim_nx/CPUs[0], sim_ny/CPUs[1], 1/2*sim_nx*sim_ny/(CPUs[0]*CPUs[1])))
+            print(" pencils/core (2): {:g}x{:g}={:g}".format(1/2*sim_nx/CPUs[0], 3/2*sim_nz/CPUs[1], 1/2*sim_nx*3/2*sim_nz/(CPUs[0]*CPUs[1])))
+            print(" pencils/core (4): {:g}x{:g}={:g}".format(3/2*sim_ny/CPUs[0], 3/2*sim_nz/CPUs[1], 3/2*sim_ny*3/2*sim_nz/(CPUs[0]*CPUs[1])))
+
+        else:
+            print(" pencils/core: {:g} ({:g}) and {:g} ({:g})".format(1/2*sim_nx/ENV_N_TOTAL_CPU, 3/2*sim_nx/ENV_N_TOTAL_CPU,
+                                                                          sim_nz/ENV_N_TOTAL_CPU, 3/2*sim_nz/ENV_N_TOTAL_CPU))
+        print("command: "+" ".join(commands))
+        proc = subprocess.run(commands, 
+                              env=test_env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        stdout, stderr = proc.stdout, proc.stderr
 
         if verbose:
             for line in stdout.splitlines():
@@ -84,7 +195,7 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
 
                 N_x.append(num(split_line[2]))
                 N_z.append(num(split_line[3]))
-
+                
                 startup_time.append(num(split_line[4]))
                 wall_time.append(num(split_line[5]))
                 wall_time_per_iter.append(num(split_line[6]))
@@ -111,6 +222,9 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     data_set['script'] = scaling_script
     data_set['sim_nx'] = sim_nx
     data_set['sim_nz'] = sim_nz
+    if dim == 3:
+        data_set['sim_ny'] = sim_ny
+        data_set['N_y'] = N_x # hack
     data_set['N_total_cpu'] = N_total_cpu
     data_set['N_x'] = N_x
     data_set['N_z'] = N_z
@@ -119,18 +233,27 @@ def do_scaling_run(scaling_script, resolution, CPU_set, test_type='minimal', mpi
     data_set['wall_time_per_iter'] = wall_time_per_iter
     data_set['work'] = work
     data_set['work_per_core'] = work_per_core
-    data_set['file_label'] = '{:d}x{:d}'.format(sim_nx, sim_nz)
-    
-    data_set['plot_label'] = r'${:d}\times{:d}$'.format(sim_nx, sim_nz)        
-    data_set['plot_label_short'] = r'${:d}^2$'.format(sim_nz)
-
+    data_set['file_label'] = res_string
+    data_set['dim'] = dim
+    if dim == 3:
+        data_set['plot_label'] = r'${:d}\times{:d}\times{:d}$'.format(sim_nx, sim_ny, sim_nz)        
+        data_set['plot_label_short'] = r'${:d}^3$'.format(sim_nz)
+        mesh = [CPUs[0], CPUs[1]]
+        data_set['mesh'] = mesh
+        data_set['N_x_cpu'] = mesh[0]
+        data_set['N_y_cpu'] = mesh[1]
+    else:
+        data_set['plot_label'] = r'${:d}\times{:d}$'.format(sim_nx, sim_nz)        
+        data_set['plot_label_short'] = r'${:d}^2$'.format(sim_nz)
+        data_set['mesh'] = None
+        
     if not label is None:
         data_set['plot_label'] = data_set['plot_label'] + "-" + label
     write_scaling_run(data_set, label=label)
 
     end_time = time.time()
     print(40*'*')
-    print('time to test {:d}x{:d}: {:8.3g}'.format(sim_nx,sim_nz, end_time-start_time))
+    print('time to test {:s}: {:8.3g}'.format(res_string, end_time-start_time))
     print(40*'*')
 
     return data_set
@@ -157,13 +280,18 @@ def read_scaling_run(file):
 # Plotting routines
 def plot_scaling_run(data_set, ax_set, 
                      ideal_curves = True, scale_to = False, scale_to_resolution=None, 
-                     linestyle='solid', marker='o', color='None', explicit_label = True, dim=2):
+                     linestyle='solid', marker='o', color='None', explicit_label = True, dim=None):
     
     sim_nx = data_set['sim_nx']
     sim_nz = data_set['sim_nz']
     N_total_cpu = data_set['N_total_cpu']
     N_x = data_set['N_x'] 
     N_z = data_set['N_z']
+    if dim is None:
+        if 'dim' in data_set:
+            dim = data_set['dim']
+        else:
+            dim = 2
     if dim==3:
         sim_ny = data_set['sim_ny']
         N_y = data_set['N_y'] 
@@ -198,39 +326,47 @@ def plot_scaling_run(data_set, ax_set,
         label_string = data_set['plot_label_short']
         scaled_label_string = data_set['plot_label_short'] + r'$/{:d}^{:d}$'.format(scale_factor_inverse, dim)
     
-    ax_set[0].loglog(N_total_cpu, wall_time, label=label_string, 
-                     marker=marker, linestyle=linestyle, color=color)
+    ax_set[0].plot(N_total_cpu, wall_time, label=label_string, 
+                   marker=marker, linestyle=linestyle, color=color)
 
-    ax_set[1].loglog(N_total_cpu, wall_time_per_iter, label=label_string,
-                     marker=marker, linestyle=linestyle, color=color)
+    if dim == 3:
+        print("resetting linestyle")
+        linestyle='None'
+    ax_set[1].plot(N_total_cpu, wall_time_per_iter, label=label_string,
+                   marker=marker, linestyle=linestyle, color=color)
 
-    ax_set[2].loglog(N_total_cpu, work_per_core/1e-6, label=label_string,
-                     marker=marker, linestyle=linestyle, color=color)
+    ax_set[2].plot(N_total_cpu, work_per_core/1e-6, label=label_string,
+                   marker=marker, linestyle=linestyle, color=color)
 
-    ax_set[3].loglog(N_total_cpu, startup_time, label=label_string,
-                     marker=marker,  linestyle=linestyle, color=color)
+    ax_set[3].plot(N_total_cpu, startup_time, label=label_string,
+                   marker=marker,  linestyle=linestyle, color=color)
 
+    for i in range(4):
+        ax_set[i].set_xscale('log', basex=2)
+        ax_set[i].set_yscale('log')
+        ax_set[i].margins(x=0.05, y=0.05)
+    
     i_max = N_total_cpu.argmax()
     ax_set[4].plot(N_total_cpu[i_max], work_per_core[i_max]/1e-6, label=label_string,
                      marker=marker,  linestyle=linestyle, color=color)
 
     if scale_to and scale_to_factor != 1:
         print("scaling by {:f} or (1/{:d})^{:d}".format(scale_to_factor, scale_factor_inverse, dim))
-        ax_set[0].loglog(N_total_cpu, wall_time*scale_to_factor, marker=marker,
+        ax_set[0].plot(N_total_cpu, wall_time*scale_to_factor, marker=marker,
                          label=scaled_label_string, linestyle='--', color=color)
         
-        ax_set[1].loglog(N_total_cpu, wall_time_per_iter*scale_to_factor, marker=marker,
+        ax_set[1].plot(N_total_cpu, wall_time_per_iter*scale_to_factor, marker=marker,
                          label=scaled_label_string, linestyle='--',color=color)
 
     if ideal_curves:
-        ideal_cores = N_total_cpu
+        ideal_cores = np.sort(N_total_cpu)
         i_min = np.argmin(N_total_cpu)
-        ideal_time = wall_time[i_min]*(N_total_cpu[i_min]/N_total_cpu)
-        ideal_time_per_iter = wall_time_per_iter[i_min]*(N_total_cpu[i_min]/N_total_cpu)
+        ideal_time = wall_time[i_min]*(N_total_cpu[i_min]/ideal_cores)
+        ideal_time_per_iter = wall_time_per_iter[i_min]*(N_total_cpu[i_min]/ideal_cores)
 
-        ax_set[0].loglog(ideal_cores, ideal_time, linestyle='--', color='black')
+        ax_set[0].plot(ideal_cores, ideal_time, linestyle='--', color='black')
         
-        ax_set[1].loglog(ideal_cores, ideal_time_per_iter, linestyle='--', color='black')
+        ax_set[1].plot(ideal_cores, ideal_time_per_iter, linestyle='--', color='black')
 
 def initialize_plots(num_figs):
     fig_set = []
@@ -252,6 +388,40 @@ def legend_with_ideal(ax, loc='lower left'):
               [label for i,label in enumerate(labels)]+['ideal'],
               loc=loc, fontsize='small')    
 
+def add_base10_axis(ax):
+    #######################################################
+    # from http://stackoverflow.com/questions/31803817/how-to-add-second-x-axis-at-the-bottom-of-the-first-one-in-matplotlib
+    ax10 = ax.twiny()
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    # Add some extra space for the second axis at the bottom
+    #fig.subplots_adjust(bottom=0.2)
+
+    # Move twinned axis ticks and label from top to bottom
+    ax10.xaxis.set_ticks_position("bottom")
+    ax10.xaxis.set_label_position("bottom")
+
+    # Offset the twin axis below the host
+    ax10.spines["bottom"].set_position(("axes", -0.15))
+
+    # Turn on the frame for the twin axis, but then hide all 
+    # but the bottom spine
+    ax10.set_frame_on(True)
+    ax10.patch.set_visible(False)
+    for sp in ax10.spines.values():
+        sp.set_visible(False)
+    ax10.spines["bottom"].set_visible(True)
+    
+    tick_locs = ax.xaxis.get_ticklocs()
+    ax10.set_xscale('log', basex=2)
+    ax10.grid(b=False) # suppress gridlines
+    ax10.set_xticks(tick_locs)
+    ax10.set_xticklabels(["{:d}".format(int(V)) for V in tick_locs])
+    ax10.set_xlim(xlim)
+    ax10.set_ylim(ylim)
+    return ax10
+    #######################################################    
+
 def finalize_plots(fig_set, ax_set, script):
     
     ax_set[0].set_title('Wall time {}'.format(script))
@@ -259,14 +429,16 @@ def finalize_plots(fig_set, ax_set, script):
     ax_set[0].set_ylabel('total time [s]')
     legend_with_ideal(ax_set[0], loc='lower left')
     fig_set[0].savefig('scaling_time.png')
-
     
     ax_set[1].set_title('Wall time per iteration {}'.format(script))
     ax_set[1].set_xlabel('N-core')
     ax_set[1].set_ylabel('time/iter [s]')
-    legend_with_ideal(ax_set[1], loc='upper right')
+    legend_with_ideal(ax_set[1], loc='lower left')
+    xlim = ax_set[1].get_xlim()
+    ax_set[1].set_xlim(0.9*xlim[0],1.1*xlim[1])
+    ax10 = add_base10_axis(ax_set[1])
+    fig_set[1].subplots_adjust(bottom=0.2)
     fig_set[1].savefig('scaling_time_per_iter.png')
-
     
     ax_set[2].set_title('Normalized work {}'.format(script))
     ax_set[2].set_xlabel('N-core')
@@ -290,26 +462,81 @@ def finalize_plots(fig_set, ax_set, script):
 
 if __name__ == "__main__":
     
+    import logging
+    logger = logging.getLogger(__name__)
+
     from docopt import docopt
     
     fig_set, ax_set = initialize_plots(5)
     args = docopt(__doc__)
+    if args['--3D']:
+        dim = 3
+    else:
+        dim = 2
+        
     if args['run']:
         if not args['<z_resolution>'] is None:
             n_z = num(args['<z_resolution>'])
             
             resolution = [2*n_z, n_z]
-            n_z_2 = np.log(n_z)/np.log(2) # 2 pencils per core min (arange goes to -1 of top)
-            n_z_2_min = n_z_2-4
+            n_z_2 = np.log(n_z)/np.log(2) -1 # 2 pencils per core min
+            if args['--3D']:
+                n_z_2_min = n_z_2-3
+                if n_z >= 128:
+                    n_z_2_min = n_z_2-2
+            else:
+                if n_z >= 1024:
+                    n_z_2_min = n_z_2-3
+                else:
+                    n_z_2_min = n_z_2-4
+            if args['--one-pencil']:
+                print("Pushing to one pencil per core in coeff space; this may be inefficient depending on dealias padding choice.")
+                n_z_2 = np.log(n_z)/np.log(2) 
+            if args['--limit-mem']:
+                    n_z_2_min += 1
+            if args['--max-cores'] is not None:
+                log2_max = np.log(np.int(args['--max-cores']))/np.log(2)
+                if args['--3D']:
+                    log2_max = log2_max/2
+                log2_max = np.floor(log2_max)
+                
+                print("max cores in log2 space {}".format(log2_max))
+                if n_z_2 > log2_max:
+                    n_z_2 = log2_max
+                max_cores = np.int(args['--max-cores'])
+            else:
+                max_cores = None
+
+            if args['--min-cores'] is not None:
+                log2_min = np.log(np.int(args['--min-cores']))/np.log(2)
+                if args['--3D']:
+                    log2_min = log2_min/2
+                log2_min = np.ceil(log2_min)
+
+                print("min cores in log2 space {}".format(log2_min))
+                if n_z_2_min < log2_min:
+                    n_z_2_min = log2_min
+                min_cores = np.int(args['--min-cores'])
+            else:
+                min_cores = None
+
+            n_z_2_min = np.ceil(n_z_2_min)
+            n_z_2 = np.floor(n_z_2)
             
-            CPU_set = (2**np.arange(n_z_2_min, n_z_2)).astype(int)[::-1] # flip order so large numbers of cores are done first
+            logger.info("Spanning log-2 space from {} -- {}".format(n_z_2_min, n_z_2))
+            print("Spanning log-2 space from {} -- {}".format(n_z_2_min, n_z_2))
+            CPU_set = (2**np.arange(n_z_2_min, n_z_2+1)).astype(int)[::-1] # flip order so large numbers of cores are done first (and arange goes to -1 of top)
             print("scaling run with {} on {} cores".format(resolution, CPU_set))
         else:
             CPU_set = [512, 256, 128, 64]
             resolution = [2048, 1024]
-        
+
+        print(args['--OpenMPI'])
         start_time = time.time()
-        data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, mpirun='mpirun', verbose=args['--verbose'], label=args['--label'])
+        data_set = do_scaling_run(args['<scaling_script>'], resolution, CPU_set, 
+                                  max_cores=max_cores, min_cores=min_cores,
+                                  verbose=args['--verbose'], label=args['--label'], dim=dim,
+                                  OpenMPI=args['--OpenMPI'], MPISGI=args['--MPISGI'], IntelMPI=args['--IntelMPI'])
         end_time = time.time()
         
         plot_scaling_run(data_set, ax_set)
@@ -321,11 +548,8 @@ if __name__ == "__main__":
 
     elif args['plot']:
         output_path = pathlib.Path(args['--output']).absolute()
-        # Create output directory if needed
-        with Sync() as sync:
-            if sync.comm.rank == 0:
-                if not output_path.exists():
-                    output_path.mkdir()
+        if not output_path.exists():
+            output_path.mkdir()
         if not args['--rescale'] is None:
             n_z_rescale = num(args['--rescale'])
             

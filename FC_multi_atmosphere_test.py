@@ -72,12 +72,12 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         atmosphere = equations.FC_MHD_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                                 n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                                 verbose=verbose)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, include_background_flux=False) #false?
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
     else:
         atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=False, ncc_cutoff=1e-8)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-8)
         
     atmosphere.set_BC()
     problem = atmosphere.get_problem()

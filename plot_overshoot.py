@@ -17,6 +17,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from cycler import cycler
+
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
@@ -76,8 +78,8 @@ def plot_overshoot_times(times, overshoot, average_overshoot=None, output_path='
             apjfig.ax.plot(times, q, label=key, color=color)
             if average_overshoot is not None:
                 apjfig.ax.axhline(average_overshoot[key], linestyle='dashed', color=color)
-        min_z = min(min_z, np.min(q))
-        max_z = max(max_z, np.max(q))
+            min_z = min(min_z, np.min(q))
+            max_z = max(max_z, np.max(q))
 
     min_z = min(min_z, np.min(ref_depth))
     max_z = max(max_z, np.max(ref_depth))
@@ -107,8 +109,12 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     try:
         #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
         norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
-        # hard coded
-        norm_diag['brunt'] = ('$\omega^2/N^2$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot'])))
+        try:
+            norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot']))
+        except:
+            # hard coded and not correct for low stiffness (when m_cz !~ 1.5 and our gravity estimate is off)
+            logger.info("estimating brunt; this will introduce errors due to gravity estimate")
+            norm_diag['brunt'] = (r'$\omega^2/N^2_{HC}$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot']*(gamma-1)/gamma)))
 
     except:
         logger.info("Missing grad_s from outputs; trying numeric gradient option")
@@ -163,7 +169,13 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         
         z_search = np.copy(z)
         criteria_search = np.copy(criteria)
-        z_root = interp_bisect_root(z_search, criteria_search)
+        if key=='grad_s_mean':
+            a = np.min(z)
+            b = np.max(z)
+        else:
+            a = None
+            b = None
+        z_root = interp_bisect_root(z_search, criteria_search, a=a, b=b)
  
         overshoot_depths[key] = z_root
         roots[key] = (z_root, root_color)
@@ -221,6 +233,14 @@ def analyze_case(files, verbose=False, output_path=None):
 
     stiffness_string = re.search(r'_S\d+e\d+', '{:}'.format(files)).group()
     stiffness = float(stiffness_string.split('_S')[1])
+    rayleigh_string = re.search(r'_Ra\d+e\d+', '{:}'.format(files)).group()
+    rayleigh = float(rayleigh_string.split('_Ra')[1])
+    erf_string = re.search(r'_erf\d+.\d+', '{:}'.format(files))
+    if erf_string is None:
+        erf = 0.128
+    else:
+        erf = float(erf_string.group().split('_erf')[1])
+        
     logger.info("overshoot: case has stiffness of {}".format(stiffness))
     
     overshoot_depths = diagnose_overshoot(averages, z, stiffness, output_path=str(output_path)+'/', verbose=verbose)
@@ -232,7 +252,7 @@ def analyze_case(files, verbose=False, output_path=None):
     else:
         std_dev = OrderedDict()
         for key in overshoot_depths:
-            std_dev[key] = None
+            std_dev[key] = np.nan
     
     return overshoot_depths, std_dev
 
@@ -260,29 +280,56 @@ def analyze_all_cases(stiffness_file_list, **kwargs):
     return stiffness_array, overshoot, std_dev
     
 
-def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False):
+def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False, fig=None, marker='o'):
 
     if linear:
         x = 1/stiffness
     else:
         x = stiffness
-    apjfig = analysis.APJSingleColumnFigure()
+        
+    if fig is None:
+        apjfig = analysis.APJSingleColumnFigure()
+        min_z = 100
+        max_z = 0
+    else:
+        logger.info("Appending to figure")
+        apjfig = fig
+        apjfig.ax.set_prop_cycle(None) 
+        min_z, max_z = apjfig.ax.get_ylim()
+        
     ref = 'grad_s_mean'
+    compare = 'brunt'
     ref_depth = overshoot[ref]
-    min_z = 100
-    max_z = 0
+
+    m_ad = 1.5
+    m_rz = 3
+    m_cz = m_ad-(m_rz-m_ad)/stiffness
+    # the following assume that T(ref_depth)=ref_depth (namely, grad_T=-1 and we're probably in the CZ)
+    H_rho = (ref_depth/m_cz) # estimate for H_rho at ref depth; H_rho = (T/m_cz)
+    n_rho = m_cz*np.log(ref_depth) # estimate for n_rho at ref depth
+    logger.info("T={}".format(ref_depth))
+    logger.info("m_cz={}".format(m_cz))
+    logger.info("H_rho={}".format(H_rho))
+    logger.info("n_rho={}".format(n_rho))
+    
+    
     logger.info("reference depth:")
     logger.info("{} -- {}".format(ref, ref_depth))
     for key in overshoot:
         if key!=ref and key!='grad_s':
             color = next(apjfig.ax._get_lines.prop_cycler)['color']
-            logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
-            q = np.abs(overshoot[key]-ref_depth)
+            logger.info("{:10s} -- OV: {} ({})".format(key, ref_depth - overshoot[key],
+                                                       (ref_depth - overshoot[key])/(ref_depth-overshoot[compare])))
+            q = np.abs(overshoot[key]-ref_depth)            
+            q = q/H_rho
             
-            if std_dev[key][0] is not None:
-                apjfig.ax.errorbar(x, q, yerr=std_dev[key], label=key, marker='o', color=color)
+            if np.any(np.isfinite(std_dev[key])):
+                apjfig.ax.errorbar(x, q, yerr=std_dev[key], label=key, marker=marker, color=color)
             else:
-                apjfig.ax.plot(x, q, label=key, marker='o', color=color)
+                apjfig.ax.plot(x, q, label=key, marker=marker, color=color)
+
+            min_z = min(min_z, np.nanmin(q))
+            max_z = max(max_z, np.nanmax(q))
 
             if key=='enstrophy':
                 # powerlaw fitting to the lower stiffness regime
@@ -292,60 +339,108 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
                 logger.info(a)
                 apjfig.ax.plot(x, np.exp(a[1])*x**a[0], label=powerlaw_label, color=color, linestyle='dotted')
                 logger.info("low stiffness fit: {}".format(a))
-                
-            min_z = min(min_z, np.min(q))
-            max_z = max(max_z, np.max(q))
+
+    # plot is now of delta_z/H_rho
+    z_predicted = m_rz*(np.exp(n_rho/(m_cz*stiffness))-1)
+    Lz_cz = np.exp(n_rho/m_cz)-1
+    L_adjust = (ref_depth-Lz_cz)/H_rho
+    z_total = z_predicted + L_adjust
+    logger.info("z_predicted/H {}".format(z_predicted))
+    logger.info("Lz_cz         {}".format(Lz_cz))
+    logger.info("L_adjust/H    {}".format(L_adjust))
+    logger.info("prediction  = {}".format(z_total))
+    apjfig.ax.plot(x, z_total, label="prediction")
+
 
     if linear:
         apjfig.ax.set_xscale("linear")
         apjfig.ax.set_xlabel("Inverse stiffness 1/S")
-        apjfig.legend(loc="lower right", title="diagnostics", fontsize=6)
+        if fig is None:
+            apjfig.legend(loc="lower right", title="diagnostics", fontsize=6)
     else:
         apjfig.ax.set_xscale("log", nonposx='clip')
         apjfig.ax.set_xlabel("Stiffness S")
-        apjfig.legend(loc="upper right", title="diagnostics", fontsize=6)
-
+        if fig is None:
+            apjfig.legend(loc="lower left", title="diagnostics", fontsize=6)
+            
+    
     apjfig.ax.set_yscale("log", nonposy='clip')
+    
+    if fig is None:
+        min_z = 0.5*min_z
+        max_z = 1.5*max_z
+        
+    apjfig.ax.set_ylim(min_z, max_z)
+    logger.info("plot lims {}--{}".format(min_z, max_z))
+    
+    apjfig.ax.set_ylabel(r"$\Delta z/H_{\rho}$ of overshoot")
+#    if linear:
+#        apjfig.savefig(output_path+"overshoot_linear.png", dpi=600)
+#    else:
+#        apjfig.savefig(output_path+"overshoot.png", dpi=600)
 
-    apjfig.ax.set_ylim(0.9*min_z, 1.1*max_z)
-    
-    apjfig.ax.set_ylabel("$\Delta z$ of overshoot")
-    if linear:
-        apjfig.savefig(output_path+"overshoot_linear.png", dpi=600)
-    else:
-        apjfig.savefig(output_path+"overshoot.png", dpi=600)
-    
+    return apjfig
  
 def main(output_path='./', **kwargs):
     import glob
 
-    file_list = [(1e1, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e1/profiles/profiles_s[8,9].h5')),
-                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e2/profiles/profiles_s[8,9].h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e3/profiles/profiles_s[8,9].h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e4/profiles/profiles_s[8,9].h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e7_S1e5/profiles/profiles_s[8,9].h5'))]
-
-    file_list = [(1e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e2/profiles/profiles_s[1,2]??.h5')),
-                 (3e2, glob.glob('FC_multi_nrhocz1_Ra1e6_S3e2/profiles/profiles_s[1,2]??.h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e3/profiles/profiles_s[1,2]??.h5')),
-                 (3e3, glob.glob('FC_multi_nrhocz1_Ra1e6_S3e3/profiles/profiles_s[1,2]??.h5')),
-                 (1e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e4/profiles/profiles_s[1,2]??.h5')),
-                 (3e4, glob.glob('FC_multi_nrhocz1_Ra1e6_S3e4/profiles/profiles_s[1,2]??.h5')),
-                 (1e5, glob.glob('FC_multi_nrhocz1_Ra1e6_S1e5/profiles/profiles_s[1,2]??.h5'))]
-
-    file_list = [(3e0, glob.glob('FC_multi_nrhocz1_Ra1e8_S3e0_single/profiles/profiles_s1[0,1]?.h5')),
-                 (5e0, glob.glob('FC_multi_nrhocz1_Ra1e8_S5e0_single/profiles/profiles_s1[0,1]?.h5')),
-                 (1e1, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e1_single/profiles/profiles_s1[0,1]?.h5')),
-                 (3e1, glob.glob('FC_multi_nrhocz1_Ra1e8_S3e1_single/profiles/profiles_s1[0,1]?.h5')),
-                 (1e2, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e2_single/profiles/profiles_s1[0,1]?.h5')),
-                 (1e3, glob.glob('FC_multi_nrhocz1_Ra1e8_S1e3_single/profiles/profiles_s1[0,1]?.h5'))]
-                 #(1e4, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e4/profiles/profiles_s[8,9]?.h5')),
-                 #(1e5, glob.glob('FC_multi_fast_nrhocz1_Ra1e8_S1e5/profiles/profiles_s[8,9]?.h5'))]
-                     
+    file_list =[(3e0, glob.glob('FC_multi_nrhocz3_Ra1e4_S3e0_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e1, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e1_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (3e1, glob.glob('FC_multi_nrhocz3_Ra1e4_S3e1_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e2_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e3, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e3_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e4, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e4_single/profiles/profiles_s1[0,1,2,3,4]?.h5'))]
 
     stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
-    plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path)
-    plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True)
+    
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True)
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path)
+
+    file_list =[(3e0, glob.glob('FC_multi_nrhocz3_Ra1e6_S3e0_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e1, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e1_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (3e1, glob.glob('FC_multi_nrhocz3_Ra1e6_S3e1_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e3, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e3_single/profiles/profiles_s1[0,1,2,3,4]?.h5')),
+                (1e4, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e4_single/profiles/profiles_s1[0,1,2,3,4]?.h5'))]
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='s')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='s')
+
+
+    file_list =[(1e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e1_single/profiles/profiles_s[5,6,7]?.h5')),
+                (3e1, glob.glob('FC_multi_nrhocz3_Ra1e8_S3e1_single/profiles/profiles_s[5,6,7]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6,7]?.h5')),
+                (1e3, glob.glob('FC_multi_nrhocz3_Ra1e8_S1e2_single/profiles/profiles_s[5,6,7]?.h5'))]
+
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='*')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='*')
+
+    file_list =[(1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_erf0.05_single/profiles/profiles_s[5]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e6_S1e2_single/profiles/profiles_s[5]?.h5'))]
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='<')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='<')
+
+
+    file_list =[(1e2, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e2_erf0.05_single/profiles/profiles_s[5]?.h5')),
+                (1e2, glob.glob('FC_multi_nrhocz3_Ra1e4_S1e2_single/profiles/profiles_s[5]?.h5'))]
+
+    stiffness, overshoot, std_dev = analyze_all_cases(file_list, **kwargs)
+
+    fig_linear = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, linear=True, fig=fig_linear, marker='>')
+    fig = plot_overshoot(stiffness, overshoot, std_dev, output_path=output_path, fig=fig, marker='>')
+
+
+    fig_linear.savefig(output_path+"overshoot_linear.png", dpi=600)
+    fig.savefig(output_path+"overshoot.png", dpi=600)
+
      
 if __name__ == "__main__":
 

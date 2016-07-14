@@ -1,12 +1,28 @@
+"""
+Dedalus script for 2D compressible convection
+
+This script uses a Fourier basis in the x direction with periodic boundary
+conditions.  The equations are scaled in units of the isothermal sound crossing
+time at the top of the layer and the temperature gradient length scale.
+
+This version of the script is intended for scaling and performance tests.
+
+Usage:
+    FC_scaling.py [options] 
+
+Options:
+    --nz=<nz>                 Number of Chebyshev modes [default: 128]
+    --nx=<nx>                 Number of Fourier modes; default is aspect*nz
+    --aspect=<aspect>         Aspect ratio [default: 2]
+    --Rayleigh=<Rayleigh>     Rayleigh number of the convection [default: 1e6]
+"""
+
+
 import numpy as np
 import time
 import os
 import sys
 import equations
-
-# acquire scaling run parameters
-nx = np.int(os.environ['N_X'])
-nz = np.int(os.environ['N_Z'])
 
 import logging
 logger = logging.getLogger(__name__)
@@ -15,68 +31,53 @@ from dedalus.public import *
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
 
+from docopt import docopt
+args = docopt(__doc__)
+nz = int(args['--nz'])
+nx = args['--nx']
+aspect = int(args['--aspect'])
+if nx is None:
+        nx = nz*aspect
+else:
+        nx = int(nx)
+Rayleigh_string = args['--Rayleigh']
+Rayleigh = float(Rayleigh_string)        
+
+
 initial_time = time.time()
 
 logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-# save data in directory named after script
-data_dir = sys.argv[0].split('.py')[0]+'/'
-
-Rayleigh = 4e4
+#Rayleigh = 4e4
 Prandtl = 1
 
-# Set domain
-Lz = 10
-Lx = 4*Lz
-    
-atmosphere = equations.FC_polytrope(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
+n_rho_cz=3
+
+atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
+
 atmosphere.set_BC()
 problem = atmosphere.get_problem()
 
-if atmosphere.domain.distributor.rank == 0:
-    if not os.path.exists('{:s}/'.format(data_dir)):
-        os.mkdir('{:s}/'.format(data_dir))
 
 ts = timesteppers.RK443
 cfl_safety_factor = 0.2*4
+
+ts = timesteppers.RK222
+cfl_safety_factor = 0.2*2
 
 
 # Build solver
 solver = problem.build_solver(ts)
 
-x = atmosphere.domain.grid(0)
-z = atmosphere.domain.grid(1)
+atmosphere.set_IC(solver)
 
-# initial conditions
-u = solver.state['u']
-w = solver.state['w']
-T = solver.state['T1']
-#s = solver.state['s']
-ln_rho = solver.state['ln_rho1']
-
-solver.evaluator.vars['Lx'] = Lx
-solver.evaluator.vars['Lz'] = Lz
-
-A0 = 1e-6
-np.random.seed(1+atmosphere.domain.distributor.rank)
-
-T.set_scales(atmosphere.domain.dealias, keep_data=True)
-z_dealias = atmosphere.domain.grid(axis=1, scales=atmosphere.domain.dealias)
-T['g'] = A0*np.sin(np.pi*z_dealias/Lz)*np.random.randn(*T['g'].shape)*atmosphere.T0['g']
-
-logger.info("A0 = {:g}".format(A0))
-logger.info("T = {:g} -- {:g}".format(np.min(T['g']), np.max(T['g'])))
-
-logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
-
-
-max_dt = 0.5*atmosphere.buoyancy_time
+max_dt = atmosphere.buoyancy_time*0.25
 
 report_cadence = 1
 output_time_cadence = 0.1*atmosphere.buoyancy_time
 solver.stop_sim_time = 0.05*atmosphere.thermal_time
-solver.stop_iteration= np.inf
+solver.stop_iteration= 100+1
 solver.stop_wall_time = 0.25*3600
 
 logger.info("output cadence = {:g}".format(output_time_cadence))
@@ -84,7 +85,9 @@ logger.info("output cadence = {:g}".format(output_time_cadence))
     
 cfl_cadence = 1
 CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
-                     max_change=1.5, min_change=0.5, max_dt=max_dt)
+                     max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
+
+    
 
 CFL.add_velocities(('u', 'w'))
 
@@ -123,7 +126,7 @@ logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
 
 if (atmosphere.domain.distributor.rank==0):
 
-    N_TOTAL_CPU = atmosphere.domain.distributor.comm_world.size
+    N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
     
     # Print statistics
     print('-' * 40)
