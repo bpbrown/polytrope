@@ -45,7 +45,7 @@ from dedalus.extras import flow_tools
 try:
     from dedalus.extras.checkpointing import Checkpoint
     do_checkpointing = True
-    checkpoint_min   = 0.5
+    checkpoint_min   = 30
 except:
     print('not importing checkpointing')
     do_checkpointing = False
