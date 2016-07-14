@@ -12,6 +12,8 @@ Options:
     --nz=<nz>                            vertical z (chebyshev) resolution [default: 128]
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
+    --Lx=<Lx>                            Physical width of the atmosphere
+    --aspect_ratio=<aspect_ratio>        Physical aspect ratio of the atmosphere
     --epsilon=<epsilon>                  The level of superadiabaticity of our polytrope background [default: 1e-4]
     --run_time=<run_time>                Run time, in hours [default: 23.5]
 
@@ -48,11 +50,11 @@ except:
     print('not importing checkpointing')
     do_checkpointing = False
 
-def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
+def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1, Lx=None, aspect_ratio=None,\
                         nz=128, nx=False, n_rho_cz=3.5, epsilon=1e-4, run_time=23.5, \
                         fixed_T=False, fixed_Tz=False, const_mu=False, const_kappa=True, \
                         restart=None, start_new_files=False, start_dt=None, zero_velocities=False, \
-                        rk443=False, safety_factor=0.2,\
+                        rk443=False, safety_factor=0.2, sim_time_buoyancies=None, \
                         data_dir='./', out_cadence=0.1, no_coeffs=False):
     import time
     import equations
@@ -67,7 +69,7 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
         nx = nz*4
     
     atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                        epsilon=epsilon, n_rho_cz=n_rho_cz,\
+                                        epsilon=epsilon, n_rho_cz=n_rho_cz, Lx=Lx, aspect_ratio=aspect_ratio,\
                                         fig_dir='./FC_poly_atmosphere/')
     atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
 
@@ -138,7 +140,10 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
         atmosphere.set_IC(solver)
     report_cadence = 1
     output_time_cadence     = out_cadence*atmosphere.buoyancy_time
-    solver.stop_sim_time    = 100*atmosphere.thermal_time
+    if sim_time_buoyancies != None:
+        solver.stop_sim_time    = solver.sim_time + sim_time_buoyancies*atmosphere.buoyancy_time
+    else:
+        solver.stop_sim_time    = atmosphere.thermal_time*10
     solver.stop_iteration   = np.inf
     solver.stop_wall_time   = run_time*3600
         
@@ -207,8 +212,16 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1,\
         
         logger.info('beginning join operation')
         if do_checkpointing:
+            try:
+                final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
+                final_checkpoint.set_checkpoint(solver, wall_dt=1, write_num=1, set_num=1)
+                solver.step(dt) #clean this up in the future...works for now.
+            except:
+                print('cannot save final checkpoint')
+
             logger.info(data_dir+'/checkpoint/')
             post.merge_analysis(data_dir+'/checkpoint/')
+            post.merge_analysis(data_dir+'/final_checkpoint/')
 
         for task in analysis_tasks.keys():
             logger.info(analysis_tasks[task].base_path)
@@ -315,11 +328,20 @@ if __name__ == "__main__":
     if args['--const_chi']:
         const_kappa = False
 
+    Lx = args['--Lx']
+    aspect_ratio = args['--aspect_ratio']
+    if Lx != None:
+        Lx = float(Lx)
+    if aspect_ratio != None:
+        aspect_ratio = float(aspect_ratio)
+
 
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       nx = nx,
                       nz = nz,
+                      Lx = Lx,
+                      aspect_ratio = aspect_ratio,
                       n_rho_cz=float(args['--n_rho_cz']),
                       epsilon=float(args['--epsilon']),
                       run_time=float(args['--run_time']),
