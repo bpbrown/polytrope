@@ -16,7 +16,7 @@ data_types = ['checkpoint', 'scalar', 'profiles', 'slices', 'coeffs']
 for data_type in data_types:
     logger.info("merging {}".format(data_type))
     try:
-        post.merge_process_files(base_path+data_type)
+        post.merge_analysis(base_path+data_type)
     except:
         logger.info("missing {}".format(data_type))
         

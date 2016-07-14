@@ -1277,8 +1277,8 @@ class FC_equations(Equations):
         self.problem.substitutions['u_rms'] = 'sqrt(u**2)'
         self.problem.substitutions['w_rms'] = 'sqrt(w**2)'
         self.problem.substitutions['vel_rms'] = 'sqrt(u**2 + w**2)'
-        self.problem.substitutions['Re_rms'] = 'sqrt(u**2+w**2)vel_rms*Lz/nu'
-        self.problem.substitutions['Pe_rms'] = 'sqrt(u**2+w**2)vel_rms*Lz/chi'
+        self.problem.substitutions['Re_rms'] = 'vel_rms*Lz/nu'
+        self.problem.substitutions['Pe_rms'] = 'vel_rms*Lz/chi'
         #self.problem.substitutions['lambda_microscale'] = 'sqrt(plane_avg(vel_rms)/plane_avg(enstrophy))'
         #self.problem.substitutions['Re_microscale'] = 'vel_rms*lambda_microscale/nu'
         #self.problem.substitutions['Pe_microscale'] = 'vel_rms*lambda_microscale/chi'
@@ -1563,6 +1563,8 @@ class FC_equations(Equations):
             #analysis_profile.add_task("plane_avg(Pe_microscale)",  name="Pe_microscale")
             analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
                                       name="T1_source_terms")
+            analysis_profile.add_task("plane_avg(u)", name="u")
+            analysis_profile.add_task("plane_avg(w)", name="w")
             
             analysis_tasks['profile'] = analysis_profile
 
@@ -1580,6 +1582,10 @@ class FC_equations(Equations):
             analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
             analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
             analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
+            analysis_scalar.add_task("vol_avg(rho_full*plane_avg(u)**2)/2", name="KE_x0")
+            analysis_scalar.add_task("vol_avg(rho_full*(u - plane_avg(u))**2)/2", name="KE_x1")
+            analysis_scalar.add_task("vol_avg(rho_full*plane_avg(w)**2)/2", name="KE_z0")
+            analysis_scalar.add_task("vol_avg(rho_full*(w - plane_avg(w))**2)/2", name="KE_z1")
             #analysis_scalar.add_task("vol_avg(Re_microscale)",  name="Re_microscale")
             #analysis_scalar.add_task("vol_avg(Pe_microscale)",  name="Pe_microscale")
 

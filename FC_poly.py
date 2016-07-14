@@ -13,7 +13,7 @@ Options:
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
     --Lx=<Lx>                            Physical width of the atmosphere
-    --aspect_ratio=<aspect_ratio>        Physical aspect ratio of the atmosphere
+    --aspect_ratio=<aspect_ratio>        Physical aspect ratio of the atmosphere [default: 4]
     --epsilon=<epsilon>                  The level of superadiabaticity of our polytrope background [default: 1e-4]
     --run_time=<run_time>                Run time, in hours [default: 23.5]
 
@@ -45,7 +45,7 @@ from dedalus.extras import flow_tools
 try:
     from dedalus.extras.checkpointing import Checkpoint
     do_checkpointing = True
-    checkpoint_min   = 30
+    checkpoint_min   = 0.5
 except:
     print('not importing checkpointing')
     do_checkpointing = False
@@ -71,7 +71,7 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1, Lx=None, aspect_ratio=None,\
     atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, Lx=Lx, aspect_ratio=aspect_ratio,\
                                         fig_dir='./FC_poly_atmosphere/')
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, include_background_flux=True)
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl)
 
     if fixed_T:
         atmosphere.set_BC(T1_left=0, T1_right=0, fixed_temperature=True, stress_free=True)
@@ -112,8 +112,19 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1, Lx=None, aspect_ratio=None,\
         chk_write = chk_set = 1
     if do_checkpointing:
         logger.info('checkpointing in {}'.format(data_dir))
+
+        #Find all of the directories we don't want to checkpoint in
+        import glob
+        good_dirs = ['slices', 'profiles', 'scalar', 'coeffs', 'checkpoint']
+        dirs = glob.glob('{:s}/*/'.format(data_dir))
+        found_dirs = [s_dir.split(data_dir)[-1].split('/')[0] for s_dir in dirs]
+        excluded_dirs = []
+        for found_dir in found_dirs:
+            if found_dir not in good_dirs: excluded_dirs.append(found_dir)
+
+        #Checkpoint
         try:
-            checkpoint = Checkpoint(data_dir, allowed_dirs=['slices', 'profiles', 'scalar', 'coeffs'])
+            checkpoint = Checkpoint(data_dir, excluded_dirs=excluded_dirs)
         except:
             checkpoint = Checkpoint(data_dir)
         if restart is None :
@@ -179,6 +190,9 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1, Lx=None, aspect_ratio=None,\
 
     start_iter=solver.iteration
     start_sim_time = solver.sim_time
+    dt = CFL.compute_dt()
+    # advance
+    solver.step(dt)
 
     try:
         start_time = time.time()
@@ -329,11 +343,9 @@ if __name__ == "__main__":
         const_kappa = False
 
     Lx = args['--Lx']
-    aspect_ratio = args['--aspect_ratio']
+    aspect_ratio = float(args['--aspect_ratio'])
     if Lx != None:
         Lx = float(Lx)
-    if aspect_ratio != None:
-        aspect_ratio = float(aspect_ratio)
 
 
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
