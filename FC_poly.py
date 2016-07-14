@@ -190,9 +190,6 @@ def FC_constant_kappa(  Rayleigh=1e6, Prandtl=1, Lx=None, aspect_ratio=None,\
 
     start_iter=solver.iteration
     start_sim_time = solver.sim_time
-    dt = CFL.compute_dt()
-    # advance
-    solver.step(dt)
 
     try:
         start_time = time.time()
