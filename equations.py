@@ -1590,15 +1590,20 @@ class FC_equations_rxn(Equations):
     def _set_subs(self):
         super(FC_equations_rxn, self)._set_subs()
         
-    def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl, **kwargs):
+    def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl, ChemicalReynolds, **kwargs):
         super(FC_equations_rxn, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
 
         self.nu_chem = self._new_ncc()
-        self.nu_chem.set_scales(self.domain.dealias, keep_data=False)
         self.necessary_quantities['nu_chem'] = self.nu_chem
-        self.nu_chem.set_scales(self.domain.dealias, keep_data=True)        
+        self.nu_chem.set_scales(self.domain.dealias, keep_data=False)
         self.nu_chem['g'] = self.nu['g']/ChemicalPrandtl
 
+        # this should become a chemical Reynolds number control parameter, or something sensible
+        self.k_chem = self._new_ncc()
+        self.necessary_quantities['k_chem'] = self.k_chem
+        self.k_chem.set_scales(self.domain.dealias, keep_data=False)
+        self.k_chem['g'] = self.nu_chem['g']*self.Lz_cz*ChemicalReynolds
+        
     def _set_parameters(self):
         super(FC_equations_rxn, self)._set_parameters()
     
@@ -1607,10 +1612,8 @@ class FC_equations_rxn(Equations):
         # need to set rate coefficient somewhere.  In init?  In diffusivities?
         self.problem.parameters['k_chem'] = self.k_chem
         
-    def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl, **kwargs):
-        # DOES NOT YET INCLUDE Ohmic heating, variable eta.
-        
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, ChemicalPrandtl=ChemicalPrandtl, **kwargs)
+    def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl, ChemicalReynolds, **kwargs):
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, ChemicalPrandtl=ChemicalPrandtl, ChemicalReynolds=ChemicalReynolds, **kwargs)
         self._set_parameters()
         # thermal boundary conditions
         self.problem.parameters['T1_left']  = self.T1_left
@@ -1674,7 +1677,7 @@ class FC_equations_rxn(Equations):
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
-        # assumes constant eta; no NCCs here to rescale.  Easy to modify.
+        # no NCCs here to rescale.  Easy to modify.
         self.problem.add_equation("dt(f) - nu_chem*Lap(f, f_z) =  -UdotGrad(f,f_z) - f*Div_u")
         self.problem.add_equation("(scale)*(dt(c) - nu_chem*Lap(c, c_z) + k_chem*rho0*c) =  (scale)*(-UdotGrad(c,c_z) - c*Div_u)")
         
@@ -1682,63 +1685,43 @@ class FC_equations_rxn(Equations):
 
     def set_BC(self, **kwargs):
         
-        super(FC_MHD_equations, self).set_BC(**kwargs)
+        super(FC_equations_rxn, self).set_BC(**kwargs)
 
-        self.problem.add_bc( "left(v_z) = 0")
-        self.problem.add_bc("right(v_z) = 0")
- 
         # perfectly conducting boundary conditions.
-        self.problem.add_bc("left(Ax) = 0")
-        self.problem.add_bc("left(Ay) = 0")
-        self.problem.add_bc("left(Az) = 0")
-        self.problem.add_bc("right(Ax) = 0")
-        self.problem.add_bc("right(Ay) = 0")
-        self.problem.add_bc("right(Az) = 0", condition="(nx != 0)")
-        self.problem.add_bc("right(Phi) = 0", condition="(nx == 0)")
+        self.problem.add_bc("left(f_z) = 0")
+        self.problem.add_bc("left(c_z) = 0")
+        self.problem.add_bc("right(f_z) = 0")
+        self.problem.add_bc("right(c_z) = 0")
 
-        self.dirichlet_set.append('Ax')
-        self.dirichlet_set.append('Ay')
-        self.dirichlet_set.append('Az')
-        self.dirichlet_set.append('Phi')
+        #HERE
         
     def set_IC(self, solver, A0=1e-6, **kwargs):
-        super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
+        super(FC_equations_rxn, self).set_IC(solver, A0=A0, **kwargs)
     
-        self.Bx_IC = solver.state['Bx']
-        self.Ay_IC = solver.state['Ay']
+        self.f_IC = solver.state['f']
+        self.c_IC = solver.state['c']
 
-        # not in HS balance
-        B0 = 1
-        self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
-
-        self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
-        self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
-        self.Ay_IC['g'] *= -1
+        # this is just a bump in z
+        self.c_IC['g'] = A0*np.cos(np.pi*self.z_dealias/self.Lz)
+        self.f_IC['g'] = self.c_IC['g']
         
     def initialize_output(self, solver, data_dir, **kwargs):
-        super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
+        super(FC_equations_rxn, self).initialize_output(solver, data_dir, **kwargs)
 
         # make analysis_tasks a dictionary!
         analysis_slice = self.analysis_tasks['slice']
-        analysis_slice.add_task("Jy", name="Jy")
-        analysis_slice.add_task("Bx", name="Bx")
-        analysis_slice.add_task("Bz", name="Bz")
-        analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
-        analysis_slice.add_task("J_squared", name="J_squared")
-            
+        analysis_slice.add_task("f", name="f")
+        analysis_slice.add_task("c", name="c")
+
         analysis_profile = self.analysis_tasks['profile']
-        analysis_profile.add_task("plane_avg(ME)", name="ME")
-        analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
+        analysis_profile.add_task("plane_avg(f)", name="f")
+        analysis_profile.add_task("plane_avg(c)", name="c")
 
         analysis_scalar = self.analysis_tasks['scalar']
-        analysis_scalar.add_task("vol_avg(ME)", name="ME")
-        analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
+        analysis_scalar.add_task("vol_avg(f)", name="f")
+        analysis_scalar.add_task("vol_avg(c)", name="c")
 
         return self.analysis_tasks
-    
-
-
-
     
 class FC_polytrope(FC_equations, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):
@@ -1839,15 +1822,19 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
     def set_equations(self, *args, **kwargs):
         super(FC_multitrope_rxn,self).set_equations(*args, **kwargs)
 
-        #self.problem.meta[:]['z']['dirichlet'] = True
         logger.info("skipping HS balance check")
-        #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
         self.T_IC = solver.state['T1']
         self.ln_rho_IC = solver.state['ln_rho1']
 
+        self.f_IC = solver.state['f']
+        self.c_IC = solver.state['c']
+        self.c_IC.set_scales(self.domain.dealias, keep_data=True)
+        self.f_IC.set_scales(self.domain.dealias, keep_data=True)
+
+        
         noise = self.global_noise(**kwargs)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
@@ -1866,6 +1853,25 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
         
         logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 
+        # we need to add c and f ICs here
+        # for now we just hijack the taper function, which puts the quench point in
+        # the middle of the CZ; in time the location and width of this should be
+        # a kwarg so we can control this profile.
+        #
+        # Right now we're setting it to be 1 in wave region and adjoining CZ,
+        # and zero in the other part of the CZ (furthest from wave region)
+        #
+        # This is a hack to get things up and running
+        c0 = 1
+        self.c_IC['g'] = c0*(1-taper)
+        self.f_IC['g'] = self.c_IC['g']
+
+        
+    def set_BC(self, *args, **kwargs):
+        super(FC_multitrope_rxn, self).set_BC(*args, **kwargs)
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+            
 class FC_MHD_equations(FC_equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD, 2.5D'
