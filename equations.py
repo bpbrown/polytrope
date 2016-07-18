@@ -1577,16 +1577,17 @@ class FC_equations(Equations):
         return self.analysis_tasks
 
 class FC_equations_rxn(FC_equations):
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super(FC_equations_rxn, self).__init__(**kwargs)
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with chemical reactions'
-        self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1','c','c_z','f','f_z']
+        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1','c','c_z','f','f_z']
 
         # possible boundary condition values for a normal system
         self.T1_left  = 0
         self.T1_right = 0
         self.T1_z_left  = 0
         self.T1_z_right = 0
-
+        
     def _set_subs(self):
         super(FC_equations_rxn, self)._set_subs()
         
@@ -1612,10 +1613,25 @@ class FC_equations_rxn(FC_equations):
 
         # need to set rate coefficient somewhere.  In init?  In diffusivities?
         self.problem.parameters['k_chem'] = self.k_chem
-        
-    def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl, ChemicalReynolds, **kwargs):
+
+    def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl, ChemicalReynolds,
+                      kx = 0, EVP_2 = False, 
+                      easy_rho_momentum=False, easy_rho_energy=False,
+                      **kwargs):
+
+        if self.dimensions == 1:
+            self.problem.parameters['j'] = 1j
+            self.problem.substitutions['dx(f)'] = "j*kx*(f)"
+            self.problem.parameters['kx'] = kx
+            
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, ChemicalPrandtl=ChemicalPrandtl, ChemicalReynolds=ChemicalReynolds, **kwargs)
         self._set_parameters()
+        if EVP_2:
+            self.problem.substitutions['chi'] = "(Prandtl*nu)"
+            self.problem.parameters['Prandtl'] = Prandtl
+            self.problem.parameters.pop('nu')
+            self.problem.parameters.pop('chi')
+ 
         # thermal boundary conditions
         self.problem.parameters['T1_left']  = self.T1_left
         self.problem.parameters['T1_right'] = self.T1_right
@@ -1625,63 +1641,66 @@ class FC_equations_rxn(FC_equations):
         self._set_subs()
                 
         # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
-        self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_v = " nu*(Lap(v, v_z) )" # work through this properly
+        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(u_z,   dz(w_z)))"
+        self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        if not easy_rho_momentum:
+            self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * (2*w_z - 2/3*Div_u)"
+            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (  u_z +     dx(w))"
 
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u
-        self.problem.substitutions['L_visc_v'] = self.viscous_term_v
-                
+
         self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
         self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_v = " 0 " # work through this properly
-
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-        self.problem.substitutions['NL_visc_v'] = self.nonlinear_viscous_v
 
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z)     + T1_z*del_ln_rho0 "
-                                       "              + T0_z*dz(ln_rho1)) + del_chi*dz(T1)) ")
-        self.nonlinear_thermal_diff =  " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                  " Cv_inv*(chi*(T0_zz             + T0_z*del_ln_rho0) + del_chi*T0_z)"
+        self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
+        if not easy_rho_energy:
+            self.linear_thermal_diff += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T1_z'
+            self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
                 
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
         self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
-        
+      
         self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
         self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
-    
+       
         self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("dz(v) - v_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
         self.problem.add_equation("dz(f) - f_z = 0")
         self.problem.add_equation("dz(c) - c_z = 0")
 
-        self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
 
-        self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
-
-        self.problem.add_equation(("(scale)*( dt(v) +                                          - L_visc_v) = "
-                                   "(scale)*(- UdotGrad(v, v_z) + NL_visc_v)"))
-
+        logger.debug("Setting z-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
         
-        self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+        logger.debug("Setting x-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
 
-        self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+
+        logger.debug("Setting continuity equation")
+        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        logger.debug("Setting energy equation")
+        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
         # no NCCs here to rescale.  Easy to modify.
+        logger.debug("Setting passive tracer scalar equation")
         self.problem.add_equation("dt(f) - nu_chem*Lap(f, f_z) =  -UdotGrad(f,f_z) - f*Div_u")
+        logger.debug("Setting passive reacting scalar equation")
         self.problem.add_equation("(scale)*(dt(c) - nu_chem*Lap(c, c_z) + k_chem*rho0*c) =  (scale)*(-UdotGrad(c,c_z) - c*Div_u)")
-        
+
         logger.info("using nonlinear EOS for entropy, via substitution")
 
     def set_BC(self, **kwargs):
@@ -1693,6 +1712,12 @@ class FC_equations_rxn(FC_equations):
         self.problem.add_bc("right(f_z) = 0")
         self.problem.add_bc("right(c_z) = 0")
 
+        self.dirichlet_set.append('c_z')
+        self.dirichlet_set.append('f_z')
+
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+        
     def set_IC(self, solver, A0=1e-6, **kwargs):
         super(FC_equations_rxn, self).set_IC(solver, A0=A0, **kwargs)
     
@@ -1864,12 +1889,6 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
         self.c_IC['g'] = c0*(1-taper)
         self.f_IC['g'] = self.c_IC['g']
         
-    def set_BC(self, *args, **kwargs):
-        super(FC_multitrope_rxn, self).set_BC(*args, **kwargs)
-        for key in self.dirichlet_set:
-            self.problem.meta[key]['z']['dirichlet'] = True
-            
-
         
 class FC_MHD_equations(FC_equations):
     def __init__(self):
