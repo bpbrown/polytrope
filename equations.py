@@ -1576,7 +1576,7 @@ class FC_equations(Equations):
 
         return self.analysis_tasks
 
-class FC_equations_rxn(Equations):
+class FC_equations_rxn(FC_equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with chemical reactions'
         self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1','c','c_z','f','f_z']
@@ -1595,7 +1595,8 @@ class FC_equations_rxn(Equations):
 
         self.nu_chem = self._new_ncc()
         self.necessary_quantities['nu_chem'] = self.nu_chem
-        self.nu_chem.set_scales(self.domain.dealias, keep_data=False)
+        self.nu_chem.set_scales(self.domain.dealias, keep_data=True)
+        self.nu.set_scales(self.domain.dealias, keep_data=True)
         self.nu_chem['g'] = self.nu['g']/ChemicalPrandtl
 
         # this should become a chemical Reynolds number control parameter, or something sensible
@@ -1684,7 +1685,6 @@ class FC_equations_rxn(Equations):
         logger.info("using nonlinear EOS for entropy, via substitution")
 
     def set_BC(self, **kwargs):
-        
         super(FC_equations_rxn, self).set_BC(**kwargs)
 
         # perfectly conducting boundary conditions.
@@ -1693,8 +1693,6 @@ class FC_equations_rxn(Equations):
         self.problem.add_bc("right(f_z) = 0")
         self.problem.add_bc("right(c_z) = 0")
 
-        #HERE
-        
     def set_IC(self, solver, A0=1e-6, **kwargs):
         super(FC_equations_rxn, self).set_IC(solver, A0=A0, **kwargs)
     
@@ -1865,13 +1863,14 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
         c0 = 1
         self.c_IC['g'] = c0*(1-taper)
         self.f_IC['g'] = self.c_IC['g']
-
         
     def set_BC(self, *args, **kwargs):
         super(FC_multitrope_rxn, self).set_BC(*args, **kwargs)
         for key in self.dirichlet_set:
             self.problem.meta[key]['z']['dirichlet'] = True
             
+
+        
 class FC_MHD_equations(FC_equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD, 2.5D'
