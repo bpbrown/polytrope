@@ -1440,7 +1440,7 @@ class FC_equations(Equations):
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T0.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
-        self.T_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise*self.T0['g']
+        self.T_IC['g'] = self.epsilon*A0*np.sin(np.pi*z_dealias/self.Lz)*noise*self.T0['g']
 
         logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
