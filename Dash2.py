@@ -8,14 +8,14 @@ Usage:
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
-    --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 1e4]
+    --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 3]
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
     --single_chebyshev         Use a single chebyshev domain across both stable and unstable regions.  Useful at low stiffness.
     --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
-    --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
-    --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
+    --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 1]
+    --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 5]
 
     --width=<width>            Width of erf transition between two polytropes
     
@@ -80,10 +80,9 @@ def FC_MHD_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                                                 n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                                 verbose=verbose, width=width,
                                                 constant_Prandtl=constant_Prandtl,
-                                                stable_top=stable_top,
-                                                guidefield_amplitude=B0_amplitude)
+                                                stable_top=stable_top)
         
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude=B0_amplitude)
     else:
         atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
@@ -127,7 +126,7 @@ def FC_MHD_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
 
     report_cadence = 1
     output_time_cadence = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time = 0.25*atmosphere.thermal_time
+    solver.stop_sim_time = np.inf
     solver.stop_iteration= np.inf
     solver.stop_wall_time = 23.75*3600
 
@@ -258,4 +257,4 @@ if __name__ == "__main__":
                       restart=(args['--restart']),
                       data_dir=data_dir,
                       verbose=args['--verbose'],
-                      B0_amplitude=args['--B0_amplitude'])
+                      B0_amplitude=float(args['--B0_amplitude']))

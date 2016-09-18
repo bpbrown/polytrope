@@ -753,6 +753,7 @@ class Multitrope(MultiLayerAtmosphere):
         self.atmosphere_name = 'multitrope'
         
         if stable_top:
+            logger.debug("stable_top = True; CZ below, RZ above")
             stable_bottom = False
             
         self.stable_bottom = stable_bottom
@@ -1907,17 +1908,14 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
 
     def _set_subs(self):
         super(FC_MHD_equations_guidefield, self)._set_subs()
-        self.problem.substitutions['Jx_0'] = '0'
-        self.problem.substitutions['Jy_0'] = '0'
-        self.problem.substitutions['Jz_0'] = '0'
         
         self.problem.substitutions['ME_1'] = '1/(8*pi)*(Bx**2+By**2+Bz**2)'
         self.problem.substitutions['ME_0'] = '1/(8*pi)*(Bx_0**2+By_0**2+Bz_0**2)'
         self.problem.substitutions['ME'] = self.problem.substitutions['ME_1']
 
         self.problem.substitutions['J_squared'] = "((Jx+Jx_0)**2 + (Jy+Jy_0)**2 + (Jz+Jz_0)**2)"
-        self.problem.substitutions['J_squared_0'] = "(Jx**2 + Jy**2 + Jz**2)"
-        self.problem.substitutions['J_squared_1'] = "(Jx_0**2 + Jy_0**2 + Jz_0**2)"
+        self.problem.substitutions['J_squared_1'] = "(Jx**2 + Jy**2 + Jz**2)"
+        self.problem.substitutions['J_squared_0'] = "(Jx_0**2 + Jy_0**2 + Jz_0**2)"
 
     def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude, **kwargs):
         # DOES NOT YET INCLUDE Ohmic heating
@@ -1935,6 +1933,11 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.parameters['Bz_0'] = guidefield_amplitude
         self.problem.parameters['Bx_0'] = 0
         self.problem.parameters['By_0'] = 0
+
+        self.problem.parameters['Jx_0'] = 0
+        self.problem.parameters['Jy_0'] = 0
+        self.problem.parameters['Jz_0'] = 0
+
 
         self._set_subs()
                 
@@ -1976,25 +1979,25 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.add_equation("Bx + dz(Ay) = 0")
         self.problem.add_equation("By - dz(Ax) + dx(Az) = 0")
 
-        self.problem.substitutions['dy(A)'] = '(0*(A))'
+        #self.problem.substitutions['dy(A)'] = '(0*(A))'
         
         self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w "
-                                   "         - 1/(4*pi*rho_0)*(Jx_0*By - Jy_0*Bx + Jx*By_0 - Jy*Bx_0)) = "
+                                   "         - 1/(4*pi*rho0)*(Jx_0*By - Jy_0*Bx + Jx*By_0 - Jy*Bx_0)) = "
                                    "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  "
                                    "         + 1/(4*pi*rho_full)*(Jx*By - Jy*Bx + Jx_0*By_0 - Jy_0*Bx_0 "
-                                   "            + rho_fluc/rho_0*(Jx*By_0 - Jy*Bx_0 + Jx_0*By - Jy_0*Bx))"))
+                                   "             + rho_fluc/rho0*(Jx*By_0 - Jy*Bx_0 + Jx_0*By - Jy_0*Bx)))"))
 
-        self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "         - 1/(4*pi*rho_0)*(Jy_0*Bz - Jz_0*By + Jy*Bz_0 - Jz*By_0)) = "
+        self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u "
+                                   "         - 1/(4*pi*rho0)*(Jy_0*Bz - Jz_0*By + Jy*Bz_0 - Jz*By_0)) = "
                                    "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  "
                                    "         + 1/(4*pi*rho_full)*(Jy*Bz - Jz*By + Jy_0*Bz_0 - Jz_0*By_0 "
-                                   "            + rho_fluc/rho_0*(Jy*Bz_0 - Jz*By_0 + Jy_0*Bz - Jz_0*By))"))
+                                   "             + rho_fluc/rho0*(Jy*Bz_0 - Jz*By_0 + Jy_0*Bz - Jz_0*By)))"))
 
-        self.problem.add_equation(("(scale)*( dt(v) + dy(T1) + T0*dy(ln_rho1)                  - L_visc_v) = "
-                                    "         - 1/(4*pi*rho_0)*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)) = "
-                                   "(scale)*(-T1*yx(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v  "
+        self.problem.add_equation(("(scale)*( dt(v)                                           - L_visc_v "
+                                    "         - 1/(4*pi*rho0)*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)) = "
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v  "
                                    "         + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz + Jz_0*Bx_0 - Jx_0*Bz_0 "
-                                   "            + rho_fluc/rho_0*(Jz*Bx_0 - Jx*Bz_0 + Jz_0*Bx - Jx_0*Bz))"))
+                                   "             + rho_fluc/rho0*(Jz*Bx_0 - Jx*Bz_0 + Jz_0*Bx - Jx_0*Bz)))"))
         
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
@@ -2003,10 +2006,10 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
         # assumes constant eta; no NCCs here to rescale.  Easy to modify.
-        self.problem.add_equation("dt(Ax) + eta*(Jx + Jx_0) + dx(Phi) - (v*Bz_0 - w*By_0) =  v*Bz - w*By")
-        self.problem.add_equation("dt(Ay) + eta*(Jy + Jy_0) + dy(Phi) - (w*Bx_0 - u*Bz_0) =  w*Bx - u*Bz")
-        self.problem.add_equation("dt(Az) + eta*(Jz + Jz_0) + dz(Phi) - (u*By_0 - v*Bx_0) =  u*By - v*Bx")
-        self.problem.add_equation("dx(Ax) + dy(Ay) + dz(Az) = 0")
+        self.problem.add_equation("dt(Ax) + eta*Jx + dx(Phi) - (v*Bz_0 - w*By_0) =  v*Bz - w*By - eta*Jx_0")
+        self.problem.add_equation("dt(Ay) + eta*Jy           - (w*Bx_0 - u*Bz_0) =  w*Bx - u*Bz - eta*Jy_0")
+        self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi) - (u*By_0 - v*Bx_0) =  u*By - v*Bx - eta*Jz_0")
+        self.problem.add_equation("dx(Ax) +          dz(Az) = 0")
         
         logger.info("using nonlinear EOS for entropy, via substitution")
 
@@ -2036,24 +2039,24 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
             
         analysis_profile = self.analysis_tasks['profile']
         analysis_profile.add_task("plane_avg(ME)", name="ME")
-        analysis_profile.add_task("plane_avg(ME_0)", name="ME_0")
+        #analysis_profile.add_task("plane_avg(ME_0)", name="ME_0")
         analysis_profile.add_task("plane_avg(ME_1)", name="ME_1")
 
         analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
-        analysis_profile.add_task("plane_avg(J_squared_0)", name="J_squared_0")
+        #analysis_profile.add_task("plane_avg(J_squared_0)", name="J_squared_0")
         analysis_profile.add_task("plane_avg(J_squared_1)", name="J_squared_1")
 
         analysis_scalar = self.analysis_tasks['scalar']
         analysis_scalar.add_task("vol_avg(ME)", name="ME")
+        #analysis_scalar.add_task("vol_avg(ME_0)", name="ME_0")
         analysis_scalar.add_task("vol_avg(ME_1)", name="ME_1")
-        analysis_scalar.add_task("vol_avg(ME_2)", name="ME_2")
         
         analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
-        analysis_scalar.add_task("vol_avg(J_squared_1)", name="J_squared_0")
-        analysis_scalar.add_task("vol_avg(J_squared_0)", name="J_squared_1")
+        #analysis_scalar.add_task("vol_avg(J_squared_0)", name="J_squared_0")
+        analysis_scalar.add_task("vol_avg(J_squared_1)", name="J_squared_1")
 
-        analysis_slice.add_task("vol_avg(abs(dx(Bx) + dz(Bz)))", name="divB")
-        analysis_slice.add_task("vol_avg(abs(dx(Ax) + dz(Az)))", name="divA")
+        analysis_scalar.add_task("vol_avg(abs(dx(Bx) + dz(Bz)))", name="divB")
+        analysis_scalar.add_task("vol_avg(abs(dx(Ax) + dz(Az)))", name="divA")
         
         return self.analysis_tasks
     
@@ -2161,7 +2164,7 @@ class FC_MHD_multitrope_guidefield(FC_MHD_equations_guidefield, Multitrope):
 
 
     def set_BC(self, *args, **kwargs):
-        super(FC_MHD_multitrope, self).set_BC(*args, **kwargs)
+        super(FC_MHD_multitrope_guidefield, self).set_BC(*args, **kwargs)
         for key in self.dirichlet_set:
             self.problem.meta[key]['z']['dirichlet'] = True
 
