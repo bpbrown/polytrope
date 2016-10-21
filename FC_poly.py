@@ -17,6 +17,8 @@ Options:
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
     --run_time=<run_time>                Run time, in hours [default: 23.5]
 
+   --rk222                               Use RK222 as timestepper
+    
     --MHD                                Do MHD run
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
 
@@ -39,7 +41,8 @@ except:
     do_checkpointing = False
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
-                      fixed_T=False, fixed_Tz=False, 
+                      fixed_T=False, fixed_Tz=False,
+                      rk222=False,
                       restart=None, nz=128, nx=None, data_dir='./', run_time=23.5):
     import numpy as np
     import time
@@ -72,8 +75,14 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
         if not os.path.exists('{:s}/'.format(data_dir)):
             os.mkdir('{:s}/'.format(data_dir))
 
-    ts = de.timesteppers.RK443
-    cfl_safety_factor = 0.2*4
+    if rk222:
+        logger.info("timestepping using RK222")
+        ts = de.timesteppers.RK222
+        cfl_safety_factor = 0.2*2
+    else:
+        logger.info("timestepping using RK443")
+        ts = de.timesteppers.RK443
+        cfl_safety_factor = 0.2*4
 
     # memory problems at high RA for LU decomp storing runs with RK443
     ts = de.timesteppers.RK222
@@ -255,6 +264,7 @@ if __name__ == "__main__":
                       fixed_Tz=args['--fixed_Tz'],                      
                       MHD=args['--MHD'],
                       restart=(args['--restart']),
+                      rk222=args['--rk222'],
                       n_rho_cz=float(args['--n_rho_cz']),
                       data_dir=data_dir,
                       run_time=float(args['--run_time']))

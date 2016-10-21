@@ -1505,6 +1505,9 @@ class FC_equations(Equations):
             analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
                                                                  write_num=profiles[0], set_num=profiles[1],  **kwargs)
             analysis_profile.add_task("plane_avg(T1)", name="T1")
+            analysis_profile.add_task("plane_avg(T1+T0)", name="T_full")
+            analysis_profile.add_task("plane_avg(vel_rms/(T1+T0))", name="Ma_iso")
+            analysis_profile.add_task("plane_avg(vel_rms/(gamma*(T1+T0)))", name="Ma_ad")
             analysis_profile.add_task("plane_avg(ln_rho1)", name="ln_rho1")
             analysis_profile.add_task("plane_avg(rho_full)", name="rho_full")
             analysis_profile.add_task("plane_avg(KE)", name="KE")
@@ -1938,6 +1941,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.parameters['Jy_0'] = 0
         self.problem.parameters['Jz_0'] = 0
 
+        logger.info("Constant Bz guidefield, amplitude {}".format(guidefield_amplitude))
 
         self._set_subs()
                 
@@ -2018,13 +2022,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.namespace['Jx'].store_last = True
         self.problem.namespace['Jy'].store_last = True
         self.problem.namespace['Jz'].store_last = True    
-        
-    def set_IC(self, solver, A0=1e-6, **kwargs):
-        super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
-    
-        self.Bx_IC = solver.state['Bx']
-        self.Ay_IC = solver.state['Ay']
-        
+                
     def initialize_output(self, solver, data_dir, **kwargs):
         super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
@@ -2033,6 +2031,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         analysis_slice.add_task("Jy", name="Jy")
         analysis_slice.add_task("Bx", name="Bx")
         analysis_slice.add_task("Bz", name="Bz")
+        analysis_slice.add_task("Ay", name="Ay")
         analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
 
         analysis_slice.add_task("J_squared", name="J_squared")
