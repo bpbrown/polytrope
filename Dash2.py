@@ -20,6 +20,8 @@ Options:
     --width=<width>            Width of erf transition between two polytropes
 
     --rk222                    Use RK222 as timestepper
+
+    --constant_Prandtl         Make Prandtl number constant with depth
         
     --MHD                                Do MHD run
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
@@ -51,6 +53,7 @@ def FC_MHD_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                       width=None,
                       single_chebyshev=True,
                       rk222=False,
+                      constant_Prandtl=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -63,7 +66,7 @@ def FC_MHD_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
 
     oz = True
     if oz:
-        constant_Prandtl=False
+        constant_Prandtl=constant_Prandtl
         stable_top=True
         mixed_temperature_flux=True
         
@@ -137,7 +140,7 @@ def FC_MHD_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = np.inf
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.75*3600
+    solver.stop_wall_time = 23.*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -235,6 +238,8 @@ if __name__ == "__main__":
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
+    if args['--constant_Prandtl']:
+        data_dir+='_constPr'
     if args['--width'] is not None:
         data_dir += "_erf{}".format(args['--width'])
         width = float(args['--width'])
@@ -267,4 +272,5 @@ if __name__ == "__main__":
                       rk222=args['--rk222'],
                       data_dir=data_dir,
                       verbose=args['--verbose'],
+                      constant_Prandtl=args['--constant_Prandtl'],
                       B0_amplitude=float(args['--B0_amplitude']))
