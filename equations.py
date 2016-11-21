@@ -1984,32 +1984,35 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.add_equation("By - dz(Ax) + dx(Az) = 0")
 
         #self.problem.substitutions['dy(A)'] = '(0*(A))'
-        
+
+        # momentum equation
         self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w "
                                    "         - 1/(4*pi*rho0)*(Jx_0*By - Jy_0*Bx + Jx*By_0 - Jy*Bx_0)) = "
                                    "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  "
                                    "         + 1/(4*pi*rho_full)*(Jx*By - Jy*Bx + Jx_0*By_0 - Jy_0*Bx_0 "
-                                   "             + rho_fluc/rho0*(Jx*By_0 - Jy*Bx_0 + Jx_0*By - Jy_0*Bx)))"))
+                                   "         - rho_fluc/rho0*(Jx_0*By - Jy_0*Bx + Jx*By_0 - Jy*Bx_0)))"))
 
         self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u "
                                    "         - 1/(4*pi*rho0)*(Jy_0*Bz - Jz_0*By + Jy*Bz_0 - Jz*By_0)) = "
                                    "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  "
                                    "         + 1/(4*pi*rho_full)*(Jy*Bz - Jz*By + Jy_0*Bz_0 - Jz_0*By_0 "
-                                   "             + rho_fluc/rho0*(Jy*Bz_0 - Jz*By_0 + Jy_0*Bz - Jz_0*By)))"))
+                                   "         - rho_fluc/rho0*(Jy_0*Bz - Jz_0*By + Jy*Bz_0 - Jz*By_0)))"))
 
         self.problem.add_equation(("(scale)*( dt(v)                                           - L_visc_v "
-                                    "         - 1/(4*pi*rho0)*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)) = "
+                                    "        - 1/(4*pi*rho0)*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)) = "
                                    "(scale)*(-T1*dx(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v  "
                                    "         + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz + Jz_0*Bx_0 - Jx_0*Bz_0 "
-                                   "             + rho_fluc/rho0*(Jz*Bx_0 - Jx*Bz_0 + Jz_0*Bx - Jx_0*Bz)))"))
-        
+                                   "         - rho_fluc/rho0*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)))"))
+
+        # continuity equation
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
+        # temperature equation; no ohmic heating yet
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
-        # assumes constant eta; no NCCs here to rescale.  Easy to modify.
+        # Induction equation
         self.problem.add_equation("dt(Ax) + eta*Jx + dx(Phi) - (v*Bz_0 - w*By_0) =  v*Bz - w*By - eta*Jx_0")
         self.problem.add_equation("dt(Ay) + eta*Jy           - (w*Bx_0 - u*Bz_0) =  w*Bx - u*Bz - eta*Jy_0")
         self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi) - (u*By_0 - v*Bx_0) =  u*By - v*Bx - eta*Jz_0")
