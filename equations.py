@@ -2049,7 +2049,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         analysis_profile.add_task("plane_avg(J_squared_1)", name="J_squared_1")
 
         analysis_profile.add_task("plane_avg(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full))", name="V_alfven_squared")
-        analysis_profile.add_task("plane_avg(sqrt(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full)/(T+T0)))", name="Ma_alfven")
+        analysis_profile.add_task("plane_avg(sqrt(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full)/(T1+T0)))", name="Ma_alfven")
 
         analysis_scalar = self.analysis_tasks['scalar']
         analysis_scalar.add_task("vol_avg(ME)", name="ME")
