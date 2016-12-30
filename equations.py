@@ -1234,15 +1234,13 @@ class Equations():
         self.filter_field(noise_field, **kwargs)
 
         return noise_field['g']
-    
+
 class FC_equations(Equations):
     def __init__(self, **kwargs):
         super(FC_equations, self).__init__(**kwargs)
-        self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
-        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-        self.T1_left = 0
-        self.T1_right = 0
-        self.T1_z_left = 0
+        self.T1_left    = 0
+        self.T1_right   = 0
+        self.T1_z_left  = 0
         self.T1_z_right = 0
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
@@ -1289,89 +1287,6 @@ class FC_equations(Equations):
         self.problem.substitutions['KE_flux'] = 'w*KE'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
 
-    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
-                      easy_rho_momentum=False, easy_rho_energy=False):
-
-        if self.dimensions == 1:
-            self.problem.parameters['j'] = 1j
-            self.problem.substitutions['dx(f)'] = "j*kx*(f)"
-            self.problem.parameters['kx'] = kx
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
-        self._set_parameters()
-        if EVP_2:
-            self.problem.substitutions['chi'] = "(Prandtl*nu)"
-            self.problem.parameters['Prandtl'] = Prandtl
-            self.problem.parameters.pop('nu')
-            self.problem.parameters.pop('chi')
- 
-        # thermal boundary conditions
-        self.problem.parameters['T1_left']  = self.T1_left
-        self.problem.parameters['T1_right'] = self.T1_right
-        self.problem.parameters['T1_z_left']  = self.T1_z_left
-        self.problem.parameters['T1_z_right'] = self.T1_z_right
-
-        self._set_subs()
-                
-        # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(u_z,   dz(w_z)))"
-        self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        if not easy_rho_momentum:
-            self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * (2*w_z - 2/3*Div_u)"
-            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (  u_z +     dx(w))"
-
-        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
-        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
-
-        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-
-        # double check implementation of variabile chi and background coupling term.
-        self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
-        if not easy_rho_energy:
-            self.linear_thermal_diff += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T1_z'
-            self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
-                
-        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
-        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
-        self.problem.substitutions['source_terms'] = self.source
-      
-        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
-       
-        self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(T1) - T1_z = 0")
-
-        logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
-        
-        logger.debug("Setting x-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
-
-
-        logger.debug("Setting continuity equation")
-        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
-
-        logger.debug("Setting energy equation")
-        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
-        
-        logger.info("using nonlinear EOS for entropy, via substitution")
-        # non-linear EOS for s, where we've subtracted off
-        # Cv_inv*∇s0 =  T0_z/(T0 + T1) - (gamma-1)*del_ln_rho0
-        # move entropy to a substitution; no need to solve for it.
-        #self.problem.add_equation(("(scale)*(Cv_inv*s - T1/T0 + (gamma-1)*ln_rho1) = "
-        #                           "(scale)*(log(1+T1/T0) - T1/T0)"))
-
-                
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
                stress_free=None, no_slip=None):
@@ -1382,28 +1297,38 @@ class FC_equations(Equations):
             stress_free = True
 
         self.dirichlet_set = []
-        
+
+        # thermal boundary conditions
+        # this needs to be done before any equations are entered
+        #self.problem.parameters['T1_left']    = self.T1_left
+        #self.problem.parameters['T1_right']   = self.T1_right  
+        #self.problem.parameters['T1_z_left']  = self.T1_z_left 
+        #self.problem.parameters['T1_z_right'] = self.T1_z_right 
+
         # thermal boundary conditions
         if fixed_flux:
             logger.info("Thermal BC: fixed flux (T1_z)")
-            self.problem.add_bc( "left(T1_z) = T1_z_left")
-            self.problem.add_bc("right(T1_z) = T1_z_right")
+            logger.info("warning; these are not fully correct fixed flux conditions yet")
+            self.problem.add_bc( "left(T1_z) = 0")
+            self.problem.add_bc("right(T1_z) = 0")
             self.dirichlet_set.append('T1_z')
         elif fixed_temperature:
             logger.info("Thermal BC: fixed temperature (T1)")
-            self.problem.add_bc( "left(T1) = T1_left")
-            self.problem.add_bc("right(T1) = T1_right")
+            self.problem.add_bc( "left(T1) = 0")
+            self.problem.add_bc("right(T1) = 0")
             self.dirichlet_set.append('T1')
         elif mixed_flux_temperature:
             logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
-            self.problem.add_bc("left(T1_z) = T1_z_left")
-            self.problem.add_bc("right(T1)  = T1_right")
+            logger.info("warning; these are not fully correct fixed flux conditions yet")
+            self.problem.add_bc("left(T1_z) = 0")
+            self.problem.add_bc("right(T1)  = 0")
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('T1')
         elif mixed_temperature_flux:
             logger.info("Thermal BC: mixed temperature/flux (T1/T1_z)")
-            self.problem.add_bc("left(T1)    = T1_left")
-            self.problem.add_bc("right(T1_z) = T1_z_right")
+            logger.info("warning; these are not fully correct fixed flux conditions yet")
+            self.problem.add_bc("left(T1)    = 0")
+            self.problem.add_bc("right(T1_z) = 0")
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('T1')
         else:
@@ -1472,6 +1397,89 @@ class FC_equations(Equations):
 
         self.check_atmosphere(T=T, rho=rho, **kwargs)
 
+    def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
+        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
+        self.problem.substitutions['dt(f)'] = "(0*f)"
+        self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
+        
+
+        
+class FC_equations_2d(FC_equations):
+    def __init__(self, **kwargs):
+        super(FC_equations_2d, self).__init__(**kwargs)
+        self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
+        self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
+
+    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
+                      easy_rho_momentum=False, easy_rho_energy=False):
+
+        if self.dimensions == 1:
+            self.problem.parameters['j'] = 1j
+            self.problem.substitutions['dx(f)'] = "j*kx*(f)"
+            self.problem.parameters['kx'] = kx
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
+        self._set_parameters()
+        if EVP_2:
+            self.problem.substitutions['chi'] = "(Prandtl*nu)"
+            self.problem.parameters['Prandtl'] = Prandtl
+            self.problem.parameters.pop('nu')
+            self.problem.parameters.pop('chi')
+ 
+        self._set_subs()
+                
+        # here, nu and chi are constants        
+        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(u_z,   dz(w_z)))"
+        self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        if not easy_rho_momentum:
+            self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * (2*w_z - 2/3*Div_u)"
+            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (  u_z +     dx(w))"
+
+        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
+        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
+
+        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
+        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
+        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
+        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
+
+        # double check implementation of variabile chi and background coupling term.
+        self.problem.substitutions['Q_z'] = "(-T1_z)"
+        self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
+        if not easy_rho_energy:
+            self.linear_thermal_diff += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T1_z'
+            self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
+                
+        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
+        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
+        self.problem.substitutions['source_terms'] = self.source
+      
+        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
+        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
+       
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
+
+        logger.debug("Setting z-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+        
+        logger.debug("Setting x-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
+
+
+        logger.debug("Setting continuity equation")
+        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        logger.debug("Setting energy equation")
+        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                
+
     def initialize_output(self, solver, data_dir, full_output=False,
                           slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
         #  slices, profiles, and scalar are all [write_num, set_num]
@@ -1501,100 +1509,84 @@ class FC_equations(Equations):
         analysis_coeff.add_task("vorticity", name="vorticity", layout='c')
         analysis_tasks['coeff'] = analysis_coeff
 
-        if self.dimensions != 1:
-            analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
-                                                                 write_num=profiles[0], set_num=profiles[1],  **kwargs)
-            analysis_profile.add_task("plane_avg(T1)", name="T1")
-            analysis_profile.add_task("plane_avg(T1+T0)", name="T_full")
-            analysis_profile.add_task("plane_avg(vel_rms/(T1+T0))", name="Ma_iso")
-            analysis_profile.add_task("plane_avg(vel_rms/(gamma*(T1+T0)))", name="Ma_ad")
-            analysis_profile.add_task("plane_avg(ln_rho1)", name="ln_rho1")
-            analysis_profile.add_task("plane_avg(rho_full)", name="rho_full")
-            analysis_profile.add_task("plane_avg(KE)", name="KE")
-            analysis_profile.add_task("plane_avg(PE)", name="PE")
-            analysis_profile.add_task("plane_avg(IE)", name="IE")
-            analysis_profile.add_task("plane_avg(PE_fluc)", name="PE_fluc")
-            analysis_profile.add_task("plane_avg(IE_fluc)", name="IE_fluc")
-            analysis_profile.add_task("plane_avg(KE + PE + IE)", name="TE")
-            analysis_profile.add_task("plane_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
-            analysis_profile.add_task("plane_avg(w*(KE))", name="KE_flux_z")
-            analysis_profile.add_task("plane_avg(w*(PE))", name="PE_flux_z")
-            analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
-            analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
-            analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
-            analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
-            analysis_profile.add_task("plane_avg(kappa_flux)", name="kappa_flux_z")
-            analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
-            analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
-            analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
-            analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
-            analysis_profile.add_task("plane_avg(vel_rms)", name="vel_rms")
-            analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
-            analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
-            analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
-            analysis_profile.add_task("plane_std(enstrophy)", name="enstrophy_std")        
-            analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
-            analysis_profile.add_task("plane_avg(Rayleigh_local)",  name="Rayleigh_local")
-            analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
-            analysis_profile.add_task("plane_std(s_fluc)", name="s_fluc_std")
-            analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
-            analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
-            analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
-            analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
-            analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")
-            analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cp_inv)", name="brunt_squared_fluc")        
-            analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cp_inv)", name="brunt_squared_mean")        
-            analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cp_inv)", name="brunt_squared_tot")
-            #analysis_profile.add_task("lambda_microscale", name="lambda_microscale")
-            #analysis_profile.add_task("plane_avg(Re_microscale)",  name="Re_microscale")
-            #analysis_profile.add_task("plane_avg(Pe_microscale)",  name="Pe_microscale")
-            analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
-                                      name="T1_source_terms")
-            
-            analysis_tasks['profile'] = analysis_profile
+        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
+                                                             write_num=profiles[0], set_num=profiles[1],  **kwargs)
+        analysis_profile.add_task("plane_avg(T1)", name="T1")
+        analysis_profile.add_task("plane_avg(T1+T0)", name="T_full")
+        analysis_profile.add_task("plane_avg(vel_rms/(T1+T0))", name="Ma_iso")
+        analysis_profile.add_task("plane_avg(vel_rms/(gamma*(T1+T0)))", name="Ma_ad")
+        analysis_profile.add_task("plane_avg(ln_rho1)", name="ln_rho1")
+        analysis_profile.add_task("plane_avg(rho_full)", name="rho_full")
+        analysis_profile.add_task("plane_avg(KE)", name="KE")
+        analysis_profile.add_task("plane_avg(PE)", name="PE")
+        analysis_profile.add_task("plane_avg(IE)", name="IE")
+        analysis_profile.add_task("plane_avg(PE_fluc)", name="PE_fluc")
+        analysis_profile.add_task("plane_avg(IE_fluc)", name="IE_fluc")
+        analysis_profile.add_task("plane_avg(KE + PE + IE)", name="TE")
+        analysis_profile.add_task("plane_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
+        analysis_profile.add_task("plane_avg(w*(KE))", name="KE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(PE))", name="PE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
+        analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
+        analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux)", name="kappa_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
+        analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
+        analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
+        analysis_profile.add_task("plane_avg(vel_rms)", name="vel_rms")
+        analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
+        analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
+        analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
+        analysis_profile.add_task("plane_std(enstrophy)", name="enstrophy_std")        
+        analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
+        analysis_profile.add_task("plane_avg(Rayleigh_local)",  name="Rayleigh_local")
+        analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
+        analysis_profile.add_task("plane_std(s_fluc)", name="s_fluc_std")
+        analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
+        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
+        analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
+        analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
+        analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")
+        analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cp_inv)", name="brunt_squared_fluc")        
+        analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cp_inv)", name="brunt_squared_mean")        
+        analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cp_inv)", name="brunt_squared_tot")
+        #analysis_profile.add_task("lambda_microscale", name="lambda_microscale")
+        #analysis_profile.add_task("plane_avg(Re_microscale)",  name="Re_microscale")
+        #analysis_profile.add_task("plane_avg(Pe_microscale)",  name="Pe_microscale")
+        analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
+                                  name="T1_source_terms")
 
-            analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
-                                                                write_num=scalar[0], set_num=scalar[1], **kwargs)
-            analysis_scalar.add_task("vol_avg(KE)", name="KE")
-            analysis_scalar.add_task("vol_avg(PE)", name="PE")
-            analysis_scalar.add_task("vol_avg(IE)", name="IE")
-            analysis_scalar.add_task("vol_avg(PE_fluc)", name="PE_fluc")
-            analysis_scalar.add_task("vol_avg(IE_fluc)", name="IE_fluc")
-            analysis_scalar.add_task("vol_avg(KE + PE + IE)", name="TE")
-            analysis_scalar.add_task("vol_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
-            analysis_scalar.add_task("vol_avg(u_rms)", name="u_rms")
-            analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
-            analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
-            analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
-            analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
-            #analysis_scalar.add_task("vol_avg(Re_microscale)",  name="Re_microscale")
-            #analysis_scalar.add_task("vol_avg(Pe_microscale)",  name="Pe_microscale")
+        analysis_tasks['profile'] = analysis_profile
 
-            analysis_tasks['scalar'] = analysis_scalar
+        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
+                                                            write_num=scalar[0], set_num=scalar[1], **kwargs)
+        analysis_scalar.add_task("vol_avg(KE)", name="KE")
+        analysis_scalar.add_task("vol_avg(PE)", name="PE")
+        analysis_scalar.add_task("vol_avg(IE)", name="IE")
+        analysis_scalar.add_task("vol_avg(PE_fluc)", name="PE_fluc")
+        analysis_scalar.add_task("vol_avg(IE_fluc)", name="IE_fluc")
+        analysis_scalar.add_task("vol_avg(KE + PE + IE)", name="TE")
+        analysis_scalar.add_task("vol_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
+        analysis_scalar.add_task("vol_avg(u_rms)", name="u_rms")
+        analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
+        analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
+        analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
+        analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
+        #analysis_scalar.add_task("vol_avg(Re_microscale)",  name="Re_microscale")
+        #analysis_scalar.add_task("vol_avg(Pe_microscale)",  name="Pe_microscale")
 
-        # workaround for issue #29
-        self.problem.namespace['enstrophy'].store_last = True
-        #self.problem.namespace['Re_microscale'].store_last = True
-        #self.problem.namespace['Pe_microscale'].store_last = True
-        #self.problem.namespace['lambda_microscale'].store_last = True
+        analysis_tasks['scalar'] = analysis_scalar
 
         return self.analysis_tasks
 
-class FC_equations_rxn(FC_equations):
+class FC_equations_rxn(FC_equations_2d):
     def __init__(self, **kwargs):
         super(FC_equations_rxn, self).__init__(**kwargs)
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with chemical reactions'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1','c','c_z','f','f_z']
-
-        # possible boundary condition values for a normal system
-        self.T1_left  = 0
-        self.T1_right = 0
-        self.T1_z_left  = 0
-        self.T1_z_right = 0
-        
-    def _set_subs(self):
-        super(FC_equations_rxn, self)._set_subs()
-        
+                
     def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl, ChemicalReynolds, **kwargs):
         super(FC_equations_rxn, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
 
@@ -1636,12 +1628,6 @@ class FC_equations_rxn(FC_equations):
             self.problem.parameters.pop('nu')
             self.problem.parameters.pop('chi')
  
-        # thermal boundary conditions
-        self.problem.parameters['T1_left']  = self.T1_left
-        self.problem.parameters['T1_right'] = self.T1_right
-        self.problem.parameters['T1_z_left']  = self.T1_z_left
-        self.problem.parameters['T1_z_right'] = self.T1_z_right
-
         self._set_subs()
                 
         # here, nu and chi are constants        
@@ -1750,18 +1736,15 @@ class FC_equations_rxn(FC_equations):
 
         return self.analysis_tasks
 
-class FC_equations_3d(FC_equations)
+class FC_equations_3d(FC_equations):
     def __init__(self, **kwargs):
         # this doesn't super correctly; 2-D vs 3-D conflict
-        super(FC_equations, self).__init__(**kwargs)
-        self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
+        super(FC_equations_3d, self).__init__(**kwargs)
+        self.equation_set = 'Fully Compressible (FC) Navier-Stokes in 3-D'
         self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-        self.T1_left = 0
-        self.T1_right = 0
-        self.T1_z_left = 0
-        self.T1_z_right = 0
     
     def _set_subs(self):
+        super(FC_equations_3d, self)._set_subs()
         # differential operators
         self.problem.substitutions['Lap(fx, fy, fz_z)'] = "(dx(dx(fx)) + dy(dy(fy)) + dz(fz_z))"
         self.problem.substitutions['Div(fx, fy, fz_z)'] = "(dx(f) + dy(fy) + f_z)"
@@ -1774,7 +1757,7 @@ class FC_equations_3d(FC_equations)
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
         # output parameters
-        # these are not yet correct       
+        # these are not yet correct 
         self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
         self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'
 
@@ -1790,12 +1773,6 @@ class FC_equations_3d(FC_equations)
             self.problem.parameters.pop('nu')
             self.problem.parameters.pop('chi')
  
-        # thermal boundary conditions
-        self.problem.parameters['T1_left']  = self.T1_left
-        self.problem.parameters['T1_right'] = self.T1_right
-        self.problem.parameters['T1_z_left']  = self.T1_z_left
-        self.problem.parameters['T1_z_right'] = self.T1_z_right
-
         self._set_subs()
 
         self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
@@ -1869,13 +1846,12 @@ class FC_equations_3d(FC_equations)
 
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
-            
-
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)"))
         
-class FC_polytrope(FC_equations, Polytrope):
+        
+class FC_polytrope_2d(FC_equations_2d, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):
-        super(FC_polytrope, self).__init__(dimensions=dimensions) 
+        super(FC_polytrope_2d, self).__init__(dimensions=dimensions) 
         Polytrope.__init__(self, dimensions=dimensions, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
@@ -1885,23 +1861,12 @@ class FC_polytrope(FC_equations, Polytrope):
             easy_rho_momentum   = True
         if self.constant_kappa:
             easy_rho_energy     = True
-        super(FC_polytrope, self).set_equations(*args,  easy_rho_momentum = easy_rho_momentum,
+        super(FC_polytrope_2d, self).set_equations(*args,  easy_rho_momentum = easy_rho_momentum,
                                                         easy_rho_energy   = easy_rho_energy,
                                                         **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
-    def set_BC(self, T1_left=0, T1_z_left=0, T1_right=0, T1_z_right=0, **kwargs):
-        self.T1_left        = T1_left
-        self.T1_right       = T1_right
-        self.T1_z_left      = T1_z_left
-        self.T1_z_right     = T1_z_right
-        #Decrease flux factor is 1 - sqrt(Pr2/Pr1)
-        self.problem.parameters['T1_z_left']    = self.T1_z_left
-        self.problem.parameters['T1_z_right']   = self.T1_z_right
-        self.problem.parameters['T1_left']      = self.T1_left
-        self.problem.parameters['T1_right']     = self.T1_right
-        super(FC_polytrope, self).set_BC(**kwargs)
-
+        
 class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
     def __init__(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).__init__() 
@@ -1927,7 +1892,7 @@ class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
         self.ln_rho_IC['g'] = self.ln_rho0_IC['g']        
         logger.info("adding in nonadiabatic background to T1 and ln_rho1")
 
-class FC_multitrope(FC_equations, Multitrope):
+class FC_multitrope(FC_equations_2d, Multitrope):
     def __init__(self, *args, **kwargs):
         super(FC_multitrope, self).__init__() 
         Multitrope.__init__(self, *args, **kwargs)

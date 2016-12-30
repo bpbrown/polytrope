@@ -40,7 +40,7 @@ try:
 except:
     do_checkpointing = False
 
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
+def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
                       fixed_T=False, fixed_Tz=False,
                       rk222=False,
                       restart=None, nz=128, nx=None, data_dir='./', run_time=23.5):
@@ -60,7 +60,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
         atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
     else:
-        atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, constant_mu=False, n_rho_cz=n_rho_cz)
+        atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=True, constant_mu=False, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl)
     if fixed_T:
         atmosphere.set_BC(fixed_temperature=fixed_T)
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     if nz is not None:
         nz = int(nz)
 
-    FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
+    FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       MagneticPrandtl=float(args['--MagneticPrandtl']),
                       nz=nz,
