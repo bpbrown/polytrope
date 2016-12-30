@@ -1426,19 +1426,24 @@ class FC_equations_2d(FC_equations):
             self.problem.parameters.pop('chi')
  
         self._set_subs()
-                
-        # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(u_z,   dz(w_z)))"
+
+        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
+        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
+        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
+        
         self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
+        
         if not easy_rho_momentum:
-            self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * (2*w_z - 2/3*Div_u)"
-            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * (  u_z +     dx(w))"
+            self.viscous_term_u += " + (nu*del_ln_rho0 + del_nu) * σxz"
+            self.viscous_term_w += " + (nu*del_ln_rho0 + del_nu) * σzz"
 
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u
 
-        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
+        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
+        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
+        
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
 
@@ -1454,8 +1459,10 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
         self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
-      
-        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
+
+        # double check this      
+        self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + w_z*σzz + σxz**2)"
+
         self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
        
         self.problem.add_equation("dz(u) - u_z = 0")
