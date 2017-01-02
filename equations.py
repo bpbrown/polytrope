@@ -1202,6 +1202,7 @@ class Equations():
         return BC
 
     def _set_subs(self):
+
         # differential operators
         self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
         self.problem.substitutions['Div(f, f_z)'] = "(dx(f) + f_z)"
@@ -1247,10 +1248,18 @@ class FC_equations(Equations):
         self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
-        
+
     def _set_subs(self):
-        super(FC_equations, self)._set_subs()
-        
+        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
+
+        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
+        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
+        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
+
+        # output parameters        
+        self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
+        self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
+
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
@@ -1280,12 +1289,17 @@ class FC_equations(Equations):
         #self.problem.substitutions['Re_microscale'] = 'vel_rms*lambda_microscale/nu'
         #self.problem.substitutions['Pe_microscale'] = 'vel_rms*lambda_microscale/chi'
         
-        self.problem.substitutions['h_flux'] = 'w*h'
+        self.problem.substitutions['h_flux_z'] = 'w*h'
         self.problem.substitutions['kappa_flux_mean'] = '-rho0*chi*dz(T0)'
         self.problem.substitutions['kappa_flux_fluc'] = '-rho_full*chi*dz(T1) - rho_fluc*chi*dz(T0)'
-        self.problem.substitutions['kappa_flux'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
-        self.problem.substitutions['KE_flux'] = 'w*KE'
-        self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
+        self.problem.substitutions['kappa_flux_z'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
+        self.problem.substitutions['KE_flux_z'] = 'w*KE'
+        self.problem.substitutions['PE_flux_z'] = 'w*PE'
+        #self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*u_z + (4/3)*w*w_z + u*dx(w) - (2/3)*w*dx(u))'
+        self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*σxz + w*σzz)'
+        self.problem.substitutions['convective_flux_z'] = '(viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
+        self.problem.substitutions['kappa_adiabatic_flux_z'] = '(rho0*chi*g/Cp)'
+        self.problem.substitutions['Nusselt'] = '((convective_flux_z-kappa_adiabatic_flux_z)/(kappa_flux_z-kappa_adiabatic_flux_z))'
 
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
@@ -1410,6 +1424,20 @@ class FC_equations_2d(FC_equations):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
 
+    def _set_subs(self):
+        # 2-D specific subs
+
+        # differential operators
+        self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
+        self.problem.substitutions['Div(f, f_z)'] = "(dx(f) + f_z)"
+        self.problem.substitutions['Div_u'] = "Div(u, w_z)"
+        self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + w*(f_z))"
+        # analysis operators
+        self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
+        self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
+
+        super(FC_equations_2d, self)._set_subs()
+        
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
                       easy_rho_momentum=False, easy_rho_energy=False):
 
@@ -1424,12 +1452,8 @@ class FC_equations_2d(FC_equations):
             self.problem.parameters['Prandtl'] = Prandtl
             self.problem.parameters.pop('nu')
             self.problem.parameters.pop('chi')
- 
-        self._set_subs()
 
-        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
-        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
-        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
+        self._set_subs()
         
         self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
         self.viscous_term_w = " nu*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
@@ -1537,9 +1561,10 @@ class FC_equations_2d(FC_equations):
         analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
         analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
         analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
-        analysis_profile.add_task("plane_avg(kappa_flux)", name="kappa_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_z)", name="kappa_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
         analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
+        analysis_profile.add_task("plane_avg(Nusselt)", name="Nusselt")
         analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
         analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
         analysis_profile.add_task("plane_avg(vel_rms)", name="vel_rms")
@@ -1559,12 +1584,7 @@ class FC_equations_2d(FC_equations):
         analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cp_inv)", name="brunt_squared_fluc")        
         analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cp_inv)", name="brunt_squared_mean")        
         analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cp_inv)", name="brunt_squared_tot")
-        #analysis_profile.add_task("lambda_microscale", name="lambda_microscale")
-        #analysis_profile.add_task("plane_avg(Re_microscale)",  name="Re_microscale")
-        #analysis_profile.add_task("plane_avg(Pe_microscale)",  name="Pe_microscale")
-        analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
-                                  name="T1_source_terms")
-
+        
         analysis_tasks['profile'] = analysis_profile
 
         analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
@@ -1581,8 +1601,7 @@ class FC_equations_2d(FC_equations):
         analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
         analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
         analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
-        #analysis_scalar.add_task("vol_avg(Re_microscale)",  name="Re_microscale")
-        #analysis_scalar.add_task("vol_avg(Pe_microscale)",  name="Pe_microscale")
+        analysis_scalar.add_task("vol_avg(Nusselt)", name="Nusselt")
 
         analysis_tasks['scalar'] = analysis_scalar
 
