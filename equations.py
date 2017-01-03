@@ -1299,7 +1299,9 @@ class FC_equations(Equations):
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*σxz + w*σzz)'
         self.problem.substitutions['convective_flux_z'] = '(viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
         self.problem.substitutions['kappa_adiabatic_flux_z'] = '(rho0*chi*g/Cp)'
-        self.problem.substitutions['Nusselt'] = '((convective_flux_z-kappa_adiabatic_flux_z)/(kappa_flux_z-kappa_adiabatic_flux_z))'
+        self.problem.substitutions['kappa_reference_flux_z'] = '(-chi*rho0*(right(T1+T0)-left(T1+T0))/Lz)'
+        self.problem.substitutions['Nusselt_norm'] = '(kappa_reference_flux_z-kappa_adiabatic_flux_z)'
+        self.problem.substitutions['Nusselt'] = '((convective_flux_z-kappa_adiabatic_flux_z)/(Nusselt_norm))'
 
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,

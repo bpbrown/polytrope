@@ -60,7 +60,7 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz
         atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
     else:
-        atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=True, constant_mu=False, n_rho_cz=n_rho_cz)
+        atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl)
     if fixed_T:
         atmosphere.set_BC(fixed_temperature=fixed_T)
