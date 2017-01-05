@@ -89,7 +89,7 @@ def plot_energies(data, times, output_path='./'):
     ax1.legend()
     ax1.set_ylabel("Nu")
     ax2 = fig_Nu.add_subplot(2,1,2)
-    ax2.semilogy(t, data['Nusselt'], label="Nu")
+    ax2.semilogy(t, np.abs(data['Nusselt']), label="Nu")
     ax2.legend()
     ax2.set_xlabel("time")
     ax2.set_ylabel("Nu")

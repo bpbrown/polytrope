@@ -97,6 +97,18 @@ def plot_fluxes(fluxes, z, output_path='./'):
     ax1.set_ylabel("energy fluxes")
     figs["relative_fluxes"]=fig_fluxes
 
+    fig_fluxes = plt.figure(figsize=(16,8))
+    ax1 = fig_fluxes.add_subplot(1,1,1)
+    ax1.plot(z, fluxes['norm_enthalpy_flux_z'], label="h flux")
+    ax1.plot(z, fluxes['norm_kappa_flux_z'], label=r"$\kappa\nabla (T-T_{ad})$")
+    ax1.plot(z, fluxes['norm_KE_flux_z'], label="KE flux")
+    ax1.plot(z, fluxes['norm_viscous_flux_z'], label=r"$u\cdot\sigma$")
+    ax1.plot(z, fluxes['Nusselt'], color='black', linestyle='dashed', label='total')
+    ax1.legend()
+    ax1.set_xlabel("z")
+    ax1.set_ylabel("energy fluxes")
+    figs["normalized_fluxes"]=fig_fluxes
+
     for key in figs.keys():
         figs[key].savefig(output_path+'energy_{}.png'.format(key))
 
@@ -107,7 +119,7 @@ def plot_profiles(data, z, output_path='./'):
             's_mean', 's_fluc', 's_tot', 's_fluc_std',
             'T1', 'ln_rho1',
             'kappa_flux_fluc_z', 'kappa_flux_mean_z', 'kappa_flux_z',
-            'T1_source_terms', 'enstrophy']
+            'enstrophy', 'Nusselt']
 
     if "ME" in data:
         keys.append("ME")

@@ -1301,7 +1301,7 @@ class FC_equations(Equations):
         self.problem.substitutions['kappa_adiabatic_flux_z'] = '(rho0*chi*g/Cp)'
         self.problem.substitutions['kappa_reference_flux_z'] = '(-chi*rho0*(right(T1+T0)-left(T1+T0))/Lz)'
         self.problem.substitutions['Nusselt_norm'] = '(kappa_reference_flux_z-kappa_adiabatic_flux_z)'
-        self.problem.substitutions['Nusselt'] = '((convective_flux_z-kappa_adiabatic_flux_z)/(Nusselt_norm))'
+        self.problem.substitutions['Nusselt'] = '((convective_flux_z+kappa_flux_z-kappa_adiabatic_flux_z)/(Nusselt_norm))'
 
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
@@ -1566,6 +1566,12 @@ class FC_equations_2d(FC_equations):
         analysis_profile.add_task("plane_avg(kappa_flux_z)", name="kappa_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
         analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
+        analysis_profile.add_task("plane_avg(w*(h))/plane_avg(Nusselt_norm)",  name="norm_enthalpy_flux_z")
+        analysis_profile.add_task("plane_avg(viscous_flux_z)/plane_avg(Nusselt_norm)",  name="norm_viscous_flux_z")
+        analysis_profile.add_task("plane_avg(w*(KE))/plane_avg(Nusselt_norm)", name="norm_KE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(PE))/plane_avg(Nusselt_norm)", name="norm_PE_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_fluc)/plane_avg(Nusselt_norm)", name="norm_kappa_flux_fluc_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_z-kappa_adiabatic_flux_z)/plane_avg(Nusselt_norm)", name="norm_kappa_flux_z")
         analysis_profile.add_task("plane_avg(Nusselt)", name="Nusselt")
         analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
         analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
