@@ -1,24 +1,29 @@
 """
-Dedalus script for 2D compressible convection in a polytrope,
-with 3.5 density scale heights of stratification.
+Dedalus script for 2D or 3D compressible convection in a polytrope,
+with specified number of density scale heights of stratification.
 
 Usage:
     FC_poly.py [options] 
 
 Options:
-    --Rayleigh=<Rayleigh>                Rayleigh number [default: 1e6]
+    --Rayleigh=<Rayleigh>                Rayleigh number [default: 1e4]
     --Prandtl=<Prandtl>                  Prandtl number = nu/kappa [default: 1]
-    
+    --aspect=<aspect>                    Aspect ratio [default: 4]
+     
     --restart=<restart_file>             Restart from checkpoint
 
     --nz=<nz>                            vertical z (chebyshev) resolution 
     --nz_cz=<nz>                         vertical z (chebyshev) resolution [default: 128]
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
-    --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
+    --ny=<ny>                            Horizontal y (Fourier) resolution; if not set, ny=nx (3D only)  
+    --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3]
     --run_time=<run_time>                Run time, in hours [default: 23.5]
 
-   --rk222                               Use RK222 as timestepper
-    
+    --rk222                              Use RK222 as timestepper
+
+    --3D                                 Do 3D run
+    --mesh=<mesh>                        Processor mesh if distributing 3D run in 2D
+        
     --MHD                                Do MHD run
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
 
@@ -40,10 +45,11 @@ try:
 except:
     do_checkpointing = False
 
-def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
+def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD=False, n_rho_cz=3.5,
                       fixed_T=False, fixed_Tz=False,
-                      rk222=False,
-                      restart=None, nz=128, nx=None, data_dir='./', run_time=23.5):
+                      rk222=False, threeD=False, mesh=None,
+                      restart=None, nz=128, nx=None, ny=None,
+                      data_dir='./', run_time=23.5):
     import numpy as np
     import time
     import equations
@@ -54,13 +60,19 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
     if nx is None:
-        nx = nz*4
+        nx = int(np.round(nz*aspect_ratio))
+    if threeD and ny is None:
+        ny = nx
 
     if MHD:
         atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
     else:
-        atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz)
+        if threeD:
+            atmosphere = equations.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, aspect_ratio=aspect_ratio, mesh=mesh,
+                                                   constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz)
+        else:
+            atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, aspect_ratio=aspect_ratio, constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl)
     if fixed_T:
         atmosphere.set_BC(fixed_temperature=fixed_T)
@@ -84,11 +96,6 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz
         ts = de.timesteppers.RK443
         cfl_safety_factor = 0.2*4
 
-    # memory problems at high RA for LU decomp storing runs with RK443
-    ts = de.timesteppers.RK222
-    cfl_safety_factor = 0.2*2
-
-
     # Build solver
     solver = problem.build_solver(ts)
 
@@ -104,8 +111,6 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz
 
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time,
                                                                       atmosphere.top_thermal_time))
-    #logger.info("full atm HS check")
-    #atmosphere.check_atmosphere(make_plots = True, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
 
     max_dt = atmosphere.buoyancy_time*0.25
 
@@ -124,7 +129,11 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz
     CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
-    CFL.add_velocities(('u', 'w'))
+    if threeD:
+        CFL.add_velocities(('u', 'v', 'w'))
+    else:
+        CFL.add_velocities(('u', 'w'))
+        
     if MHD:
         CFL.add_velocities(('Bx/sqrt(4*pi*rho_full)', 'Bz/sqrt(4*pi*rho_full)'))
 
@@ -234,11 +243,15 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
+    if args['--3D']:
+        data_dir +='_3D'
     if args['--fixed_T']:
         data_dir +='_fixed'
     if args['--fixed_Tz']:
         data_dir +='_flux'
     data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
+    if args['--aspect']:
+        data_dir+="_a{}".format(args['--aspect'])
     if args['--MHD']:
         data_dir+= '_MHD'
     if args['--label'] is not None:
@@ -249,6 +262,9 @@ if __name__ == "__main__":
     nx =  args['--nx']
     if nx is not None:
         nx = int(nx)
+    ny =  args['--ny']
+    if ny is not None:
+        ny = int(ny)
     nz = args['--nz']
     if nz is None:
         nz = args['--nz_cz']
@@ -258,8 +274,11 @@ if __name__ == "__main__":
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       MagneticPrandtl=float(args['--MagneticPrandtl']),
+                      aspect_ratio=float(args['--aspect']),
+                      threeD=args['--3D'],
                       nz=nz,
                       nx=nx,
+                      ny=ny,
                       fixed_T=args['--fixed_T'],
                       fixed_Tz=args['--fixed_Tz'],                      
                       MHD=args['--MHD'],

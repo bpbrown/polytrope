@@ -1202,24 +1202,7 @@ class Equations():
         return BC
 
     def _set_subs(self):
-
-        # differential operators
-        self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
-        self.problem.substitutions['Div(f, f_z)'] = "(dx(f) + f_z)"
-        self.problem.substitutions['Div_u'] = "Div(u, w_z)"
-        self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + w*(f_z))"
-        
-        if self.dimensions == 2:
-            
-            # analysis operators
-            self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
-            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
-            self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
-
-            # output parameters        
-            self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
-            self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
-
+        pass
 
     def global_noise(self, seed=42, **kwargs):            
         # Random perturbations, initialized globally for same results in parallel
@@ -1257,9 +1240,6 @@ class FC_equations(Equations):
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
 
         # output parameters        
-        self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
-        self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'        
-
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
@@ -1418,8 +1398,86 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
+    def initialize_output(self, solver, data_dir, full_output=False,
+                          slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
+        #  slices, profiles, and scalar are all [write_num, set_num]
 
+        analysis_tasks = OrderedDict()
+        self.analysis_tasks = analysis_tasks
+
+        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
+                                                             write_num=profiles[0], set_num=profiles[1],  **kwargs)
+        analysis_profile.add_task("plane_avg(T1)", name="T1")
+        analysis_profile.add_task("plane_avg(T1+T0)", name="T_full")
+        analysis_profile.add_task("plane_avg(vel_rms/(T1+T0))", name="Ma_iso")
+        analysis_profile.add_task("plane_avg(vel_rms/(gamma*(T1+T0)))", name="Ma_ad")
+        analysis_profile.add_task("plane_avg(ln_rho1)", name="ln_rho1")
+        analysis_profile.add_task("plane_avg(rho_full)", name="rho_full")
+        analysis_profile.add_task("plane_avg(KE)", name="KE")
+        analysis_profile.add_task("plane_avg(PE)", name="PE")
+        analysis_profile.add_task("plane_avg(IE)", name="IE")
+        analysis_profile.add_task("plane_avg(PE_fluc)", name="PE_fluc")
+        analysis_profile.add_task("plane_avg(IE_fluc)", name="IE_fluc")
+        analysis_profile.add_task("plane_avg(KE + PE + IE)", name="TE")
+        analysis_profile.add_task("plane_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
+        analysis_profile.add_task("plane_avg(w*(KE))", name="KE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(PE))", name="PE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
+        analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
+        analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_z)", name="kappa_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
+        analysis_profile.add_task("plane_avg(w*(h))/plane_avg(Nusselt_norm)",  name="norm_enthalpy_flux_z")
+        analysis_profile.add_task("plane_avg(viscous_flux_z)/plane_avg(Nusselt_norm)",  name="norm_viscous_flux_z")
+        analysis_profile.add_task("plane_avg(w*(KE))/plane_avg(Nusselt_norm)", name="norm_KE_flux_z")
+        analysis_profile.add_task("plane_avg(w*(PE))/plane_avg(Nusselt_norm)", name="norm_PE_flux_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_fluc)/plane_avg(Nusselt_norm)", name="norm_kappa_flux_fluc_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_z-kappa_adiabatic_flux_z)/plane_avg(Nusselt_norm)", name="norm_kappa_flux_z")
+        analysis_profile.add_task("plane_avg(Nusselt)", name="Nusselt")
+        analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
+        analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
+        analysis_profile.add_task("plane_avg(vel_rms)", name="vel_rms")
+        analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
+        analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
+        analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
+        analysis_profile.add_task("plane_std(enstrophy)", name="enstrophy_std")        
+        analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
+        analysis_profile.add_task("plane_avg(Rayleigh_local)",  name="Rayleigh_local")
+        analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
+        analysis_profile.add_task("plane_std(s_fluc)", name="s_fluc_std")
+        analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
+        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
+        analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
+        analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
+        analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")
+        analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cp_inv)", name="brunt_squared_fluc")        
+        analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cp_inv)", name="brunt_squared_mean")        
+        analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cp_inv)", name="brunt_squared_tot")
         
+        analysis_tasks['profile'] = analysis_profile
+
+        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
+                                                            write_num=scalar[0], set_num=scalar[1], **kwargs)
+        analysis_scalar.add_task("vol_avg(KE)", name="KE")
+        analysis_scalar.add_task("vol_avg(PE)", name="PE")
+        analysis_scalar.add_task("vol_avg(IE)", name="IE")
+        analysis_scalar.add_task("vol_avg(PE_fluc)", name="PE_fluc")
+        analysis_scalar.add_task("vol_avg(IE_fluc)", name="IE_fluc")
+        analysis_scalar.add_task("vol_avg(KE + PE + IE)", name="TE")
+        analysis_scalar.add_task("vol_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
+        analysis_scalar.add_task("vol_avg(u_rms)", name="u_rms")
+        analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
+        analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
+        analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
+        analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
+        analysis_scalar.add_task("vol_avg(Nusselt)", name="Nusselt")
+
+        analysis_tasks['scalar'] = analysis_scalar
+
+        return self.analysis_tasks
+    
 class FC_equations_2d(FC_equations):
     def __init__(self, **kwargs):
         super(FC_equations_2d, self).__init__(**kwargs)
@@ -1428,6 +1486,8 @@ class FC_equations_2d(FC_equations):
 
     def _set_subs(self):
         # 2-D specific subs
+        self.problem.substitutions['ω_y'] = '( u_z  - dx(w))'        
+        self.problem.substitutions['enstrophy']   = '(ω_y**2)'
 
         # differential operators
         self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dz(f_z))"
@@ -1516,8 +1576,10 @@ class FC_equations_2d(FC_equations):
     def initialize_output(self, solver, data_dir, full_output=False,
                           slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
         #  slices, profiles, and scalar are all [write_num, set_num]
-        analysis_tasks = OrderedDict()
-        self.analysis_tasks = analysis_tasks
+
+        analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir, full_output=full_output,
+                          slices=slices, profiles=profiles, scalar=scalar, coeffs=coeffs, **kwargs)
+        
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False,
                                                            write_num=slices[0], set_num=slices[1], **kwargs)
         analysis_slice.add_task("s_fluc", name="s")
@@ -1527,7 +1589,7 @@ class FC_equations_2d(FC_equations):
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
-        analysis_slice.add_task("vorticity", name="vorticity")
+        analysis_slice.add_task("ω_y", name="vorticity")
         analysis_tasks['slice'] = analysis_slice
 
         analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20, parallel=False,
@@ -1539,80 +1601,9 @@ class FC_equations_2d(FC_equations):
         analysis_coeff.add_task("u", name="u", layout='c')
         analysis_coeff.add_task("w", name="w", layout='c')
         analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
-        analysis_coeff.add_task("vorticity", name="vorticity", layout='c')
+        analysis_coeff.add_task("ω_y", name="vorticity", layout='c')
         analysis_tasks['coeff'] = analysis_coeff
-
-        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
-                                                             write_num=profiles[0], set_num=profiles[1],  **kwargs)
-        analysis_profile.add_task("plane_avg(T1)", name="T1")
-        analysis_profile.add_task("plane_avg(T1+T0)", name="T_full")
-        analysis_profile.add_task("plane_avg(vel_rms/(T1+T0))", name="Ma_iso")
-        analysis_profile.add_task("plane_avg(vel_rms/(gamma*(T1+T0)))", name="Ma_ad")
-        analysis_profile.add_task("plane_avg(ln_rho1)", name="ln_rho1")
-        analysis_profile.add_task("plane_avg(rho_full)", name="rho_full")
-        analysis_profile.add_task("plane_avg(KE)", name="KE")
-        analysis_profile.add_task("plane_avg(PE)", name="PE")
-        analysis_profile.add_task("plane_avg(IE)", name="IE")
-        analysis_profile.add_task("plane_avg(PE_fluc)", name="PE_fluc")
-        analysis_profile.add_task("plane_avg(IE_fluc)", name="IE_fluc")
-        analysis_profile.add_task("plane_avg(KE + PE + IE)", name="TE")
-        analysis_profile.add_task("plane_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
-        analysis_profile.add_task("plane_avg(w*(KE))", name="KE_flux_z")
-        analysis_profile.add_task("plane_avg(w*(PE))", name="PE_flux_z")
-        analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
-        analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
-        analysis_profile.add_task("plane_avg(w*(h))",  name="enthalpy_flux_z")
-        analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
-        analysis_profile.add_task("plane_avg(kappa_flux_z)", name="kappa_flux_z")
-        analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
-        analysis_profile.add_task("plane_avg(kappa_flux_mean)", name="kappa_flux_mean_z")
-        analysis_profile.add_task("plane_avg(w*(h))/plane_avg(Nusselt_norm)",  name="norm_enthalpy_flux_z")
-        analysis_profile.add_task("plane_avg(viscous_flux_z)/plane_avg(Nusselt_norm)",  name="norm_viscous_flux_z")
-        analysis_profile.add_task("plane_avg(w*(KE))/plane_avg(Nusselt_norm)", name="norm_KE_flux_z")
-        analysis_profile.add_task("plane_avg(w*(PE))/plane_avg(Nusselt_norm)", name="norm_PE_flux_z")
-        analysis_profile.add_task("plane_avg(kappa_flux_fluc)/plane_avg(Nusselt_norm)", name="norm_kappa_flux_fluc_z")
-        analysis_profile.add_task("plane_avg(kappa_flux_z-kappa_adiabatic_flux_z)/plane_avg(Nusselt_norm)", name="norm_kappa_flux_z")
-        analysis_profile.add_task("plane_avg(Nusselt)", name="Nusselt")
-        analysis_profile.add_task("plane_avg(u_rms)", name="u_rms")
-        analysis_profile.add_task("plane_avg(w_rms)", name="w_rms")
-        analysis_profile.add_task("plane_avg(vel_rms)", name="vel_rms")
-        analysis_profile.add_task("plane_avg(Re_rms)", name="Re_rms")
-        analysis_profile.add_task("plane_avg(Pe_rms)", name="Pe_rms")
-        analysis_profile.add_task("plane_avg(enstrophy)", name="enstrophy")
-        analysis_profile.add_task("plane_std(enstrophy)", name="enstrophy_std")        
-        analysis_profile.add_task("plane_avg(Rayleigh_global)", name="Rayleigh_global")
-        analysis_profile.add_task("plane_avg(Rayleigh_local)",  name="Rayleigh_local")
-        analysis_profile.add_task("plane_avg(s_fluc)", name="s_fluc")
-        analysis_profile.add_task("plane_std(s_fluc)", name="s_fluc_std")
-        analysis_profile.add_task("plane_avg(s_mean)", name="s_mean")
-        analysis_profile.add_task("plane_avg(s_fluc + s_mean)", name="s_tot")
-        analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
-        analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
-        analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")
-        analysis_profile.add_task("plane_avg(g*dz(s_fluc)*Cp_inv)", name="brunt_squared_fluc")        
-        analysis_profile.add_task("plane_avg(g*dz(s_mean)*Cp_inv)", name="brunt_squared_mean")        
-        analysis_profile.add_task("plane_avg(g*dz(s_fluc + s_mean)*Cp_inv)", name="brunt_squared_tot")
         
-        analysis_tasks['profile'] = analysis_profile
-
-        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
-                                                            write_num=scalar[0], set_num=scalar[1], **kwargs)
-        analysis_scalar.add_task("vol_avg(KE)", name="KE")
-        analysis_scalar.add_task("vol_avg(PE)", name="PE")
-        analysis_scalar.add_task("vol_avg(IE)", name="IE")
-        analysis_scalar.add_task("vol_avg(PE_fluc)", name="PE_fluc")
-        analysis_scalar.add_task("vol_avg(IE_fluc)", name="IE_fluc")
-        analysis_scalar.add_task("vol_avg(KE + PE + IE)", name="TE")
-        analysis_scalar.add_task("vol_avg(KE + PE_fluc + IE_fluc)", name="TE_fluc")
-        analysis_scalar.add_task("vol_avg(u_rms)", name="u_rms")
-        analysis_scalar.add_task("vol_avg(w_rms)", name="w_rms")
-        analysis_scalar.add_task("vol_avg(Re_rms)", name="Re_rms")
-        analysis_scalar.add_task("vol_avg(Pe_rms)", name="Pe_rms")
-        analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
-        analysis_scalar.add_task("vol_avg(Nusselt)", name="Nusselt")
-
-        analysis_tasks['scalar'] = analysis_scalar
-
         return self.analysis_tasks
 
 class FC_equations_rxn(FC_equations_2d):
@@ -1772,13 +1763,17 @@ class FC_equations_rxn(FC_equations_2d):
 
 class FC_equations_3d(FC_equations):
     def __init__(self, **kwargs):
-        # this doesn't super correctly; 2-D vs 3-D conflict
         super(FC_equations_3d, self).__init__(**kwargs)
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes in 3-D'
         self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1']
     
     def _set_subs(self):
-        super(FC_equations_3d, self)._set_subs()
+        # 3-D specific subs
+        self.problem.substitutions['ω_x'] = '(dy(w) - v_z)'        
+        self.problem.substitutions['ω_y'] = '( u_z  - dx(w))'        
+        self.problem.substitutions['ω_z'] = '(dx(v) - dy(u))'        
+        self.problem.substitutions['enstrophy']   = '(ω_x**2 + ω_y**2 + ω_z**2)'
+
         # differential operators
         self.problem.substitutions['Lap(fx, fy, fz_z)'] = "(dx(dx(fx)) + dy(dy(fy)) + dz(fz_z))"
         self.problem.substitutions['Div(fx, fy, fz_z)'] = "(dx(f) + dy(fy) + f_z)"
@@ -1788,13 +1783,8 @@ class FC_equations_3d(FC_equations):
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Ly/Lz'
-        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
-
-        # output parameters
-        # these are not yet correct 
-        self.problem.substitutions['enstrophy'] = '(dx(w) - u_z)**2'
-        self.problem.substitutions['vorticity'] = '(dx(w) - u_z)'
-
+        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'        
+        super(FC_equations_3d, self)._set_subs()
                 
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
                       easy_rho_momentum=False, easy_rho_energy=False):
@@ -1882,7 +1872,31 @@ class FC_equations_3d(FC_equations):
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)"))
         
+
+    def initialize_output(self, solver, data_dir, full_output=False,
+                          slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
+        #  slices, profiles, and scalar are all [write_num, set_num]
+
+        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output,
+                          slices=slices, profiles=profiles, scalar=scalar, coeffs=coeffs, **kwargs)
         
+        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False,
+                                                           write_num=slices[0], set_num=slices[1], **kwargs)
+        analysis_slice.add_task("interp(s_fluc,                     y=(Ly/2))", name="s")
+        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), y=(Ly/2))", name="s'")
+        analysis_slice.add_task("interp(enstrophy,                  y=(Ly/2))", name="enstrophy")
+        analysis_slice.add_task("interp(ω_y,                        y=(Ly/2))", name="vorticity")
+        analysis_slice.add_task("interp(s_fluc,                     z=(0.95*Lz))", name="s near top")
+        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z=(0.95*Lz))", name="s' near top")
+        analysis_slice.add_task("interp(enstrophy,                  z=(0.95*Lz))", name="enstrophy near top")
+        analysis_slice.add_task("interp(ω_z,                        z=(0.95*Lz))", name="vorticity_z near top")
+        analysis_slice.add_task("interp(s_fluc,                     z=(0.5*Lz))",  name="s midplane")
+        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z=(0.5*Lz))",  name="s' midplane")
+        analysis_slice.add_task("interp(enstrophy,                  z=(0.5*Lz))",  name="enstrophy midplane")
+        analysis_slice.add_task("interp(ω_z,                        z=(0.5*Lz))",  name="vorticity_z midplane")
+        analysis_tasks['slice'] = analysis_slice
+        return self.analysis_tasks
+            
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):
         super(FC_polytrope_2d, self).__init__(dimensions=dimensions) 
@@ -1900,7 +1914,23 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
                                                         **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
-        
+class FC_polytrope_3d(FC_equations_3d, Polytrope):
+    def __init__(self, dimensions=3, *args, **kwargs):
+        super(FC_polytrope_2d, self).__init__(dimensions=dimensions) 
+        Polytrope.__init__(self, dimensions=dimensions, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+    def set_equations(self, *args, **kwargs):
+        easy_rho_momentum, easy_rho_energy = False, False
+        if self.constant_mu:
+            easy_rho_momentum   = True
+        if self.constant_kappa:
+            easy_rho_energy     = True
+        super(FC_polytrope_3d, self).set_equations(*args,  easy_rho_momentum = easy_rho_momentum,
+                                                        easy_rho_energy   = easy_rho_energy,
+                                                        **kwargs)
+        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+
 class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
     def __init__(self, *args, **kwargs):
         super(FC_polytrope_adiabatic, self).__init__() 
