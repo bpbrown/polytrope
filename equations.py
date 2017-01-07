@@ -30,19 +30,26 @@ class Atmosphere:
         if self.domain.dist.comm_cart.rank == 0 and not os.path.exists(self.fig_dir):
             os.mkdir(self.fig_dir)
                 
-    def _set_domain(self, nx=256, Lx=4, nz=128, Lz=1, grid_dtype=np.float64, comm=MPI.COMM_WORLD):
+    def _set_domain(self, nx=256, Lx=4,
+                          ny=256, Ly=4,
+                          nz=128, Lz=1,
+                          grid_dtype=np.float64, comm=MPI.COMM_WORLD, mesh=None):
+
         z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
         if self.dimensions > 1:
             x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
-
+        if self.dimensions > 2:
+            y_basis = de.Fourier(  'y', ny, interval=[0., Ly], dealias=3/2)
         if self.dimensions == 1:
             bases = [z_basis]
         elif self.dimensions == 2:
             bases = [x_basis, z_basis]
+        elif self.dimensions == 3:
+            bases = [x_basis, y_basis, z_basis]
         else:
-            logger.error('>2 dimensions not implemented')
+            logger.error('>3 dimensions not implemented')
         
-        self.domain = de.Domain(bases, grid_dtype=grid_dtype, comm=comm)
+        self.domain = de.Domain(bases, grid_dtype=grid_dtype, comm=comm, mesh=mesh)
         
         self.z = self.domain.grid(-1) # need to access globally-sized z-basis
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
@@ -50,13 +57,19 @@ class Atmosphere:
 
         self.z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
 
+        if self.dimensions == 1:
+            self.x, self.Lx, self.nx, self.delta_x = None, 0, None, None
+            self.y, self.Ly, self.ny, self.delta_y = None, 0, None, None
         if self.dimensions > 1:
             self.x = self.domain.grid(0)
             self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
             self.nx = self.domain.bases[0].coeff_size
             self.delta_x = self.Lx/self.nx
-        else:
-            self.x, self.Lx, self.nx, self.delta_x = None, 0, None, None
+        if self.dimensions > 2:
+            self.y = self.domain.grid(1)
+            self.Ly = self.domain.bases[1].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
+            self.ny = self.domain.bases[1].coeff_size
+            self.delta_y = self.Ly/self.ny
         
 
     def filter_field(self, field,frac=0.25):
@@ -65,19 +78,31 @@ class Atmosphere:
         local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
         coeff = []
         for i in range(dom.dim)[::-1]:
+            logger.info("i = {}".format(i))
             coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+        logger.info(coeff)
         cc = np.meshgrid(*coeff)
-
         field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
 
-        for i in range(dom.dim):
-            field_filter = field_filter | (cc[i][local_slice] > frac)
-        field['c'][field_filter] = 0j
+        for i in range(len(cc)):
+            logger.info("cc {} shape {}".format(i, cc[i].shape))
+            logger.info("local slice {}".format(local_slice[i]))
+            logger.info("field_filter shape {}".format(field_filter.shape))
+
+        if len(cc) < 3:
+            for i in range(dom.dim):
+                logger.info("trying i={}".format(i))
+                field_filter = field_filter | (cc[i][local_slice[i]] > frac)
+        
+            # broken for 3-D right now; works for 2-D
+            field['c'][field_filter] = 0j
         
     def _new_ncc(self):
         field = self.domain.new_field()
         if self.dimensions > 1:
             field.meta['x']['constant'] = True
+        if self.dimensions > 2:
+            field.meta['y']['constant'] = True            
         return field
 
     def _new_field(self):
@@ -159,6 +184,8 @@ class Atmosphere:
         self.problem.parameters['Lz'] = self.Lz
         if self.dimensions > 1:
             self.problem.parameters['Lx'] = self.Lx
+        if self.dimensions > 2:
+            self.problem.parameters['Ly'] = self.Ly
 
         self.problem.parameters['gamma'] = self.gamma
         self.problem.parameters['Cv'] = 1/(self.gamma-1)
@@ -494,9 +521,11 @@ class Polytrope(Atmosphere):
     Single polytrope, stable or unstable.
     '''
     def __init__(self,
-                 nx=256, nz=128,
-                 Lx=None, aspect_ratio=4,
-                 Lz=None, n_rho_cz = 3.5,
+                 nx=256, Lx=None,
+                 ny=256, Ly=None,
+                 nz=128, Lz=None,
+                 aspect_ratio=4,
+                 n_rho_cz = 3,
                  m_cz=None, epsilon=1e-4, gamma=5/3,
                  constant_kappa=True, constant_mu=True,
                  **kwargs):
@@ -514,11 +543,11 @@ class Polytrope(Atmosphere):
                 logger.error("Either Lz or n_rho must be set")
                 raise
         if Lx is None:
-            #Lx = 4*(1 + Lz)/np.abs(m_cz) #number of density scale heights at bot of domain
-       
             Lx = Lz*aspect_ratio
-
-        super(Polytrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz, **kwargs)
+        if Ly is None:
+            Ly = Lx
+            
+        super(Polytrope, self).__init__(nx=nx, ny=ny, nz=nz, Lx=Lx, Ly=Ly, Lz=Lz, **kwargs)
         logger.info("   Lx = {:g}, Lz = {:g}".format(self.Lx, self.Lz))
         self.z0 = 1. + self.Lz
        
@@ -682,8 +711,11 @@ class Polytrope(Atmosphere):
         if self.dimensions > 1:
             self.thermal_time = self.thermal_time[0]
             self.viscous_time = self.viscous_time[0]
+        if self.dimensions > 2:
+            self.thermal_time = self.thermal_time[0]
+            self.viscous_time = self.viscous_time[0]
 
-        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
+        logger.info("thermal_time = {}, top_thermal_time = {}".format(self.thermal_time,
                                                                           self.top_thermal_time))
 
 class Polytrope_adiabatic(Polytrope):
@@ -1235,10 +1267,6 @@ class FC_equations(Equations):
     def _set_subs(self):
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
-        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
-        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
-        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
-
         # output parameters        
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
@@ -1497,6 +1525,10 @@ class FC_equations_2d(FC_equations):
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
+
+        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
+        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
+        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
 
         super(FC_equations_2d, self)._set_subs()
         
@@ -1775,15 +1807,23 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['enstrophy']   = '(ω_x**2 + ω_y**2 + ω_z**2)'
 
         # differential operators
-        self.problem.substitutions['Lap(fx, fy, fz_z)'] = "(dx(dx(fx)) + dy(dy(fy)) + dz(fz_z))"
-        self.problem.substitutions['Div(fx, fy, fz_z)'] = "(dx(f) + dy(fy) + f_z)"
+        self.problem.substitutions['Lap(f, f_z)'] = "(dx(dx(f)) + dy(dy(f)) + dz(f_z))"
+        self.problem.substitutions['Div(fx, fy, fz_z)'] = "(dx(fx) + dy(fy) + fz_z)"
         self.problem.substitutions['Div_u'] = "Div(u, v, w_z)"
-        self.problem.substitutions['UdotGrad(fx, fy, fz_z)'] = "(u*dx(fx) + v*dy(fy) + w*(fz_z))"
+        self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + v*dy(f) + w*(f_z))"
                     
         # analysis operators
         self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
         self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Ly/Lz'
-        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'        
+        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
+
+        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
+        self.problem.substitutions["σyy"] = "(2*dy(v) - 2/3*Div_u)"
+        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
+        self.problem.substitutions["σxy"] = "(dx(v) + dy(u))"
+        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
+        self.problem.substitutions["σyz"] = "(dy(w) +  v_z )"
+           
         super(FC_equations_3d, self)._set_subs()
                 
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
@@ -1798,13 +1838,6 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters.pop('chi')
  
         self._set_subs()
-
-        self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
-        self.problem.substitutions["σyy"] = "(2*dy(v) - 2/3*Div_u)"
-        self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
-        self.problem.substitutions["σxy"] = "(dx(v) + dy(u))"
-        self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
-        self.problem.substitutions["σyz"] = "(dy(w) +  v_z )"
         
         # here, nu and chi are constants        
         self.viscous_term_u = " nu*(Lap(u, u_z) + 1/3*Div(dx(u), dx(v), dx(w_z)))"
@@ -1851,6 +1884,14 @@ class FC_equations_3d(FC_equations):
         self.problem.add_equation("dz(v) - v_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
+
+        logger.debug("Setting continuity equation")
+        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        logger.debug("Setting z-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
@@ -1860,19 +1901,21 @@ class FC_equations_3d(FC_equations):
         self.problem.add_equation(("(scale_momentum)*( dt(v) + dy(T1) + T0*dy(ln_rho1)                  - L_visc_v) = "
                                    "(scale_momentum)*(-T1*dy(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v)"))
 
-        logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
-
-        logger.debug("Setting continuity equation")
-        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
-
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)"))
         
 
+    def set_BC(self, **kwargs):        
+        super(FC_equations_3d, self).set_BC(**kwargs)
+        # stress free boundary conditions.
+        self.problem.add_bc("left(v_z) = 0")
+        self.problem.add_bc("right(v_z) = 0")
+        self.dirichlet_set.append('v_z')
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+
+        
     def initialize_output(self, solver, data_dir, full_output=False,
                           slices=[1,1], profiles=[1,1], scalar=[1,1], coeffs=[1,1], **kwargs):
         #  slices, profiles, and scalar are all [write_num, set_num]
@@ -1882,18 +1925,18 @@ class FC_equations_3d(FC_equations):
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False,
                                                            write_num=slices[0], set_num=slices[1], **kwargs)
-        analysis_slice.add_task("interp(s_fluc,                     y=(Ly/2))", name="s")
-        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), y=(Ly/2))", name="s'")
-        analysis_slice.add_task("interp(enstrophy,                  y=(Ly/2))", name="enstrophy")
-        analysis_slice.add_task("interp(ω_y,                        y=(Ly/2))", name="vorticity")
-        analysis_slice.add_task("interp(s_fluc,                     z=(0.95*Lz))", name="s near top")
-        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z=(0.95*Lz))", name="s' near top")
-        analysis_slice.add_task("interp(enstrophy,                  z=(0.95*Lz))", name="enstrophy near top")
-        analysis_slice.add_task("interp(ω_z,                        z=(0.95*Lz))", name="vorticity_z near top")
-        analysis_slice.add_task("interp(s_fluc,                     z=(0.5*Lz))",  name="s midplane")
-        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z=(0.5*Lz))",  name="s' midplane")
-        analysis_slice.add_task("interp(enstrophy,                  z=(0.5*Lz))",  name="enstrophy midplane")
-        analysis_slice.add_task("interp(ω_z,                        z=(0.5*Lz))",  name="vorticity_z midplane")
+        analysis_slice.add_task("interp(s_fluc,                     y={})".format(self.Ly/2), name="s")
+        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), y={})".format(self.Ly/2), name="s'")
+        analysis_slice.add_task("interp(enstrophy,                  y={})".format(self.Ly/2), name="enstrophy")
+        analysis_slice.add_task("interp(ω_y,                        y={})".format(self.Ly/2), name="vorticity")
+        analysis_slice.add_task("interp(s_fluc,                     z={})".format(0.95*self.Lz), name="s near top")
+        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z={})".format(0.95*self.Lz), name="s' near top")
+        analysis_slice.add_task("interp(enstrophy,                  z={})".format(0.95*self.Lz), name="enstrophy near top")
+        analysis_slice.add_task("interp(ω_z,                        z={})".format(0.95*self.Lz), name="vorticity_z near top")
+        analysis_slice.add_task("interp(s_fluc,                     z={})".format(0.5*self.Lz),  name="s midplane")
+        analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z={})".format(0.5*self.Lz),  name="s' midplane")
+        analysis_slice.add_task("interp(enstrophy,                  z={})".format(0.5*self.Lz),  name="enstrophy midplane")
+        analysis_slice.add_task("interp(ω_z,                        z={})".format(0.5*self.Lz),  name="vorticity_z midplane")
         analysis_tasks['slice'] = analysis_slice
         return self.analysis_tasks
             
@@ -1916,7 +1959,7 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
 
 class FC_polytrope_3d(FC_equations_3d, Polytrope):
     def __init__(self, dimensions=3, *args, **kwargs):
-        super(FC_polytrope_2d, self).__init__(dimensions=dimensions) 
+        super(FC_polytrope_3d, self).__init__(dimensions=dimensions) 
         Polytrope.__init__(self, dimensions=dimensions, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 

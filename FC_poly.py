@@ -194,7 +194,8 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD
         logger.info('main loop time: {:e}'.format(elapsed_time))
         logger.info('Iterations: {:d}'.format(N_iterations))
         logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
-        logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
+        if N_iterations > 0:
+            logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
         
         logger.info('beginning join operation')
         if do_checkpointing:
@@ -210,7 +211,8 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD
             logger.info('main loop time: {:e}'.format(elapsed_time))
             logger.info('Iterations: {:d}'.format(N_iterations))
             logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
-            logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
+            if N_iterations > 0:
+                logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
             N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
 
@@ -223,13 +225,14 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD
             print('  startup time:', startup_time)
             print('main loop time:', main_loop_time)
             print('    total time:', total_time)
-            print('    iterations:', solver.iteration)
-            print(' loop sec/iter:', main_loop_time/solver.iteration)
-            print('    average dt:', solver.sim_time / n_steps)
-            print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
-            print('scaling:',
-                  ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
-                  ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
+            if N_iterations > 0:
+                print('    iterations:', solver.iteration)
+                print(' loop sec/iter:', main_loop_time/solver.iteration)
+                print('    average dt:', solver.sim_time / n_steps)
+                print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
+                print('scaling:',
+                    ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
+                    ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
                                                                     main_loop_time, 
                                                                     main_loop_time/n_steps, 
                                                                     main_loop_time/n_steps/(nx*nz), 
@@ -271,11 +274,17 @@ if __name__ == "__main__":
     if nz is not None:
         nz = int(nz)
 
+    mesh = args['--mesh']
+    if mesh is not None:
+        mesh = mesh.split(',')
+        mesh = [int(mesh[0]), int(mesh[1])]
+
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       MagneticPrandtl=float(args['--MagneticPrandtl']),
                       aspect_ratio=float(args['--aspect']),
                       threeD=args['--3D'],
+                      mesh=mesh,
                       nz=nz,
                       nx=nx,
                       ny=ny,
