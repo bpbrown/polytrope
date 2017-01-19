@@ -72,31 +72,40 @@ class Atmosphere:
             self.delta_y = self.Ly/self.ny
         
 
-    def filter_field(self, field,frac=0.25):
-        logger.info("filtering field with frac={}".format(frac))
+    def filter_field(self, field,frac=0.25, fancy_filter=False):
         dom = field.domain
-        local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-        coeff = []
-        for i in range(dom.dim)[::-1]:
-            logger.info("i = {}".format(i))
-            coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
-        logger.info(coeff)
-        cc = np.meshgrid(*coeff)
-        field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+        logger.info("filtering field with frac={}".format(frac))
+        if fancy_filter:
+            logger.debug("filtering using field_filter approach.  Please check.")
+            local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
+            coeff = []
+            for i in range(dom.dim)[::-1]:
+                logger.info("i = {}".format(i))
+                coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+            logger.info(coeff)
+            cc = np.meshgrid(*coeff)
+            field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
 
-        for i in range(len(cc)):
-            logger.info("cc {} shape {}".format(i, cc[i].shape))
-            logger.info("local slice {}".format(local_slice[i]))
-            logger.info("field_filter shape {}".format(field_filter.shape))
+            for i in range(len(cc)):
+                logger.info("cc {} shape {}".format(i, cc[i].shape))
+                logger.info("local slice {}".format(local_slice[i]))
+                logger.info("field_filter shape {}".format(field_filter.shape))
 
-        if len(cc) < 3:
+        
             for i in range(dom.dim):
                 logger.info("trying i={}".format(i))
                 field_filter = field_filter | (cc[i][local_slice[i]] > frac)
         
-            # broken for 3-D right now; works for 2-D
+            # broken for 3-D right now; works for 2-D.  Nope, broken now in 2-D as well... what did I do?
             field['c'][field_filter] = 0j
-        
+        else:
+            logger.debug("filtering using set_scales approach.  Please check.")
+            orig_scale = field.meta[:]['scale']
+            field.set_scales(frac, keep_data=True)
+            field['c']
+            field['g']
+            field.set_scales(orig_scale, keep_data=True)
+            
     def _new_ncc(self):
         field = self.domain.new_field()
         if self.dimensions > 1:
@@ -486,35 +495,48 @@ class MultiLayerAtmosphere(Atmosphere):
         
         self.z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
 
-    def filter_field(self, field,frac=0.25):
+    def filter_field(self, field,frac=0.25, fancy_filter=False):
         logger.info("compound domain: filtering field with frac={}".format(frac))
         dom = field.domain
-        local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-        coeff = []
-        first_subbasis = True
-        for i in range(dom.dim)[::-1]:
-            if i == np.max(dom.dim)-1:
-                # special operation on the compound basis
-                for nz in self.nz_set:
-                    logger.info("nz: {} out of {}".format(nz, self.nz_set))
-                    if first_subbasis:
-                        compound_set = np.linspace(0,1,nz,endpoint=False)
-                        first_subbasis=False
-                    else:
-                        compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
-                logger.debug("compound set shape {}".format(compound_set.shape))
-                logger.debug("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
-                coeff.append(compound_set)
-            else:
-                coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
-        cc = np.meshgrid(*coeff)
-        for i in range(len(cc)):
-            logger.debug("cc {} shape {}".format(i, cc[i].shape))
-        field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+        if dom.dim < 3:
+            fancy_filter=True
+            
+        if fancy_filter:
+            logger.info("filtering using field_filter approach.  Robust for 2-D.")
 
-        for i in range(dom.dim):
-            field_filter = field_filter | (cc[i][local_slice] > frac)
-        field['c'][field_filter] = 0j
+            local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
+            coeff = []
+            first_subbasis = True
+            for i in range(dom.dim)[::-1]:
+                if i == np.max(dom.dim)-1:
+                    # special operation on the compound basis
+                    for nz in self.nz_set:
+                        logger.info("nz: {} out of {}".format(nz, self.nz_set))
+                        if first_subbasis:
+                            compound_set = np.linspace(0,1,nz,endpoint=False)
+                            first_subbasis=False
+                        else:
+                            compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
+                    logger.debug("compound set shape {}".format(compound_set.shape))
+                    logger.debug("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
+                    coeff.append(compound_set)
+                else:
+                    coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+            cc = np.meshgrid(*coeff)
+            for i in range(len(cc)):
+                logger.debug("cc {} shape {}".format(i, cc[i].shape))
+            field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+
+            for i in range(dom.dim):
+                field_filter = field_filter | (cc[i][local_slice] > frac)
+            field['c'][field_filter] = 0j
+        else:
+            logger.info("filtering using set_scales approach; this may not have the desired behaviour on a compound domain.  Please check.")
+            orig_scale = field.meta[:]['scale']
+            field.set_scales(frac, keep_data=True)
+            field['c']
+            field['g']
+            field.set_scales(orig_scale, keep_data=True)
 
 class Polytrope(Atmosphere):
     '''
@@ -1249,7 +1271,7 @@ class Equations():
         noise_field['g'] = noise
         self.filter_field(noise_field, **kwargs)
 
-        return noise_field['g']
+        return noise_field
 
 class FC_equations(Equations):
     def __init__(self, **kwargs):
@@ -1387,10 +1409,11 @@ class FC_equations(Equations):
         self.ln_rho_IC = solver.state['ln_rho1']
 
         noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T0.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
-        self.T_IC['g'] = self.epsilon*A0*np.sin(np.pi*z_dealias/self.Lz)*noise*self.T0['g']
+        self.T_IC['g'] = self.epsilon*A0*np.sin(np.pi*z_dealias/self.Lz)*noise['g']*self.T0['g']
 
         logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
@@ -2018,6 +2041,7 @@ class FC_multitrope(FC_equations_2d, Multitrope):
         self.ln_rho_IC = solver.state['ln_rho1']
 
         noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
@@ -2029,7 +2053,7 @@ class FC_multitrope(FC_equations_2d, Multitrope):
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
         # this will broadcast power back into relatively high Tz; consider widening taper.
-        self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.T_IC['g'] = self.epsilon*A0*noise['g']*self.T0['g']*taper
         self.filter_field(self.T_IC, **kwargs)
         self.ln_rho_IC['g'] = 0
         
@@ -2058,6 +2082,7 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
 
         
         noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
@@ -2069,7 +2094,7 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
         # this will broadcast power back into relatively high Tz; consider widening taper.
-        self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.T_IC['g'] = self.epsilon*A0*noise['g']*self.T0['g']*taper
         self.filter_field(self.T_IC, **kwargs)
         self.ln_rho_IC['g'] = 0
         
@@ -2518,6 +2543,7 @@ class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
         self.ln_rho_IC = solver.state['ln_rho1']
 
         noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
@@ -2529,7 +2555,7 @@ class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
         # this will broadcast power back into relatively high Tz; consider widening taper.
-        self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.T_IC['g'] = self.epsilon*A0*noise['g']*self.T0['g']*taper
         self.filter_field(self.T_IC, **kwargs)
         self.ln_rho_IC['g'] = 0
 
@@ -2569,6 +2595,7 @@ class FC_MHD_multitrope_guidefield(FC_MHD_equations_guidefield, Multitrope):
         self.ln_rho_IC = solver.state['ln_rho1']
 
         noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
@@ -2580,7 +2607,7 @@ class FC_MHD_multitrope_guidefield(FC_MHD_equations_guidefield, Multitrope):
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
         # this will broadcast power back into relatively high Tz; consider widening taper.
-        self.T_IC['g'] = self.epsilon*A0*noise*self.T0['g']*taper
+        self.T_IC['g'] = self.epsilon*A0*noise['g']*self.T0['g']*taper
         self.filter_field(self.T_IC, **kwargs)
         self.ln_rho_IC['g'] = 0
 
@@ -2676,9 +2703,10 @@ class AN_equations(Equations):
         # initial conditions
         self.s_IC = solver.state['s']
         noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
         self.s_IC.set_scales(self.domain.dealias, keep_data=True)
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
-        self.s_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise
+        self.s_IC['g'] = A0*np.sin(np.pi*z_dealias/self.Lz)*noise['g']
 
         logger.info("Starting with s perturbations of amplitude A0 = {:g}".format(A0))
 

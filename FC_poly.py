@@ -120,6 +120,8 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD
     solver.stop_iteration= np.inf
     solver.stop_wall_time = run_time*3600
 
+    Hermitian_cadence = 100
+    
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence)
@@ -161,6 +163,10 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD
             dt = CFL.compute_dt()
             # advance
             solver.step(dt)
+
+            if threeD and solver.iteration % Hermitian_cadence == 0:
+                for field in solver.state.fields:
+                    field.require_grid_space()
 
             # update lists
             if solver.iteration % report_cadence == 0:
