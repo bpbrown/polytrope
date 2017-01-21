@@ -1348,19 +1348,12 @@ class FC_equations(Equations):
         self.dirichlet_set = []
 
         # thermal boundary conditions
-        # this needs to be done before any equations are entered
-        #self.problem.parameters['T1_left']    = self.T1_left
-        #self.problem.parameters['T1_right']   = self.T1_right  
-        #self.problem.parameters['T1_z_left']  = self.T1_z_left 
-        #self.problem.parameters['T1_z_right'] = self.T1_z_right 
-
-        # thermal boundary conditions
         if fixed_flux:
-            logger.info("Thermal BC: fixed flux (T1_z)")
-            logger.info("warning; these are not fully correct fixed flux conditions yet")
-            self.problem.add_bc( "left(T1_z) = 0")
-            self.problem.add_bc("right(T1_z) = 0")
+            logger.info("Thermal BC: fixed flux (full form)")
+            self.problem.add_bc( "left(T1_z - ln_rho1*T0_z)  =  left((exp(ln_rho1)-1-ln_rho1)*T0_z)")
+            self.problem.add_bc("right(T1_z - ln_rho1*T0_z)  = right((exp(ln_rho1)-1-ln_rho1)*T0_z)")
             self.dirichlet_set.append('T1_z')
+            self.dirichlet_set.append('ln_rho1')
         elif fixed_temperature:
             logger.info("Thermal BC: fixed temperature (T1)")
             self.problem.add_bc( "left(T1) = 0")

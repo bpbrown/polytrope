@@ -8,6 +8,7 @@ Usage:
 Options:
     --output=<output>  Output directory; if blank a guess based on likely case name will be made
     --overshoot        Do overshoot diagnostics
+    --timetrace        Do profiles in time
 """
 import numpy as np
 
@@ -151,7 +152,7 @@ def plot_profiles(data, z, output_path='./'):
     for key in figs.keys():
         figs[key].savefig(output_path+'profiles_{}.png'.format(key), dpi=600)
 
-def main(files, output_path='./', overshoot=True):
+def main(files, output_path='./', overshoot=False, timetrace=False):
     logger.info("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
@@ -165,7 +166,8 @@ def main(files, output_path='./', overshoot=True):
     if overshoot:
         import plot_overshoot
         plot_overshoot.analyze_case(files, verbose=True)
-    plot_profiles(data.data, z, output_path=output_path)
+    if timetrace:
+        plot_profiles(data.data, z, output_path=output_path)
 
 
 if __name__ == "__main__":
@@ -193,6 +195,6 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         logger.info("output to {}".format(output_path))
-        main(args['<files>'], output_path=str(output_path)+'/', overshoot=args['--overshoot'])
+        main(args['<files>'], output_path=str(output_path)+'/', overshoot=args['--overshoot'], timetrace=args['--timetrace'])
 
 

@@ -72,17 +72,6 @@ def plot_energies(data, times, output_path='./'):
     ax2.set_ylabel("energy")
     figs["KE"] = fig_KE_only
  
-    fig_log = plt.figure(figsize=(16,8))
-    ax1 = fig_log.add_subplot(1,1,1)
-    ax1.semilogy(t, data['KE'], label="KE")
-    ax1.semilogy(t, np.abs(data['PE']-data['PE'][0]), label="|PE-PE$_0$|")
-    ax1.semilogy(t, np.abs(data['IE']-data['IE'][0]), label="|IE-IE$_0$|")
-    ax1.semilogy(t, np.abs(data['TE']-data['TE'][0]), label="|TE-TE$_0$|", color='black')
-    ax1.set_xlabel("time")
-    ax1.set_ylabel("energy")
-    ax1.legend()
-    figs["log_fluctuating_energies"] = fig_log
-
     fig_Nu = plt.figure(figsize=(16,8))
     ax1 = fig_Nu.add_subplot(2,1,1)
     ax1.plot(t, data['Nusselt'], label="Nu")
