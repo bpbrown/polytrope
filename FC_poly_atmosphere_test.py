@@ -16,9 +16,6 @@ Options:
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3.5]
 
-    --MHD                                Do MHD run
-    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
-
     --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
     --fixed_Tz                           Fixed Temperature gradient boundary conditions (top and bottom)
         
@@ -38,7 +35,7 @@ except:
     do_checkpointing = False
 import matplotlib.pyplot as plt
     
-def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_rho_cz=3.5,
+def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5,
                       fixed_T=False, fixed_Tz=False, 
                       restart=None, nz=128, nx=None, data_dir='./'):
     import numpy as np
@@ -52,12 +49,9 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, MHD=False, n_r
 
     nx = 2
     
-    if MHD:
-        atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
-    else:
-        atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl)
+    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl)
+    
     if fixed_T:
         atmosphere.set_BC(fixed_temperature=fixed_T)
     elif fixed_Tz:
@@ -111,8 +105,6 @@ if __name__ == "__main__":
     if args['--fixed_Tz']:
         data_dir +='_flux'
     data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
-    if args['--MHD']:
-        data_dir+= '_MHD'
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
@@ -129,12 +121,10 @@ if __name__ == "__main__":
 
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
-                      MagneticPrandtl=float(args['--MagneticPrandtl']),
                       nz=nz,
                       nx=nx,
                       fixed_T=args['--fixed_T'],
                       fixed_Tz=args['--fixed_Tz'],                      
-                      MHD=args['--MHD'],
                       restart=(args['--restart']),
                       n_rho_cz=float(args['--n_rho_cz']),
                       data_dir=data_dir)

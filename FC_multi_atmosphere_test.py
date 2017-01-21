@@ -19,10 +19,6 @@ Options:
 
     --width=<width>            Width of erf transition between two polytropes
     
-    --MHD                                Do MHD run
-    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1]
-
-    
     --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
 """
@@ -43,7 +39,6 @@ except:
 
 
 def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
-                      MagneticPrandtl=1, MHD=False, 
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
@@ -68,16 +63,10 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         nz = nz_rz+nz_cz
         nz_list = [nz_rz, nz_cz]
 
-    if MHD:
-        atmosphere = equations.FC_MHD_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
-                                                n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
-                                                verbose=verbose)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
-    else:
-        atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width)
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-8)
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-8)
         
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -123,8 +112,6 @@ if __name__ == "__main__":
         width = float(args['--width'])
     else:
         width = None
-    if args['--MHD']:
-        data_dir+= '_MHD'
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
@@ -137,8 +124,6 @@ if __name__ == "__main__":
     FC_constant_kappa(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
-                      MHD=args['--MHD'],
-                      MagneticPrandtl=float(args['--MagneticPrandtl']),
                       n_rho_cz=float(args['--n_rho_cz']),
                       n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
