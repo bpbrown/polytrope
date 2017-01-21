@@ -1,7 +1,7 @@
 # README #
 
 These are basic stratified fluid dynamics problems, for flows under
-the LBR anelastic approximation in a polytropic background, executed
+the fully compressible Navier-Stokes equations in a polytropic background, executed
 with the [Dedalus](http://dedalus-project.org) pseudospectral
 framework.  To run these problems, first install
 [Dedalus](http://dedalus-project.org/) (and on
@@ -10,19 +10,20 @@ framework.  To run these problems, first install
 Once [Dedalus](http://dedalus-project.org/) is installed and activated, do the following:
 ```
 #!bash
-mpirun -np 4 python3 FC_poly.py
-mpirun -np 2 python3 plot_results_parallel.py FC_poly_Ra1e6 slices 1 1 10
+mpirun -np 16 python3 FC_poly.py --run_time=0.1
+mpirun -np 1 python3 plot_energies.py FC_poly_nrhocz3_Ra1e4_eps1e-4_a4/scalar/*.h5
+mpirun -np 2 python3 plot_slices.py FC_poly_nrhocz3_Ra1e4_eps1e-4_a4/slices/*.h5
 ```
 
 For multitropes, use
 ```
 #!bash
-mpirun -np 4 python3 FC_multi.py
+mpirun -np 16 python3 FC_multi.py
 ```
 and for exoplanet inspired (stable top, unstable bottom) atmospheres, consider
 ```
 #!bash
-mpirun -np 4 python3 FC_poly_oz.py
+mpirun -np 16 python3 FC_multi.py --oz
 ```
 
 We are using docopt in these general driver cases, and
