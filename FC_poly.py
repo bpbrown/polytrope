@@ -9,7 +9,8 @@ Options:
     --Rayleigh=<Rayleigh>                Rayleigh number [default: 1e4]
     --Prandtl=<Prandtl>                  Prandtl number = nu/kappa [default: 1]
     --aspect=<aspect>                    Aspect ratio [default: 4]
-     
+    --epsilon=<epsilon>                  Epsilon of super-adiabaticity [default: 1e-4]
+         
     --restart=<restart_file>             Restart from checkpoint
 
     --nz=<nz>                            vertical z (chebyshev) resolution 
@@ -45,7 +46,7 @@ try:
 except:
     do_checkpointing = False
 
-def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD=False, n_rho_cz=3.5,
+def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD=False, n_rho_cz=3.5, epsilon=1e-4,
                       fixed_T=False, fixed_Tz=False,
                       rk222=False, threeD=False, mesh=None,
                       restart=None, nz=128, nx=None, ny=None,
@@ -65,14 +66,14 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, MagneticPrandtl=1, aspect_ratio=4, MHD
         ny = nx
 
     if MHD:
-        atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
+        atmosphere = equations.FC_MHD_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz, epsilon=epsilon)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl)
     else:
         if threeD:
             atmosphere = equations.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, aspect_ratio=aspect_ratio, mesh=mesh,
-                                                   constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz)
+                                                   constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz, epsilon=epsilon)
         else:
-            atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, aspect_ratio=aspect_ratio, constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz)
+            atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, aspect_ratio=aspect_ratio, constant_kappa=True, constant_mu=True, n_rho_cz=n_rho_cz, epsilon=epsilon)
         atmosphere.set_IVP_problem(Rayleigh, Prandtl)
     if fixed_T:
         atmosphere.set_BC(fixed_temperature=fixed_T)
@@ -259,6 +260,8 @@ if __name__ == "__main__":
     if args['--fixed_Tz']:
         data_dir +='_flux'
     data_dir += "_nrhocz{}_Ra{}".format(args['--n_rho_cz'], args['--Rayleigh'])
+    if args['--epsilon']:
+        data_dir+="_eps{}".format(args['--epsilon'])
     if args['--aspect']:
         data_dir+="_a{}".format(args['--aspect'])
     if args['--MHD']:
@@ -288,6 +291,7 @@ if __name__ == "__main__":
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       MagneticPrandtl=float(args['--MagneticPrandtl']),
+                      epsilon=float(args['--epsilon']),
                       aspect_ratio=float(args['--aspect']),
                       threeD=args['--3D'],
                       mesh=mesh,
