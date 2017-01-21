@@ -742,47 +742,6 @@ class Polytrope(Atmosphere):
         logger.info("thermal_time = {}, top_thermal_time = {}".format(self.thermal_time,
                                                                           self.top_thermal_time))
 
-class Polytrope_adiabatic(Polytrope):
-    def __init__(self,
-                 nx=256, nz=128,
-                 Lx=None, aspect_ratio=4,
-                 Lz=None, n_rho_cz = 3.5,
-                 gamma=5/3,                 
-                 **kwargs):
-
-        logger.info("************* entering polytrope_adiabatic, setting full_atm")
-        full_atm = Polytrope(Lz=Lz, n_rho_cz=n_rho_cz,
-                             gamma=gamma,nx=nx,nz=nz, Lx=Lx, aspect_ratio=aspect_ratio,
-                             **kwargs)
-        
-        self.atmosphere_name = 'single adiabatic polytrope'
-
-        if Lz is None:
-            # take Lz from full_atm so that n_rho_cz is consistent
-            Lz = full_atm.Lz
-        if Lx is None:
-            Lx = Lz*aspect_ratio
-
-        super(Polytrope, self).__init__(nx=nx, nz=nz, Lx=Lx, Lz=Lz)
-        self.z0 = 1. + self.Lz
-
-        logger.info("************* setting adiabatic atm")
-
-        self.constant_diffusivities = full_atm.constant_diffusivities
-        self._set_atmosphere_parameters(gamma=gamma, epsilon=0, poly_m=full_atm.m_ad)
-
-        self._set_atmosphere()
-        full_atm._set_timescales(atmosphere=self)
-
-        self.T0_IC = self._new_ncc()
-        self.rho0_IC = self._new_ncc()
-        self.ln_rho0_IC = self._new_ncc()
-        
-        self.T0_IC['g'] = full_atm.T0['g'] - self.T0['g']
-        self.rho0_IC['g'] = full_atm.rho0['g'] - self.rho0['g']
-        self.ln_rho0_IC['g'] = np.log(full_atm.rho0['g']) - np.log(self.rho0['g'])
-
-        self.delta_s = full_atm.delta_s
                       
 class Multitrope(MultiLayerAtmosphere):
     '''
@@ -1178,47 +1137,6 @@ class Multitrope(MultiLayerAtmosphere):
         flux = self._new_ncc()
         flux['g'] = rho['g']*T_z['g']*chi['g']
         return flux
-
-# need to implement flux-based Rayleigh number here.
-class PolytropeFlux(Polytrope):
-    def __init__(self, *args, **kwargs):
-        super(Polytrope, self).__init__(*args, **kwargs)
-        self.atmosphere_name = 'single Polytrope'
-        
-    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
-        
-        logger.info("problem parameters:")
-        logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
-
-        # take constant nu, chi
-        nu = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
-        chi = nu/Prandtl
-
-        logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
-
-        # determine characteristic timescales
-        self.thermal_time = self.Lz**2/chi
-        self.top_thermal_time = 1/chi
-
-        self.viscous_time = self.Lz**2/nu
-        self.top_viscous_time = 1/nu
-
-        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
-                                                                          self.top_thermal_time))
-
-        self.nu['g'] = nu
-        self.chi['g'] = chi
-        
-        return nu, chi        
-
-    def set_BC(self):
-        self.problem.add_bc( "left(Q_z) = 1")
-        self.problem.add_bc("right(Q_z) = 1")
-            
-        self.problem.add_bc( "left(u) = 0")
-        self.problem.add_bc("right(u) = 0")
-        self.problem.add_bc( "left(w) = 0")
-        self.problem.add_bc("right(w) = 0")
 
 
 class Equations():
@@ -1994,31 +1912,6 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
                                                         easy_rho_energy   = easy_rho_energy,
                                                         **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-
-class FC_polytrope_adiabatic(FC_equations, Polytrope_adiabatic):
-    def __init__(self, *args, **kwargs):
-        super(FC_polytrope_adiabatic, self).__init__() 
-        Polytrope_adiabatic.__init__(self, *args, **kwargs)
-        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
-
-        self.T1_left  = self.at_boundary(self.T0_IC, z=0,       BC_text='T1')
-        self.T1_right = self.at_boundary(self.T0_IC, z=self.Lz, BC_text='T1')
-        self.T1_z_left  = self.at_boundary(self.T0_IC, z=0,       dz=True, BC_text='T1')
-        self.T1_z_right = self.at_boundary(self.T0_IC, z=self.Lz, dz=True, BC_text='T1')
-
-    def set_equations(self, *args, **kwargs):
-        super(FC_polytrope_adiabatic, self).set_equations(*args, **kwargs)
-        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-        
-    def set_IC(self, *args, **kwargs):
-        super(FC_polytrope_adiabatic, self).set_IC(*args, **kwargs)
-        # update initial conditions to include super-adiabatic component
-        logger.info("shapes: {} and {}".format(self.T_IC['g'].shape, self.T0_IC['g'].shape))
-        self.T0_IC.set_scales(self.domain.dealias, keep_data=True)
-        self.T_IC['g'] += self.T0_IC['g']
-        
-        self.ln_rho_IC['g'] = self.ln_rho0_IC['g']        
-        logger.info("adding in nonadiabatic background to T1 and ln_rho1")
 
 class FC_multitrope(FC_equations_2d, Multitrope):
     def __init__(self, *args, **kwargs):
