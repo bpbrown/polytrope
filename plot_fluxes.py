@@ -3,12 +3,13 @@ Plot energy fluxes from joint analysis files.
 
 Usage:
     plot_fluxes.py join <base_path>
-    plot_fluxes.py <files>... [--output=<output> --overshoot]
+    plot_fluxes.py <files>... [options]
 
 Options:
     --output=<output>  Output directory; if blank a guess based on likely case name will be made
     --overshoot        Do overshoot diagnostics
     --timetrace        Do profiles in time
+    
 """
 import numpy as np
 
@@ -110,6 +111,20 @@ def plot_fluxes(fluxes, z, output_path='./'):
     ax1.set_ylabel("energy fluxes")
     figs["normalized_fluxes"]=fig_fluxes
 
+    fig_fluxes = plt.figure(figsize=(16,8))
+    ax1 = fig_fluxes.add_subplot(1,1,1)
+    ax1.plot(z, fluxes['norm_5_enthalpy_flux_z'], label="h flux")
+    ax1.plot(z, fluxes['norm_5_kappa_flux_z'], label=r"$\kappa\nabla (T-T_{ad})$")
+    ax1.plot(z, fluxes['norm_5_KE_flux_z'], label="KE flux")
+    ax1.plot(z, fluxes['norm_5_viscous_flux_z'], label=r"$u\cdot\sigma$")
+    ax1.plot(z, fluxes['Nusselt_5'], color='black', linestyle='dashed', label='total')
+    ax1.legend()
+    ax1.set_xlabel("z")
+    ax1.set_ylabel("energy fluxes")
+    figs["normalized_fluxes_norm_5"]=fig_fluxes
+    
+
+    
     for key in figs.keys():
         figs[key].savefig(output_path+'energy_{}.png'.format(key))
 
