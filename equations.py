@@ -1282,19 +1282,20 @@ class FC_equations(Equations):
             self.problem.add_bc("right(T1) = 0")
             self.dirichlet_set.append('T1')
         elif mixed_flux_temperature:
-            logger.info("Thermal BC: mixed flux/temperature (T1_z/T1)")
-            logger.info("warning; these are not fully correct fixed flux conditions yet")
-            self.problem.add_bc("left(T1_z) = 0")
+            logger.info("Thermal BC: fixed flux/fixed temperature")
+            self.problem.add_bc("left(T1_z + ln_rho1*T0_z)  =  left((exp(-ln_rho1)-1+ln_rho1)*T0_z)")
             self.problem.add_bc("right(T1)  = 0")
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('T1')
+            self.dirichlet_set.append('ln_rho1')
         elif mixed_temperature_flux:
-            logger.info("Thermal BC: mixed temperature/flux (T1/T1_z)")
+            logger.info("Thermal BC: fixed temperature/fixed flux")
             logger.info("warning; these are not fully correct fixed flux conditions yet")
             self.problem.add_bc("left(T1)    = 0")
-            self.problem.add_bc("right(T1_z) = 0")
+            self.problem.add_bc("right(T1_z + ln_rho1*T0_z)  = right((exp(-ln_rho1)-1+ln_rho1)*T0_z)")
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('T1')
+            self.dirichlet_set.append('ln_rho1')
         else:
             logger.error("Incorrect thermal boundary conditions specified")
             raise
