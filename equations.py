@@ -639,7 +639,7 @@ class Polytrope(Atmosphere):
         self.P0.set_scales(1, keep_data=True)
         
         if self.constant_diffusivities:
-            self.scale['g']            = self.z0 - self.z
+            self.scale['g']            = (self.z0 - self.z)
             self.scale_continuity['g'] = (self.z0 - self.z)
             self.scale_momentum['g']   = (self.z0 - self.z)
             self.scale_energy['g']     = (self.z0 - self.z)

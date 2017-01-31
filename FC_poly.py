@@ -68,7 +68,8 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
     if nx is None:
-        nx = int(np.round(nz*aspect_ratio))
+        from numpy import round
+        nx = int(round(nz*aspect_ratio))
     if threeD and ny is None:
         ny = nx
 
