@@ -637,7 +637,7 @@ class Polytrope(Atmosphere):
         self.P0.set_scales(1, keep_data=True)
         
         if self.constant_diffusivities:
-            self.scale['g']            = self.z0 - self.z
+            self.scale['g']            = (self.z0 - self.z)
             self.scale_continuity['g'] = (self.z0 - self.z)
             self.scale_momentum['g']   = (self.z0 - self.z)
             self.scale_energy['g']     = (self.z0 - self.z)
@@ -645,8 +645,8 @@ class Polytrope(Atmosphere):
             # consider whether to scale nccs involving chi differently (e.g., energy equation)
             self.scale['g']            = (self.z0 - self.z)
             self.scale_continuity['g'] = (self.z0 - self.z)
-            self.scale_momentum['g']   = (self.z0 - self.z)**np.ceil(self.m_cz)
-            self.scale_energy['g']     = (self.z0 - self.z)**np.ceil(self.m_cz)
+            self.scale_momentum['g']   = (self.z0 - self.z) #**np.floor(self.m_cz)
+            self.scale_energy['g']     = (self.z0 - self.z) #**np.floor(self.m_cz)
 
         # choose a particular gauge for phi (g*z0); and -grad(phi)=g_vec=-g*z_hat
         # double negative is correct.
