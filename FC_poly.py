@@ -150,10 +150,12 @@ def FC_polytrope(Rayleigh=1e6, Prandtl=1, aspect_ratio=4, n_rho_cz=3.5, epsilon=
 
             # update lists
             if solver.iteration % report_cadence == 0:
+                Re_avg = flow.grid_average('Re')
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time, dt)
-                log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                log_string += 'Re: {:8.3e}/{:8.3e}'.format(Re_avg, flow.max('Re'))
                 logger.info(log_string)
-
+                if not np.isfinite(Re_avg):
+                    solver.ok = False
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
