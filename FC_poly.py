@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
+import numpy as np
+
 try:
     from dedalus.extras.checkpointing import Checkpoint
     do_checkpointing = True
@@ -68,8 +70,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
     if nx is None:
-        from numpy import round
-        nx = int(round(nz*aspect_ratio))
+        nx = int(np.round(nz*aspect_ratio))
     if threeD and ny is None:
         ny = nx
 
@@ -179,8 +180,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     else:
         solver.stop_sim_time    = 100*atmosphere.thermal_time
     
-    from numpy import inf
-    solver.stop_iteration   = inf
+    solver.stop_iteration   = np.inf
     solver.stop_wall_time   = run_time*3600
     report_cadence = 1
     output_time_cadence = out_cadence*atmosphere.buoyancy_time
