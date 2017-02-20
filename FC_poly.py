@@ -38,6 +38,8 @@ Options:
     --label=<label>                      Additional label for run output directory
     --out_cadence=<out_cadence>          The fraction of a buoyancy time to output data at [default: 0.1]
     --no_coeffs                          If flagged, coeffs will not be output
+
+    --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -61,7 +63,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                         fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,\
                         restart=None, start_new_files=False, \
                         rk222=False, safety_factor=0.2, run_time_buoyancies=None, \
-                        data_dir='./', out_cadence=0.1, no_coeffs=False):
+                        data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False):
     import time
     import equations
     import os
@@ -211,8 +213,9 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     # Flow properties
     flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
     flow.add_property("Re_rms", name='Re')
-    flow.add_property("Pe_rms", name='Pe')
-    flow.add_property("Nusselt", name='Nusselt')
+    if verbose:
+        flow.add_property("Pe_rms", name='Pe')
+        flow.add_property("Nusselt", name='Nusselt')
     
     start_iter=solver.iteration
     start_sim_time = solver.sim_time
@@ -233,9 +236,12 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
             # update lists
             if solver.iteration % report_cadence == 0:
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration-start_iter, solver.sim_time, (solver.sim_time-start_sim_time)/atmosphere.buoyancy_time, dt)
-                log_string += '\n\t\tRe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
-                log_string += '; Pe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Pe'), flow.max('Pe'))
-                log_string += '; Nu: {:8.5e}/{:8.5e}'.format(flow.grid_average('Nusselt'), flow.max('Nusselt'))
+                if verbose:
+                    log_string += '\n\t\tRe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                    log_string += '; Pe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Pe'), flow.max('Pe'))
+                    log_string += '; Nu: {:8.5e}/{:8.5e}'.format(flow.grid_average('Nusselt'), flow.max('Nusselt'))
+                else:
+                    log_string += 'Re: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 logger.info(log_string)
 
     except:
@@ -405,4 +411,5 @@ if __name__ == "__main__":
                       safety_factor=float(args['--safety_factor']),
                       out_cadence=float(args['--out_cadence']),
                       data_dir=data_dir,
-                      no_coeffs=args['--no_coeffs'])
+                      no_coeffs=args['--no_coeffs'],
+                      verbose=args['--verbose'])
