@@ -1241,7 +1241,6 @@ class FC_equations(Equations):
         self.problem.substitutions['u_rms'] = 'sqrt(u**2)'
         self.problem.substitutions['v_rms'] = 'sqrt(v**2)'
         self.problem.substitutions['w_rms'] = 'sqrt(w**2)'
-        self.problem.substitutions['vel_rms'] = '(u_rms + w_rms)'
         self.problem.substitutions['Re_rms'] = 'vel_rms*Lz/nu'
         self.problem.substitutions['Pe_rms'] = 'vel_rms*Lz/chi'
         self.problem.substitutions['Ma_iso_rms'] = '(vel_rms/sqrt(T_full))'
