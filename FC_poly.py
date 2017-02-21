@@ -33,6 +33,7 @@ Options:
 
     --rk222                              Use RK222 as timestepper
     --safety_factor=<safety_factor>      Determines CFL Danger.  Higher=Faster [default: 0.2]
+    --split_diffusivities                If True, split the chi and nu between LHS and RHS to lower bandwidth
     
     --root_dir=<root_dir>                Root directory to save data dir in [default: ./]
     --label=<label>                      Additional label for run output directory
@@ -63,7 +64,8 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                         fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,\
                         restart=None, start_new_files=False, \
                         rk222=False, safety_factor=0.2, run_time_buoyancies=None, \
-                        data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False):
+                        data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False,
+                        split_diffusivities=False):
     import time
     import equations
     import os
@@ -80,16 +82,18 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
 
     if threeD:
         atmosphere = equations.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                        epsilon=epsilon, n_rho_cz=n_rho_cz, Lx=Lx, aspect_ratio=aspect_ratio,\
+                                        epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir='./FC_poly_atmosphere/')
     else:
         atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir='./FC_poly_atmosphere/')
     if epsilon < 1e-4:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-14)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-14, split_diffusivities=split_diffusivities)
+    elif epsilon > 1e-1:
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-6, split_diffusivities=split_diffusivities)
     else:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-10)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-10, split_diffusivities=split_diffusivities)
 
     if fixed_flux:
         atmosphere.set_BC(fixed_flux=True, stress_free=True)
@@ -243,7 +247,6 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                 else:
                     log_string += 'Re: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
                 logger.info(log_string)
-
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
@@ -412,4 +415,5 @@ if __name__ == "__main__":
                       out_cadence=float(args['--out_cadence']),
                       data_dir=data_dir,
                       no_coeffs=args['--no_coeffs'],
+                      split_diffusivities=args['--split_diffusivities'],
                       verbose=args['--verbose'])
