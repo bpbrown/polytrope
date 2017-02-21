@@ -1297,7 +1297,7 @@ class FC_equations(Equations):
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * (nu_l+nu_r) * (u*σxz + w*σzz)'
         self.problem.substitutions['convective_flux_z'] = '(viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
         
-        self.problem.substitutions['evolved_avg_kappa'] = 'vol_avg(rh0_full*(chi_l+chi_r))'
+        self.problem.substitutions['evolved_avg_kappa'] = 'vol_avg(rho_full*(chi_l+chi_r))'
         self.problem.substitutions['kappa_adiabatic_flux_z_G75']  = '(rho0*(chi_l+chi_r)*g/Cp)'
         self.problem.substitutions['kappa_adiabatic_flux_z_AB17'] = '(evolved_avg_kappa*g/Cp)'
         self.problem.substitutions['kappa_reference_flux_z_G75'] = '(-(chi_l+chi_r)*rho0*(right(T1+T0)-left(T1+T0))/Lz)'
