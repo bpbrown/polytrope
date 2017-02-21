@@ -219,7 +219,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     flow.add_property("Re_rms", name='Re')
     if verbose:
         flow.add_property("Pe_rms", name='Pe')
-        flow.add_property("Nusselt", name='Nusselt')
+        flow.add_property("Nusselt_AB17", name='Nusselt')
     
     start_iter=solver.iteration
     start_sim_time = solver.sim_time
