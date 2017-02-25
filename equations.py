@@ -1264,8 +1264,11 @@ class FC_equations(Equations):
         self.problem.substitutions['epsilon'] = 'plane_avg(log(T0**(1/(gamma-1))/rho0)/log(T0))'
         self.problem.substitutions['m_ad']    = '((gamma-1)**-1)'
 
-        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/((nu_l+nu_r)*(chi_l+chi_r))'
-        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/((nu_l+nu_r)*(chi_l+chi_r))'
+        self.problem.substitutions['nu']  = '(nu_l + nu_r)'
+        self.problem.substitutions['chi'] = '(chi_l + chi_r)'
+
+        self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
+        self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
         
         self.problem.substitutions['vel_rms'] = 'sqrt(u**2 + v**2 + w**2)'
         self.problem.substitutions['KE'] = 'rho_full*(vel_rms**2)/2'
@@ -1280,13 +1283,13 @@ class FC_equations(Equations):
         self.problem.substitutions['u_rms'] = 'sqrt(u**2)'
         self.problem.substitutions['v_rms'] = 'sqrt(v**2)'
         self.problem.substitutions['w_rms'] = 'sqrt(w**2)'
-        self.problem.substitutions['Re_rms'] = 'vel_rms*Lz/(nu_l+nu_r)'
-        self.problem.substitutions['Pe_rms'] = 'vel_rms*Lz/(chi_l+chi_r)'
+        self.problem.substitutions['Re_rms'] = 'vel_rms*Lz/nu'
+        self.problem.substitutions['Pe_rms'] = 'vel_rms*Lz/chi'
         self.problem.substitutions['Ma_iso_rms'] = '(vel_rms/sqrt(T_full))'
         self.problem.substitutions['Ma_ad_rms'] = '(vel_rms/(sqrt(gamma*T_full)))'
         #self.problem.substitutions['lambda_microscale'] = 'sqrt(plane_avg(vel_rms)/plane_avg(enstrophy))'
-        #self.problem.substitutions['Re_microscale'] = 'vel_rms*lambda_microscale/(nu_l+nu_r)'
-        #self.problem.substitutions['Pe_microscale'] = 'vel_rms*lambda_microscale/(chi_l+chi_r)'
+        #self.problem.substitutions['Re_microscale'] = 'vel_rms*lambda_microscale/nu'
+        #self.problem.substitutions['Pe_microscale'] = 'vel_rms*lambda_microscale/chi'
         
         self.problem.substitutions['h_flux_z'] = 'w*(h)'
         self.problem.substitutions['kappa_flux_mean'] = '-rho0*(chi_l+chi_r)*dz(T0)'
@@ -1294,7 +1297,7 @@ class FC_equations(Equations):
         self.problem.substitutions['kappa_flux_z'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
         self.problem.substitutions['KE_flux_z'] = 'w*(KE)'
         self.problem.substitutions['PE_flux_z'] = 'w*(PE)'
-        self.problem.substitutions['viscous_flux_z'] = '- rho_full * (nu_l+nu_r) * (u*σxz + w*σzz)'
+        self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*σxz + w*σzz)'
         self.problem.substitutions['convective_flux_z'] = '(viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
         
         self.problem.substitutions['evolved_avg_kappa'] = 'vol_avg(rho_full*(chi_l+chi_r))'
@@ -1539,10 +1542,10 @@ class FC_equations_2d(FC_equations):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, split_diffusivities=split_diffusivities)
         self._set_parameters()
         if EVP_2:
-            self.problem.substitutions['chi'] = "(Prandtl*nu)"
+            self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
             self.problem.parameters['Prandtl'] = Prandtl
-            self.problem.parameters.pop('nu')
-            self.problem.parameters.pop('chi')
+            self.problem.parameters.pop('nu_l')
+            self.problem.parameters.pop('chi_l')
 
         self._set_subs()
         
@@ -1561,12 +1564,10 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
         
         if not split_diffusivities:
-            self.problem.substitutions['nu'] = '(nu_l)'
             self.problem.substitutions['del_nu'] = '(del_nu_l)'
-            self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
-            self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
+            self.nonlinear_viscous_u = " nu_l*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
+            self.nonlinear_viscous_w = " nu_l*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
         else:
-            self.problem.substitutions['nu'] = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu'] = '(del_nu_l + del_nu_r)'
             self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz) + {}".format(self.viscous_term_u_r)
             self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz) + {}".format(self.viscous_term_w_r)
@@ -1576,10 +1577,8 @@ class FC_equations_2d(FC_equations):
 
         # double check implementation of variabile chi and background coupling term.
         if not split_diffusivities:
-            self.problem.substitutions['chi'] = '(chi_l)'
             self.problem.substitutions['del_chi'] = '(del_chi_l)'
         else:
-            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
             self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
         self.problem.substitutions['Q_z'] = "(-T1_z)"
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
@@ -1590,7 +1589,7 @@ class FC_equations_2d(FC_equations):
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
         if not split_diffusivities:
-            self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+            self.nonlinear_thermal_diff = " Cv_inv*chi_l*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         else:
             self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1)) + {}".format(self.linear_thermal_diff_r)
                 
@@ -1853,10 +1852,10 @@ class FC_equations_3d(FC_equations):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, split_diffusivities=split_diffusivities)
         self._set_parameters()
         if EVP_2:
-            self.problem.substitutions['chi'] = "(Prandtl*nu)"
+            self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
             self.problem.parameters['Prandtl'] = Prandtl
-            self.problem.parameters.pop('nu')
-            self.problem.parameters.pop('chi')
+            self.problem.parameters.pop('nu_l')
+            self.problem.parameters.pop('chi_l')
  
         self._set_subs()
         
@@ -1881,13 +1880,11 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['L_visc_v'] = self.viscous_term_v_l
 
         if not split_diffusivities:
-            self.problem.substitutions['nu'] = '(nu_l)'
             self.problem.substitutions['del_nu'] = '(del_nu_l)'
-            self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
-            self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
-            self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
+            self.nonlinear_viscous_u = " nu_l*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
+            self.nonlinear_viscous_v = " nu_l*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
+            self.nonlinear_viscous_w = " nu_l*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
         else:
-            self.problem.substitutions['nu'] = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu'] = '(del_nu_l + del_nu_r)'
             self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz) + {}".format(self.viscous_term_u_r)
             self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz) + {}".format(self.viscous_term_v_r)
@@ -1901,10 +1898,8 @@ class FC_equations_3d(FC_equations):
 
         # double check implementation of variabile chi and background coupling term.
         if not split_diffusivities:
-            self.problem.substitutions['chi'] = '(chi_l)'
             self.problem.substitutions['del_chi'] = '(del_chi_l)'
         else:
-            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
             self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
@@ -1915,7 +1910,7 @@ class FC_equations_3d(FC_equations):
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
         if not split_diffusivities:
-            self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+            self.nonlinear_thermal_diff = " Cv_inv*chi_l*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         else:
             self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1)) + {}".format(self.linear_thermal_diff_r)
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff_l
