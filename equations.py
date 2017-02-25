@@ -1571,8 +1571,8 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
         
-        self.nonlinear_viscous_u = " nu_l*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
-        self.nonlinear_viscous_w = " nu_l*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
+        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
+        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
         if split_diffusivities:
             self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
             self.nonlinear_viscous_w += " + {}".format(self.viscous_term_w_r)
@@ -1590,7 +1590,7 @@ class FC_equations_2d(FC_equations):
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
         
-        self.nonlinear_thermal_diff = " Cv_inv*chi_l*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         if split_diffusivities:
             self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
                 
@@ -1880,9 +1880,9 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
         self.problem.substitutions['L_visc_v'] = self.viscous_term_v_l
 
-        self.nonlinear_viscous_u = " nu_l*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
-        self.nonlinear_viscous_v = " nu_l*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
-        self.nonlinear_viscous_w = " nu_l*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
+        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
+        self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
+        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
         if split_diffusivities:
             self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
             self.nonlinear_viscous_v += " + {}".format(self.viscous_term_v_r)
@@ -1902,7 +1902,7 @@ class FC_equations_3d(FC_equations):
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
 
-        self.nonlinear_thermal_diff = " Cv_inv*chi_l*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         if split_diffusivities:
             self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff_l
