@@ -1518,7 +1518,7 @@ class FC_equations_2d(FC_equations):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
 
-    def _set_subs(self):
+    def _set_subs(self, **kwargs):
         # 2-D specific subs
         self.problem.substitutions['ω_y'] = '( u_z  - dx(w))'        
         self.problem.substitutions['enstrophy']   = '(ω_y**2)'
@@ -1538,7 +1538,7 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
 
-        super(FC_equations_2d, self)._set_subs()
+        super(FC_equations_2d, self)._set_subs(**kwargs)
         
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
                       easy_rho_momentum=False, easy_rho_energy=False, split_diffusivities=False):
@@ -1820,7 +1820,7 @@ class FC_equations_3d(FC_equations):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes in 3-D'
         self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1']
     
-    def _set_subs(self):
+    def _set_subs(self, **kwargs):
         # 3-D specific subs
         self.problem.substitutions['ω_x'] = '(dy(w) - v_z)'        
         self.problem.substitutions['ω_y'] = '( u_z  - dx(w))'        
@@ -1845,7 +1845,7 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
         self.problem.substitutions["σyz"] = "(dy(w) +  v_z )"
            
-        super(FC_equations_3d, self)._set_subs()
+        super(FC_equations_3d, self)._set_subs(**kwargs)
                 
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
                       easy_rho_momentum=False, easy_rho_energy=False, split_diffusivities=False):
@@ -1858,7 +1858,7 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters.pop('nu_l')
             self.problem.parameters.pop('chi_l')
  
-        self._set_subs()
+        self._set_subs(split_diffusivities=split_diffusivities)
         
         self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(v), dx(w_z)))"
         self.viscous_term_v_l = " nu_l*(Lap(v, v_z) + 1/3*Div(dy(u), dy(v), dy(w_z)))"
