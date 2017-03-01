@@ -327,23 +327,24 @@ if __name__ == "__main__":
         data_dir += '/'
     data_dir += sys.argv[0].split('.py')[0]
     #BCs
-    if args['--fixed_T']:
-        data_dir += '_fixed'
-    elif args['--fixed_flux']:
-        data_dir += '_flux'
-    #Diffusivities
-    if args['--const_nu']:
-        data_dir += '_constNu'
-    else:
-        data_dir += '_constMu'
-    if args['--const_chi']:
-        data_dir += '_constChi'
-    else:
-        data_dir += '_constKappa'
-    if args['--3D']:
-        data_dir +='_3D'
-    else:
-        data_dir +='_2D'
+    if args['--verbose']:
+        if args['--fixed_T']:
+            data_dir += '_fixed'
+        elif args['--fixed_flux']:
+            data_dir += '_flux'
+        #Diffusivities
+        if args['--const_nu']:
+            data_dir += '_constNu'
+        else:
+            data_dir += '_constMu'
+        if args['--const_chi']:
+            data_dir += '_constChi'
+        else:
+            data_dir += '_constKappa'
+        if args['--3D']:
+            data_dir +='_3D'
+        else:
+            data_dir +='_2D'
     #Base atmosphere
     data_dir += "_nrhocz{}_Ra{}_Pr{}_eps{}_a{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'], args['--epsilon'], args['--aspect'])
     if args['--label'] == None:
