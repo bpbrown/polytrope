@@ -1973,6 +1973,12 @@ class FC_equations_3d(FC_equations):
         analysis_slice.add_task("interp(enstrophy,                  z={})".format(0.5*self.Lz),  name="enstrophy midplane")
         analysis_slice.add_task("interp(ω_z,                        z={})".format(0.5*self.Lz),  name="vorticity_z midplane")
         analysis_tasks['slice'] = analysis_slice
+
+        analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=20, parallel=False, **kwargs)
+        analysis_volume.add_task("enstrophy", name="enstrophy")
+        analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
+        analysis_tasks['volume'] = analysis_volume
+
         return self.analysis_tasks
             
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
