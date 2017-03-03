@@ -55,7 +55,7 @@ try:
     do_checkpointing = True
     checkpoint_min   = 30
 except:
-    print('not importing checkpointing')
+    logger.info('not importing checkpointing')
     do_checkpointing = False
 
 def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
@@ -179,7 +179,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                 chk_write = chk_set = 1
         checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, write_num=chk_write, set_num=chk_set)
     else:
-        atmosphere.set_IC(solver, shear=shear, shear_value=shear_val)
+        atmosphere.set_IC(solver)
 
 
     

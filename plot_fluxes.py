@@ -91,38 +91,47 @@ def plot_fluxes(fluxes, z, output_path='./'):
     fig_fluxes = plt.figure(figsize=(16,8))
     ax1 = fig_fluxes.add_subplot(1,1,1)
     ax1.plot(z, fluxes['enthalpy_flux_z'], label="h flux")
-    ax1.plot(z, fluxes['kappa_flux_fluc_z'], label=r"$\kappa\nabla T_1$")
+    try:
+        ax1.plot(z, fluxes['kappa_flux_fluc_z'], label=r"$\kappa\nabla T_1$")
+    except:
+        logger.info("missing kappa_flux_fluc_z")
     ax1.plot(z, fluxes['KE_flux_z'], label="KE flux")
-    ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['kappa_flux_fluc_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
+    try:
+        ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['kappa_flux_fluc_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
+    except:
+        ax1.plot(z, fluxes['enthalpy_flux_z']+fluxes['KE_flux_z'], color='black', linestyle='dashed', label='total')
+        logger.info("missing kappa_flux_fluc_z")
     ax1.legend()
     ax1.set_xlabel("z")
     ax1.set_ylabel("energy fluxes")
     figs["relative_fluxes"]=fig_fluxes
 
-    fig_fluxes = plt.figure(figsize=(16,8))
-    ax1 = fig_fluxes.add_subplot(1,1,1)
-    ax1.plot(z, fluxes['norm_enthalpy_flux_z'], label="h flux")
-    ax1.plot(z, fluxes['norm_kappa_flux_z'], label=r"$\kappa\nabla (T-T_{ad})$")
-    ax1.plot(z, fluxes['norm_KE_flux_z'], label="KE flux")
-    ax1.plot(z, fluxes['norm_viscous_flux_z'], label=r"$u\cdot\sigma$")
-    ax1.plot(z, fluxes['Nusselt'], color='black', linestyle='dashed', label='total')
-    ax1.legend()
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("energy fluxes")
-    figs["normalized_fluxes"]=fig_fluxes
+    try:
+        fig_fluxes = plt.figure(figsize=(16,8))
+        ax1 = fig_fluxes.add_subplot(1,1,1)
+        ax1.plot(z, fluxes['norm_enthalpy_flux_z'], label="h flux")
+        ax1.plot(z, fluxes['norm_kappa_flux_z'], label=r"$\kappa\nabla (T-T_{ad})$")
+        ax1.plot(z, fluxes['norm_KE_flux_z'], label="KE flux")
+        ax1.plot(z, fluxes['norm_viscous_flux_z'], label=r"$u\cdot\sigma$")
+        ax1.plot(z, fluxes['Nusselt'], color='black', linestyle='dashed', label='total')
+        ax1.legend()
+        ax1.set_xlabel("z")
+        ax1.set_ylabel("energy fluxes")
+        figs["normalized_fluxes"]=fig_fluxes
 
-    fig_fluxes = plt.figure(figsize=(16,8))
-    ax1 = fig_fluxes.add_subplot(1,1,1)
-    ax1.plot(z, fluxes['norm_5_enthalpy_flux_z'], label="h flux")
-    ax1.plot(z, fluxes['norm_5_kappa_flux_z'], label=r"$\kappa\nabla (T-T_{ad})$")
-    ax1.plot(z, fluxes['norm_5_KE_flux_z'], label="KE flux")
-    ax1.plot(z, fluxes['norm_5_viscous_flux_z'], label=r"$u\cdot\sigma$")
-    ax1.plot(z, fluxes['Nusselt_5'], color='black', linestyle='dashed', label='total')
-    ax1.legend()
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("energy fluxes")
-    figs["normalized_fluxes_norm_5"]=fig_fluxes
-    
+        fig_fluxes = plt.figure(figsize=(16,8))
+        ax1 = fig_fluxes.add_subplot(1,1,1)
+        ax1.plot(z, fluxes['norm_5_enthalpy_flux_z'], label="h flux")
+        ax1.plot(z, fluxes['norm_5_kappa_flux_z'], label=r"$\kappa\nabla (T-T_{ad})$")
+        ax1.plot(z, fluxes['norm_5_KE_flux_z'], label="KE flux")
+        ax1.plot(z, fluxes['norm_5_viscous_flux_z'], label=r"$u\cdot\sigma$")
+        ax1.plot(z, fluxes['Nusselt_5'], color='black', linestyle='dashed', label='total')
+        ax1.legend()
+        ax1.set_xlabel("z")
+        ax1.set_ylabel("energy fluxes")
+        figs["normalized_fluxes_norm_5"]=fig_fluxes
+    except:
+        pass
 
     
     for key in figs.keys():

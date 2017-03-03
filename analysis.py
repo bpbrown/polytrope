@@ -118,9 +118,18 @@ class Profile(DedalusData):
     def average_data(self):
         self.average = OrderedDict()
         self.std_dev = OrderedDict()
+
         for key in self.keys:
-            self.average[key] = np.mean(self.data[key], axis=0)[0]
-            self.std_dev[key] = np.std( self.data[key], axis=0)[0]
+            dim = len(self.data[key].shape) -1
+            if dim == 3:
+                self.average[key] = np.mean(self.data[key], axis=0)[0][0]
+                self.std_dev[key] = np.std( self.data[key], axis=0)[0][0]
+            elif dim == 2:
+                self.average[key] = np.mean(self.data[key], axis=0)[0]
+                self.std_dev[key] = np.std( self.data[key], axis=0)[0]
+            else:
+                self.average[key] = np.mean(self.data[key], axis=0)
+                self.std_dev[key] = np.std( self.data[key], axis=0)
 
         for key in self.keys:
             logger.debug("{} shape {} and {}".format(key, self.average[key].shape, self.std_dev[key].shape))

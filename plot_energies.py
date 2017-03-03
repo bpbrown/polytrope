@@ -85,6 +85,18 @@ def plot_energies(data, times, output_path='./'):
     ax2.set_xlabel("time")
     ax2.set_ylabel("Nu")
     figs["Nu"] = fig_Nu
+
+    fig_Nu2 = plt.figure(figsize=(16,8))
+    ax1 = fig_Nu2.add_subplot(2,1,1)
+    ax1.plot(t, data['Nusselt_AB17'], label="Nu_AB17")
+    ax1.legend()
+    ax1.set_ylabel("Nu")
+    ax2 = fig_Nu2.add_subplot(2,1,2)
+    ax2.semilogy(t, np.abs(data['Nusselt_AB17']), label="Nu_AB17")
+    ax2.legend()
+    ax2.set_xlabel("time")
+    ax2.set_ylabel("Nu")
+    figs["Nu_AB17"] = fig_Nu2
     
     for key in figs.keys():
         figs[key].savefig(output_path+'scalar_{}.png'.format(key))
