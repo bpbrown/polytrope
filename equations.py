@@ -1902,7 +1902,6 @@ class FC_equations_3d(FC_equations):
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
 
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
         if split_diffusivities:
             self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff_l
