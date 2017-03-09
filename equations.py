@@ -168,6 +168,8 @@ class Atmosphere:
         self.necessary_quantities['del_P0'] = self.del_P0
         self.necessary_quantities['P0'] = self.P0
 
+        self.nu = self._new_ncc()
+        self.chi = self._new_ncc()
         self.nu_l = self._new_ncc()
         self.chi_l = self._new_ncc()
         self.del_chi_l = self._new_ncc()
@@ -753,11 +755,15 @@ class Polytrope(Atmosphere):
         self.nu_l.set_scales(1, keep_data=True)
         self.chi_r.set_scales(1, keep_data=True)
         self.nu_r.set_scales(1, keep_data=True)
+        self.nu.set_scales(1, keep_data=True)
+        self.chi.set_scales(1, keep_data=True)
         self.nu_l['g'] = nu_l
         self.chi_l['g'] = chi_l
         self.nu_r['g'] = nu_r
         self.chi_r['g'] = chi_r
-
+        self.nu['g'] = nu_l + nu_r
+        self.chi['g'] = chi_l + chi_r
+        
         self.chi_l.differentiate('z', out=self.del_chi_l)
         self.chi_l.set_scales(1, keep_data=True)
         self.nu_l.differentiate('z', out=self.del_nu_l)
@@ -768,10 +774,10 @@ class Polytrope(Atmosphere):
         self.nu_r.set_scales(1, keep_data=True)
 
         # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
-        self.thermal_time = self.Lz**2/(self.chi_l.interpolate(z=self.Lz/2)['g'][0]+self.chi_r.interpolate(z=self.Lz/2)['g'][0])
+        self.thermal_time = self.Lz**2/(self.chi.interpolate(z=self.Lz/2)['g'][0])
         self.top_thermal_time = 1/chi_top
 
-        self.viscous_time = self.Lz**2/(self.nu_l.interpolate(z=self.Lz/2)['g'][0]+self.nu_r.interpolate(z=self.Lz/2)['g'][0])
+        self.viscous_time = self.Lz**2/(self.nu.interpolate(z=self.Lz/2)['g'][0])
         self.top_viscous_time = 1/nu_top
 
         if self.dimensions > 1:
@@ -2012,6 +2018,11 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
         if self.domain.dist.comm_cart.rank == 0:
             f = h5py.File('{:s}'.format(file), 'w')
         for key in self.problem.parameters.keys():
+            try:
+                self.problem.parameters[key].set_scales(1, keep_data=True)
+            except:
+                pass
+        for key in self.problem.parameters.keys():
             if 'scale' in key:
                 continue
             if type(self.problem.parameters[key]) == Field:
@@ -2057,6 +2068,7 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
             f['dimensions']     = 2
             f['nx']             = self.nx
             f['nz']             = self.nz
+            f['z']              = self.domain.grid(axis=-1, scales=1)
             f['m_ad']           = self.m_ad
             f['m']              = self.m_ad - self.epsilon
             f['epsilon']        = self.epsilon

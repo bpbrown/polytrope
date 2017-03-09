@@ -83,11 +83,11 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     if threeD:
         atmosphere = equations.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                        fig_dir='./FC_poly_atmosphere/')
+                                        fig_dir=data_dir)
     else:
         atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                        fig_dir='./FC_poly_atmosphere/')
+                                        fig_dir=data_dir)
     if epsilon < 1e-4:
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-14, split_diffusivities=split_diffusivities)
     elif epsilon > 1e-1:
