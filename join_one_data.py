@@ -12,7 +12,7 @@ base_path = os.path.abspath(data_dir)+'/'
 
 logger.info("joining data from Dedalus run {:s}".format(data_dir))
 
-data_types = ['slices', 'coeffs', 'profiles', 'scalar', 'checkpoint']
+data_types = ['slices', 'coeffs', 'profiles', 'scalar', 'checkpoint', 'volumes']
 for data_type in data_types:
     target = "{}/{}_s{}".format(data_type, data_type, iteration)
     logger.info("merging {}".format(target))
