@@ -2018,53 +2018,51 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
                 os.mkdir('{:s}'.format(dir))
         if self.domain.dist.comm_cart.rank == 0:
             f = h5py.File('{:s}'.format(file), 'w')
-        for key in self.problem.parameters.keys():
-            try:
-                self.problem.parameters[key].set_scales(1, keep_data=True)
-            except:
-                pass
-        for key in self.problem.parameters.keys():
+        key_set = list(self.problem.parameters.keys())
+        extended_keys = ['chi','nu','del_chi','del_nu']
+        key_set.extend(extended_keys)
+        logger.debug("Outputing atmosphere parameters for {}".format(key_set))
+        for key in key_set:
             if 'scale' in key:
                 continue
-            if type(self.problem.parameters[key]) == Field:
-                if key == 'chi_l':
-                    array = self.problem.parameters[key]['g'][0,:] +\
-                            self.problem.parameters['chi_r']['g'][0,:]
-                elif key == 'nu_l':
-                    array = self.problem.parameters[key]['g'][0,:] +\
-                            self.problem.parameters['nu_r']['g'][0,:]
-                elif key == 'del_chi_l':
-                    array = self.problem.parameters[key]['g'][0,:] +\
-                            self.problem.parameters['del_chi_r']['g'][0,:]
-                elif key == 'del_nu_l':
-                    array = self.problem.parameters[key]['g'][0,:] +\
-                            self.problem.parameters['del_nu_r']['g'][0,:]
-                elif key == 'chi_r':
-                    continue
-                else:
-                    array = self.problem.parameters[key]['g'][0,:]
+            if key in extended_keys:
+                field_key = True
+            elif type(self.problem.parameters[key]) == Field:
+                field_key = True
                 self.problem.parameters[key].set_scales(1, keep_data=True)
+            else:
+                field_key = False
+            if field_key:
+                try:
+                    array = self.problem.parameters[key]['g'][0,:]
+                except:
+                    if key == 'chi':
+                        array = self.problem.parameters['chi_l']['g'][0,:] +\
+                                self.problem.parameters['chi_r']['g'][0,:]
+                    elif key == 'nu':
+                        array = self.problem.parameters['nu_l']['g'][0,:] +\
+                                self.problem.parameters['nu_r']['g'][0,:]
+                    elif key == 'del_chi':
+                        array = self.problem.parameters['del_chi_l']['g'][0,:] +\
+                                self.problem.parameters['del_chi_r']['g'][0,:]
+                    elif key == 'del_nu':
+                        array = self.problem.parameters['del_nu_l']['g'][0,:] +\
+                                self.problem.parameters['del_nu_r']['g'][0,:]
+                    else:
+                        logger.error("key error on atmosphere output {}".format(key))
+                        
                 this_chunk      = np.zeros(self.nz)
                 global_chunk    = np.zeros(self.nz)
                 n_per_cpu       = int(self.nz/self.domain.dist.comm_cart.size)
-                this_chunk[ self.domain.dist.comm_cart.rank*(n_per_cpu):\
-                            (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)] = \
-                                    self.problem.parameters[key]['g'][0,:]
+                i_chunk_0 = self.domain.dist.comm_cart.rank*(n_per_cpu)
+                i_chunk_1 = (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)
+                this_chunk[i_chunk_0:i_chunk_1] = array
                 self.domain.dist.comm_cart.Allreduce(this_chunk, global_chunk, op=MPI.SUM)
                 if self.domain.dist.comm_cart.rank == 0:
-                    if key != 'chi_l' and key != 'nu_l' and key != 'del_chi_l' and key != 'del_nu_l':
-                        f[key] = global_chunk
-                    elif key == 'chi_l':
-                        f['chi'] = global_chunk
-                    elif key == 'nu_l':
-                        f['nu'] = global_chunk
-                    elif key == 'del_chi_l':
-                        f['del_chi'] = global_chunk
-                    elif key == 'del_nu_l':
-                        f['del_nu'] = global_chunk
-                        
+                    f[key] = global_chunk                        
             elif self.domain.dist.comm_cart.rank == 0:
                 f[key] = self.problem.parameters[key]
+                
         if self.domain.dist.comm_cart.rank == 0:
             f['dimensions']     = 2
             f['nx']             = self.nx
@@ -2079,6 +2077,7 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
             f['aspect_ratio']   = self.aspect_ratio
             f['atmosphere_name']= self.atmosphere_name
             f.close()
+            
         return self.analysis_tasks
 
 class FC_polytrope_3d(FC_equations_3d, Polytrope):
