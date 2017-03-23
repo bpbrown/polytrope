@@ -21,7 +21,7 @@ from docopt import docopt
 
 args = docopt(__doc__)
 
-data_dir = args['<case>'][0] #sys.argv[1]
+data_dir = args['<case>'][0]
 base_path = os.path.abspath(data_dir)+'/'
 
 logger.info("joining data from Dedalus run {:s}".format(data_dir))
