@@ -16,6 +16,10 @@ Options:
     --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
+    --run_time=<run_time>      Run time, in hours [default: 23.5]
+
+    
+    --fixed_flux               Fixed flux thermal BCs
 
     --rk222                    Use RK222 as timestepper
 
@@ -53,6 +57,8 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       superstep=False,
                       dense=False, nz_dense=64,
                       oz=False,
+                      fixed_flux=False,
+                      run_time=23.5,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -64,14 +70,15 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
+    mixed_temperature_flux=None
     if oz:
         constant_Prandtl=False
         stable_top=True
-        mixed_temperature_flux=True
+        if not fixed_flux:
+            mixed_temperature_flux=True
     else:
         constant_Prandtl=True
         stable_top=False
-        mixed_temperature_flux=None
         
     # Set domain
     if nx is None:
@@ -97,7 +104,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     
     atmosphere.set_IVP_problem(Rayleigh, Prandtl)
         
-    atmosphere.set_BC(mixed_temperature_flux=mixed_temperature_flux)
+    atmosphere.set_BC(mixed_temperature_flux=mixed_temperature_flux, fixed_flux=fixed_flux)
     problem = atmosphere.get_problem()
 
     #atmosphere.plot_atmosphere()
@@ -144,7 +151,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = np.inf
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.5*3600
+    solver.stop_wall_time = run_time*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
@@ -186,13 +193,16 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
             # update lists
             if solver.iteration % report_cadence == 0:
+                Re_avg = flow.grid_average('Re')
+                if not np.isfinite(Re_avg):
+                    solver.ok = False
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time)
                 log_string += 'dt: {:8.3e}'.format(dt)
                 if superstep:
                     dt_traditional = CFL_traditional.compute_dt()
                     log_string += ' (vs {:8.3e})'.format(dt_traditional)
                 log_string += ', '
-                log_string += 'Re: {:8.3e}/{:8.3e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                log_string += 'Re: {:8.3e}/{:8.3e}'.format(Re_avg, flow.max('Re'))
                 logger.info(log_string)
     except:
         logger.error('Exception raised, triggering end of main loop.')
@@ -286,7 +296,9 @@ if __name__ == "__main__":
                       data_dir=data_dir,
                       verbose=args['--verbose'],
                       oz=args['--oz'],
+                      fixed_flux=args['--fixed_flux'],
                       dense=args['--dense'],
                       nz_dense=int(args['--nz_dense']),
                       rk222=args['--rk222'],
-                      superstep=args['--superstep'])
+                      superstep=args['--superstep'],
+                      run_time=float(args['--run_time']))
