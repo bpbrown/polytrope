@@ -20,6 +20,7 @@ Options:
 
     --run_time=<run_time>                Run time, in hours [default: 23.5]
     --run_time_buoy=<run_time>           Run time, in buoyancy times
+    --run_time_iter=<run_time_iter>      Run time, number of iterations; if not set, n_iter=np.inf
 
     --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
                                                 (Default if no BCs specified)
@@ -61,11 +62,12 @@ except:
 
 def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                         nz=128, nx=None, ny=None, threeD=False, mesh=None,
-                        n_rho_cz=3, epsilon=1e-4, run_time=23.5, 
+                        n_rho_cz=3, epsilon=1e-4,
+                        run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
                         fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,
                         dynamic_diffusivities=False,
                         restart=None, start_new_files=False, 
-                        rk222=False, safety_factor=0.2, run_time_buoyancies=None, 
+                        rk222=False, safety_factor=0.2,
                         data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False,
                         split_diffusivities=False):
     import time
@@ -196,7 +198,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     else:
         solver.stop_sim_time    = 100*atmosphere.thermal_time
     
-    solver.stop_iteration   = np.inf
+    solver.stop_iteration   = run_time_iter
     solver.stop_wall_time   = run_time*3600
     report_cadence = 1
     output_time_cadence = out_cadence*atmosphere.buoyancy_time
@@ -233,9 +235,9 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     start_sim_time = solver.sim_time
 
     try:
-        start_time = time.time()
         logger.info('starting main loop')
         good_solution = True
+        first_step = True
         while solver.ok and good_solution:
             dt = CFL.compute_dt()
             # advance
@@ -257,9 +259,34 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                     log_string += 'Re: {:8.3e}/{:8.3e}'.format(Re_avg, flow.max('Re'))
                 logger.info(log_string)
                 
-                if not np.isfinite(Re_avg):
-                    good_solution = False
-                    logger.info("Terminating run.  Trapped on Reynolds = {}".format(Re_avg))
+            if not np.isfinite(Re_avg):
+                good_solution = False
+                logger.info("Terminating run.  Trapped on Reynolds = {}".format(Re_avg))
+                    
+            if first_step:
+                if verbose:
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    import matplotlib.pyplot as plt
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,1,1)
+                    ax.spy(solver.pencils[0].L, markersize=1, markeredgewidth=0.0)
+                    fig.savefig(data_dir+"sparsity_pattern.png", dpi=1200)
+
+                    import scipy.sparse.linalg as sla
+                    LU = sla.splu(solver.pencils[0].LHS.tocsc(), permc_spec='NATURAL')
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,2,1)
+                    ax.spy(LU.L.A, markersize=1, markeredgewidth=0.0)
+                    ax = fig.add_subplot(1,2,2)
+                    ax.spy(LU.U.A, markersize=1, markeredgewidth=0.0)
+                    fig.savefig(data_dir+"sparsity_pattern_LU.png", dpi=1200)
+
+                    logger.info("{} nonzero entries in LU".format(LU.nnz))
+                    logger.info("{} nonzero entries in LHS".format(solver.pencils[0].LHS.tocsc().nnz))
+                    logger.info("{} fill in factor".format(LU.nnz/solver.pencils[0].LHS.tocsc().nnz))
+                first_step=False
+                start_time = time.time()
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
@@ -269,7 +296,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         # Print statistics
         elapsed_time = end_time - start_time
         elapsed_sim_time = solver.sim_time
-        N_iterations = solver.iteration 
+        N_iterations = solver.iteration-1
         logger.info('main loop time: {:e}'.format(elapsed_time))
         logger.info('Iterations: {:d}'.format(N_iterations))
         logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
@@ -314,10 +341,10 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
             print('  startup time:', startup_time)
             print('main loop time:', main_loop_time)
             print('    total time:', total_time)
-            if N_iterations > 0:
-                print('    iterations:', solver.iteration)
-                print(' loop sec/iter:', main_loop_time/solver.iteration)
-                print('    average dt:', solver.sim_time / n_steps)
+            if n_steps > 0:
+                print('    iterations:', n_steps)
+                print(' loop sec/iter:', main_loop_time/n_steps)
+                print('    average dt:', solver.sim_time/n_steps)
                 print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
                 print('scaling:',
                     ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
@@ -331,6 +358,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
 if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
+    from numpy import inf as np_inf
     
     import sys
     # save data in directory named after script
@@ -410,7 +438,13 @@ if __name__ == "__main__":
     run_time_buoy = args['--run_time_buoy']
     if run_time_buoy != None:
         run_time_buoy = float(run_time_buoy)
-
+        
+    run_time_iter = args['--run_time_iter']
+    if run_time_iter != None:
+        run_time_iter = int(float(run_time_iter))
+    else:
+        run_time_iter = np_inf
+        
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       threeD=args['--3D'],
@@ -423,6 +457,7 @@ if __name__ == "__main__":
                       epsilon=float(args['--epsilon']),
                       run_time=float(args['--run_time']),
                       run_time_buoyancies=run_time_buoy,
+                      run_time_iter=run_time_iter,
                       fixed_T=args['--fixed_T'],
                       fixed_flux=args['--fixed_flux'],
                       mixed_flux_T=args['--mixed_flux_T'],
