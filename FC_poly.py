@@ -27,7 +27,8 @@ Options:
     --fixed_flux                         Fixed flux boundary conditions (top and bottom)
     --const_nu                           If flagged, use constant nu 
     --const_chi                          If flagged, use constant chi 
-
+    --dynamic_diffusivities              If flagged, use equations formulated in terms of dynamic diffusivities (μ,κ)
+    
     --restart=<restart_file>             Restart from checkpoint
     --start_new_files                    Start new files while checkpointing
 
@@ -58,12 +59,13 @@ except:
     logger.info('not importing checkpointing')
     do_checkpointing = False
 
-def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
-                        nz=128, nx=None, ny=None, threeD=False, mesh=None,\
-			n_rho_cz=3, epsilon=1e-4, run_time=23.5, \
-                        fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,\
-                        restart=None, start_new_files=False, \
-                        rk222=False, safety_factor=0.2, run_time_buoyancies=None, \
+def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
+                        nz=128, nx=None, ny=None, threeD=False, mesh=None,
+                        n_rho_cz=3, epsilon=1e-4, run_time=23.5, 
+                        fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,
+                        dynamic_diffusivities=False,
+                        restart=None, start_new_files=False, 
+                        rk222=False, safety_factor=0.2, run_time_buoyancies=None, 
                         data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False,
                         split_diffusivities=False):
     import time
@@ -85,16 +87,22 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     else:
-        atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+        if dynamic_diffusivities:
+            atmosphere = equations.FC_polytrope_2d_kappa(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+                                        epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                        fig_dir=data_dir)
+        else:
+            atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     if epsilon < 1e-4:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-14, split_diffusivities=split_diffusivities)
+        ncc_cutoff = 1e-14
     elif epsilon > 1e-1:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-6, split_diffusivities=split_diffusivities)
+        ncc_cutoff = 1e-6
     else:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-10, split_diffusivities=split_diffusivities)
-
+        ncc_cutoff = 1e-10
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
+    
     if fixed_flux:
         atmosphere.set_BC(fixed_flux=True, stress_free=True)
     elif mixed_flux_T:
@@ -338,6 +346,8 @@ if __name__ == "__main__":
     elif args['--fixed_flux']:
         data_dir += '_flux'
 
+    if args['--dynamic_diffusivities']:
+        data_dir += '_dynamic'
     if args['--verbose']:
         #Diffusivities
         if args['--const_nu']:
@@ -418,6 +428,7 @@ if __name__ == "__main__":
                       mixed_flux_T=args['--mixed_flux_T'],
                       const_mu=const_mu,
                       const_kappa=const_kappa,
+                      dynamic_diffusivities=args['--dynamic_diffusivities'],
                       restart=(args['--restart']),
                       start_new_files=start_new_files,
                       rk222=rk222,
