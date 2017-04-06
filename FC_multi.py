@@ -16,7 +16,10 @@ Options:
     --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
-    --run_time=<run_time>      Run time, in hours [default: 23.5]
+
+    --run_time=<run_time>                Run time, in hours [default: 23.5]
+    --run_time_buoy=<run_time_buoy>      Run time, in buoyancy times
+    --run_time_iter=<run_time_iter>      Run time, number of iterations; if not set, n_iter=np.inf
 
     
     --fixed_flux               Fixed flux thermal BCs
@@ -32,6 +35,7 @@ Options:
     --width=<width>            Width of erf transition between two polytropes
     
     --label=<label>            Additional label for run output directory
+    --no_coeffs                If flagged, coeffs will not be output
     --verbose                  Produce diagnostic plots
 """
 import logging
@@ -46,7 +50,8 @@ try:
 except:
     logger.info("No checkpointing available; disabling capability")
     do_checkpointing=False
-
+import numpy as np
+    
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
@@ -58,7 +63,8 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       dense=False, nz_dense=64,
                       oz=False,
                       fixed_flux=False,
-                      run_time=23.5,
+                      run_time=23.5, run_time_buoyancies=np.inf, run_time_iter=np.inf,
+                      no_coeffs=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -107,9 +113,6 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     atmosphere.set_BC(mixed_temperature_flux=mixed_temperature_flux, fixed_flux=fixed_flux)
     problem = atmosphere.get_problem()
 
-    #atmosphere.plot_atmosphere()
-    #atmosphere.plot_scaled_atmosphere()
-
         
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
@@ -148,9 +151,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     max_dt = atmosphere.buoyancy_time*0.25
 
     report_cadence = 1
-    output_time_cadence = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time = np.inf
-    solver.stop_iteration= np.inf
+    output_time_cadence   = 0.1*atmosphere.buoyancy_time
+    solver.stop_sim_time  = run_time_buoyancies
+    solver.stop_iteration = run_time_iter
     solver.stop_wall_time = run_time*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
@@ -184,7 +187,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     flow.add_property("Re_rms", name='Re')
 
     try:
-        start_time = time.time()
+        logger.info("starting main loop")
+        good_solution = True
+        first_step = True
         while solver.ok:
 
             dt = CFL.compute_dt()
@@ -194,8 +199,6 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             # update lists
             if solver.iteration % report_cadence == 0:
                 Re_avg = flow.grid_average('Re')
-                if not np.isfinite(Re_avg):
-                    solver.ok = False
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time)
                 log_string += 'dt: {:8.3e}'.format(dt)
                 if superstep:
@@ -204,6 +207,38 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                 log_string += ', '
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(Re_avg, flow.max('Re'))
                 logger.info(log_string)
+
+            if not np.isfinite(Re_avg):
+                good_solution = False
+                logger.info("Terminating run.  Trapped on Reynolds = {}".format(Re_avg))
+                
+            if first_step:
+                if verbose:
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    import matplotlib.pyplot as plt
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,1,1)
+                    ax.spy(solver.pencils[0].L, markersize=0.5, markeredgewidth=0.0)
+                    fig.savefig(data_dir+"sparsity_pattern.png", dpi=2400)
+                    #fig.savefig(data_dir+"sparsity_pattern.svg", format="svg")
+
+                    import scipy.sparse.linalg as sla
+                    LU = sla.splu(solver.pencils[0].LHS.tocsc(), permc_spec='NATURAL')
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,2,1)
+                    ax.spy(LU.L.A, markersize=1, markeredgewidth=0.0)
+                    ax = fig.add_subplot(1,2,2)
+                    ax.spy(LU.U.A, markersize=1, markeredgewidth=0.0)
+                    fig.savefig(data_dir+"sparsity_pattern_LU.png", dpi=1200)
+                    #fig.savefig(data_dir+"sparsity_pattern_LU.svg", format="svg")
+
+                    logger.info("{} nonzero entries in LU".format(LU.nnz))
+                    logger.info("{} nonzero entries in LHS".format(solver.pencils[0].LHS.tocsc().nnz))
+                    logger.info("{} fill in factor".format(LU.nnz/solver.pencils[0].LHS.tocsc().nnz))
+                first_step = False
+                start_time = time.time()
+
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
@@ -213,11 +248,12 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         # Print statistics
         elapsed_time = end_time - start_time
         elapsed_sim_time = solver.sim_time
-        N_iterations = solver.iteration 
+        N_iterations = solver.iteration - 1
         logger.info('main loop time: {:e}'.format(elapsed_time))
         logger.info('Iterations: {:d}'.format(N_iterations))
         logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
-        logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
+        if N_iterations > 0:
+            logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
         
         logger.info('beginning join operation')
         if do_checkpointing:
@@ -229,11 +265,6 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             post.merge_analysis(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
-
-            logger.info('main loop time: {:e}'.format(elapsed_time))
-            logger.info('Iterations: {:d}'.format(N_iterations))
-            logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
-            logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
             N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
 
@@ -246,12 +277,14 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             print('  startup time:', startup_time)
             print('main loop time:', main_loop_time)
             print('    total time:', total_time)
-            print('Iterations:', solver.iteration)
-            print('Average timestep:', solver.sim_time / n_steps)
-            print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
-            print('scaling:',
-                  ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
-                  ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
+            if n_steps > 0:
+                print('    iterations:', n_steps)
+                print(' loop sec/iter:', main_loop_time/n_steps)
+                print('    average dt:', solver.sim_time/n_steps)
+                print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
+                print('scaling:',
+                    ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
+                    ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
                                                                     main_loop_time, 
                                                                     main_loop_time/n_steps, 
                                                                     main_loop_time/n_steps/(nx*nz), 
@@ -265,6 +298,8 @@ if __name__ == "__main__":
     import sys
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
+    if args['--fixed_flux']:
+        data_dir += '_flux'
     if args['--oz']:
         data_dir += '_oz'
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
@@ -281,6 +316,18 @@ if __name__ == "__main__":
     nx =  args['--nx']
     if nx is not None:
         nx = int(nx)
+
+    run_time_buoy = args['--run_time_buoy']
+    if run_time_buoy != None:
+        run_time_buoy = float(run_time_buoy)
+    else:
+        run_time_buoy = np.inf
+        
+    run_time_iter = args['--run_time_iter']
+    if run_time_iter != None:
+        run_time_iter = int(float(run_time_iter))
+    else:
+        run_time_iter = np.inf
         
     FC_convection(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
@@ -295,10 +342,13 @@ if __name__ == "__main__":
                       restart=(args['--restart']),
                       data_dir=data_dir,
                       verbose=args['--verbose'],
+                      no_coeffs=args['--no_coeffs'],
                       oz=args['--oz'],
                       fixed_flux=args['--fixed_flux'],
                       dense=args['--dense'],
                       nz_dense=int(args['--nz_dense']),
                       rk222=args['--rk222'],
                       superstep=args['--superstep'],
-                      run_time=float(args['--run_time']))
+                      run_time=float(args['--run_time']),
+                      run_time_buoyancies=run_time_buoy,
+                      run_time_iter=run_time_iter)

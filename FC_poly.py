@@ -19,11 +19,10 @@ Options:
     --mesh=<mesh>                        Processor mesh if distributing 3D run in 2D 
 
     --run_time=<run_time>                Run time, in hours [default: 23.5]
-    --run_time_buoy=<run_time>           Run time, in buoyancy times
+    --run_time_buoy=<run_time_buoy>      Run time, in buoyancy times
     --run_time_iter=<run_time_iter>      Run time, number of iterations; if not set, n_iter=np.inf
 
-    --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
-                                                (Default if no BCs specified)
+    --fixed_T                            Fixed Temperature boundary conditions (top and bottom; default if no BCs specified)
     --mixed_flux_T                       Fixed T (top) and flux (bottom) BCs
     --fixed_flux                         Fixed flux boundary conditions (top and bottom)
     --const_nu                           If flagged, use constant nu 
@@ -285,7 +284,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                     logger.info("{} nonzero entries in LU".format(LU.nnz))
                     logger.info("{} nonzero entries in LHS".format(solver.pencils[0].LHS.tocsc().nnz))
                     logger.info("{} fill in factor".format(LU.nnz/solver.pencils[0].LHS.tocsc().nnz))
-                first_step=False
+                first_step = False
                 start_time = time.time()
     except:
         logger.error('Exception raised, triggering end of main loop.')
