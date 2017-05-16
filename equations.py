@@ -14,7 +14,6 @@ import analysis
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-from tools.EVP import EVP_homogeneous
 from dedalus import public as de
 
 class Atmosphere:
@@ -472,8 +471,9 @@ class MultiLayerAtmosphere(Atmosphere):
         if len(nz) != len(Lz):
             logger.error("nz {} has different number of elements from Lz {}".format(nz, Lz))
             raise
-                         
-        x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
+                
+        if self.dimensions > 1:
+            x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
 
         if len(nz)>1:
             logger.info("Setting compound basis in vertical (z) direction")
@@ -495,13 +495,17 @@ class MultiLayerAtmosphere(Atmosphere):
              
         logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
         logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
+      
+        if self.dimensions == 2:
+            self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
+        elif self.dimensions == 1:
+            self.domain = de.Domain([z_basis], grid_dtype=grid_dtype, comm=comm)
        
-        self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
-        
-        self.x = self.domain.grid(0)
-        self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
-        self.nx = self.domain.bases[0].coeff_size
-        self.delta_x = self.Lx/self.nx
+        if self.dimensions > 1:
+            self.x = self.domain.grid(0)
+            self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
+            self.nx = self.domain.bases[0].coeff_size
+            self.delta_x = self.Lx/self.nx
         
         self.z = self.domain.grid(-1) # need to access globally-sized z-basis
         self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
@@ -906,8 +910,12 @@ class Multitrope(MultiLayerAtmosphere):
 
         self.constant_Prandtl = constant_Prandtl
         self.constant_diffusivities = False
-        
-        logger.info("   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz))
+       
+        if self.dimensions == 2:
+            out_string = "   Lx = {:g}, Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lx, self.Lz, self.Lz_cz, self.Lz_rz)
+        elif self.dimensions == 1:
+            out_string = "   Lz = {:g} (Lz_cz = {:g}, Lz_rz = {:g})".format(self.Lz, self.Lz_cz, self.Lz_rz)
+        logger.info(out_string)
 
         self.z_cz =self.Lz_cz + 1
         self._set_atmosphere()
@@ -928,7 +936,8 @@ class Multitrope(MultiLayerAtmosphere):
         H_rho_top = (self.z_cz-self.Lz_cz)/self.m_cz
         H_rho_bottom = (self.z_cz)/self.m_cz
         logger.info("   H_rho = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top,H_rho_bottom))
-        logger.info("   H_rho/delta x = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top/self.delta_x,
+        if self.dimensions > 1:
+            logger.info("   H_rho/delta x = {:g} (top CZ)  {:g} (bottom CZ)".format(H_rho_top/self.delta_x,\
                                                                           H_rho_bottom/self.delta_x))
 
         self._set_timescales()
@@ -1118,7 +1127,8 @@ class Multitrope(MultiLayerAtmosphere):
         self.del_s0['g'] = 1/self.gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
 
 
-    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
+    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1, split_diffusivities=False):
+        #TODO: Implement split_diffusivities
         logger.info("problem parameters (multitrope):")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         Rayleigh_top = Rayleigh
@@ -1147,26 +1157,48 @@ class Multitrope(MultiLayerAtmosphere):
         self.kappa['g'] *= self.chi_top
         self.kappa.set_scales(self.domain.dealias, keep_data=True)
         self.rho0.set_scales(self.domain.dealias, keep_data=True)
-        self.chi.set_scales(self.domain.dealias, keep_data=True)
+        self.chi_l.set_scales(self.domain.dealias, keep_data=True)
         if self.rho0['g'].shape[-1] != 0:
-            self.chi['g'] = self.kappa['g']/self.rho0['g']
-            self.chi.differentiate('z', out=self.del_chi)
-            self.chi.set_scales(1, keep_data=True)
+            self.chi_l['g'] = self.kappa['g']/self.rho0['g']
+            self.chi_l.differentiate('z', out=self.del_chi_l)
+            self.chi_l.set_scales(1, keep_data=True)
         
         logger.info("setting nu")
         if self.constant_Prandtl:
             self.kappa.set_scales(self.domain.dealias, keep_data=True)
             self.rho0.set_scales(self.domain.dealias, keep_data=True)
-            self.nu.set_scales(self.domain.dealias, keep_data=True)
+            self.nu_l.set_scales(self.domain.dealias, keep_data=True)
             if self.rho0['g'].shape[-1] != 0:
-                self.nu['g'] = (self.nu_top/self.chi_top)*self.kappa['g']/self.rho0['g']
-                self.nu.differentiate('z', out=self.del_nu)
-                self.nu.set_scales(1, keep_data=True)
+                self.nu_l['g'] = (self.nu_top/self.chi_top)*self.kappa['g']/self.rho0['g']
+                self.nu_l.differentiate('z', out=self.del_nu_l)
+                self.nu_l.set_scales(1, keep_data=True)
         else:
-            self.nu['g'] = self.nu_top
-            self.nu.differentiate('z', out=self.del_nu)
+            self.nu_l['g'] = self.nu_top
+            self.nu_l.differentiate('z', out=self.del_nu)
 
         # rescale kappa to correct values based on Rayleigh number derived chi
+
+        self.nu_r['g'] = 0
+        self.chi_r['g'] = 0
+        self.chi_l.set_scales(1, keep_data=True)
+        self.nu_l.set_scales(1, keep_data=True)
+        self.chi_r.set_scales(1, keep_data=True)
+        self.nu_r.set_scales(1, keep_data=True)
+        self.nu.set_scales(1, keep_data=True)
+        self.chi.set_scales(1, keep_data=True)
+        self.nu['g'] = self.nu_l['g'] + self.nu_r['g']
+        self.chi['g'] = self.chi_l['g'] + self.chi_r['g']
+        
+        self.chi_l.differentiate('z', out=self.del_chi_l)
+        self.chi_l.set_scales(1, keep_data=True)
+        self.nu_l.differentiate('z', out=self.del_nu_l)
+        self.nu_l.set_scales(1, keep_data=True)
+        self.chi_r.differentiate('z', out=self.del_chi_r)
+        self.chi_r.set_scales(1, keep_data=True)
+        self.nu_r.differentiate('z', out=self.del_nu_r)
+        self.nu_r.set_scales(1, keep_data=True)
+
+
 
         self.top_thermal_time = 1/self.chi_top
         self.thermal_time = self.Lz_cz**2/self.chi_top
@@ -1190,14 +1222,17 @@ class Multitrope(MultiLayerAtmosphere):
 class Equations():
     def __init__(self, dimensions=2):
         self.dimensions=dimensions
+        self.problem_type = ''
         pass
     
     def set_IVP_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
+        self.problem_type = 'IVP'
         self.problem = de.IVP(self.domain, variables=self.variables, ncc_cutoff=ncc_cutoff)
         self.set_equations(*args, **kwargs)
 
     def set_eigenvalue_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
-        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff)
+        self.problem_type = 'EVP'
+        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff, tolerance=1)
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
@@ -1250,7 +1285,8 @@ class FC_equations(Equations):
         self.T1_z_right = 0
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
-        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
+        self.problem_type = 'EVP_2'
+        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='nu')
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
 
@@ -1336,11 +1372,17 @@ class FC_equations(Equations):
 
         self.dirichlet_set = []
 
+        if 'EVP' in self.problem_type:
+            l_flux_rhs_str = "0"
+            r_flux_rhs_str = "0"
+        else:
+            l_flux_rhs_str = " left((exp(-ln_rho1)-1+ln_rho1)*T0_z)"
+            r_flux_rhs_str = "right((exp(-ln_rho1)-1+ln_rho1)*T0_z)"
         # thermal boundary conditions
         if fixed_flux:
             logger.info("Thermal BC: fixed flux (full form)")
-            self.problem.add_bc( "left(T1_z + ln_rho1*T0_z) =  left((exp(-ln_rho1)-1+ln_rho1)*T0_z)")
-            self.problem.add_bc("right(T1_z + ln_rho1*T0_z) = right((exp(-ln_rho1)-1+ln_rho1)*T0_z)")
+            self.problem.add_bc( "left(T1_z + ln_rho1*T0_z) = {:s}".format(l_flux_rhs_str))
+            self.problem.add_bc("right(T1_z + ln_rho1*T0_z) = {:s}".format(r_flux_rhs_str))
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('ln_rho1')
         elif fixed_temperature:
@@ -1350,7 +1392,7 @@ class FC_equations(Equations):
             self.dirichlet_set.append('T1')
         elif mixed_flux_temperature:
             logger.info("Thermal BC: fixed flux/fixed temperature")
-            self.problem.add_bc("left(T1_z + ln_rho1*T0_z) =  left((exp(-ln_rho1)-1+ln_rho1)*T0_z)")
+            self.problem.add_bc("left(T1_z + ln_rho1*T0_z) =  {:s}".format(l_flux_rhs_str))
             self.problem.add_bc("right(T1)  = 0")
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('T1')
@@ -1359,7 +1401,7 @@ class FC_equations(Equations):
             logger.info("Thermal BC: fixed temperature/fixed flux")
             logger.info("warning; these are not fully correct fixed flux conditions yet")
             self.problem.add_bc("left(T1)    = 0")
-            self.problem.add_bc("right(T1_z + ln_rho1*T0_z) = right((exp(-ln_rho1)-1+ln_rho1)*T0_z)")
+            self.problem.add_bc("right(T1_z + ln_rho1*T0_z) = {:s}".format(r_flux_rhs_str))
             self.dirichlet_set.append('T1_z')
             self.dirichlet_set.append('T1')
             self.dirichlet_set.append('ln_rho1')
@@ -1431,7 +1473,7 @@ class FC_equations(Equations):
         self.check_atmosphere(T=T, rho=rho, **kwargs)
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
-        self.problem = EVP_homogeneous(self.domain, variables=self.variables, eigenvalue='nu')
+        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='nu')
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
@@ -1442,8 +1484,8 @@ class FC_equations(Equations):
         analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
 
-        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
-                                                             write_num=profiles[0], set_num=profiles[1],  **kwargs)
+        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
+#                                                             write_num=profiles[0], set_num=profiles[1],  **kwargs)
         analysis_profile.add_task("plane_avg(T1)", name="T1")
         analysis_profile.add_task("plane_avg(T_full)", name="T_full")
         analysis_profile.add_task("plane_avg(Ma_iso_rms)", name="Ma_iso")
@@ -1494,8 +1536,8 @@ class FC_equations(Equations):
         
         analysis_tasks['profile'] = analysis_profile
 
-        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
-                                                            write_num=scalar[0], set_num=scalar[1], **kwargs)
+        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
+                                                            #write_num=scalar[0], set_num=scalar[1], **kwargs)
         analysis_scalar.add_task("vol_avg(KE)", name="KE")
         analysis_scalar.add_task("vol_avg(PE)", name="PE")
         analysis_scalar.add_task("vol_avg(IE)", name="IE")
@@ -1538,8 +1580,12 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['Div_u'] = "Div(u, w_z)"
         self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + w*(f_z))"
         # analysis operators
-        self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
-        self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
+        if self.dimensions == 1:
+            self.problem.substitutions['plane_avg(A)'] = '(A)'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lz'
+        else:
+            self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
 
         self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
         self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
@@ -1591,7 +1637,7 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['Q_z'] = "(-T1_z)"
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
+        self.source =                 " Cv_inv*(chi*(T0_zz))" # - Qcool_z/rho_full)"
         if not easy_rho_energy:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
@@ -1734,7 +1780,7 @@ class FC_equations_rxn(FC_equations_2d):
         self.problem.substitutions['Q_z'] = "(-T1_z)"
         self.linear_thermal_diff    = " Cv_inv*(chi*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
+        self.source =                 " Cv_inv*(chi*(T0_zz))"# - Qcool_z/rho_full)"
         if not easy_rho_energy:
             self.linear_thermal_diff += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T1_z'
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
@@ -1903,7 +1949,7 @@ class FC_equations_3d(FC_equations):
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + dy(T1)*dy(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                 " Cv_inv*(chi*(T0_zz) - Qcool_z/rho_full)"
+        self.source =                 " Cv_inv*(chi*(T0_zz))"# - Qcool_z/rho_full)"
         if not easy_rho_energy:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
@@ -1986,7 +2032,7 @@ class FC_equations_3d(FC_equations):
         analysis_tasks['volume'] = analysis_volume
 
         return self.analysis_tasks
-            
+
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):
         super(FC_polytrope_2d, self).__init__(dimensions=dimensions) 
@@ -2098,9 +2144,9 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
 class FC_multitrope(FC_equations_2d, Multitrope):
-    def __init__(self, *args, **kwargs):
-        super(FC_multitrope, self).__init__() 
-        Multitrope.__init__(self, *args, **kwargs)
+    def __init__(self, dimensions=2, *args, **kwargs):
+        super(FC_multitrope, self).__init__(dimensions=dimensions) 
+        Multitrope.__init__(self, dimensions=dimensions, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
