@@ -190,7 +190,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         logger.info("starting main loop")
         good_solution = True
         first_step = True
-        while solver.ok:
+        while solver.ok and good_solution:
 
             dt = CFL.compute_dt()
             # advance

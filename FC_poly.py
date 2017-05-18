@@ -40,6 +40,7 @@ Options:
     --label=<label>                      Additional label for run output directory
     --out_cadence=<out_cadence>          The fraction of a buoyancy time to output data at [default: 0.1]
     --no_coeffs                          If flagged, coeffs will not be output
+    --no_join                            If flagged, skip join operation at end of run.
 
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
 """
@@ -63,12 +64,14 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                         nz=128, nx=None, ny=None, threeD=False, mesh=None,
                         n_rho_cz=3, epsilon=1e-4,
                         run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
-                        fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,
-                        dynamic_diffusivities=False,
-                        restart=None, start_new_files=False, 
+                        fixed_T=False, fixed_flux=False, mixed_flux_T=False,
+                        const_mu=True, const_kappa=True,
+                        dynamic_diffusivities=False, split_diffusivities=False,
+                        restart=None, start_new_files=False,
                         rk222=False, safety_factor=0.2,
-                        data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False,
-                        split_diffusivities=False):
+                        data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
+                        verbose=False):
+
     import time
     import equations
     import os
@@ -302,22 +305,23 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         if N_iterations > 0:
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
         
-        logger.info('beginning join operation')
-        if do_checkpointing:
-            try:
-                final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
-                final_checkpoint.set_checkpoint(solver, wall_dt=1, write_num=1, set_num=1)
-                solver.step(dt) #clean this up in the future...works for now.
-                post.merge_analysis(data_dir+'/final_checkpoint/')
-            except:
-                print('cannot save final checkpoint')
+        if not no_join:
+            logger.info('beginning join operation')
+            if do_checkpointing:
+                try:
+                    final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
+                    final_checkpoint.set_checkpoint(solver, wall_dt=1, write_num=1, set_num=1)
+                    solver.step(dt) #clean this up in the future...works for now.
+                    post.merge_analysis(data_dir+'/final_checkpoint/')
+                except:
+                    print('cannot save final checkpoint')
 
-            logger.info(data_dir+'/checkpoint/')
-            post.merge_analysis(data_dir+'/checkpoint/')
+                logger.info(data_dir+'/checkpoint/')
+                post.merge_analysis(data_dir+'/checkpoint/')
 
-        for task in analysis_tasks.keys():
-            logger.info(analysis_tasks[task].base_path)
-            post.merge_analysis(analysis_tasks[task].base_path)
+            for task in analysis_tasks.keys():
+                logger.info(analysis_tasks[task].base_path)
+                post.merge_analysis(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
 
@@ -470,5 +474,6 @@ if __name__ == "__main__":
                       out_cadence=float(args['--out_cadence']),
                       data_dir=data_dir,
                       no_coeffs=args['--no_coeffs'],
+                      no_join=args['--no_join'],
                       split_diffusivities=args['--split_diffusivities'],
                       verbose=args['--verbose'])
