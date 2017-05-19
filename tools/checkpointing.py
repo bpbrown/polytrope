@@ -34,7 +34,8 @@ class Checkpoint:
         # this should be set via some kind of global option
         self.set_re = re.compile("[\w]*_s([0-9]+)")
 
-    def set_checkpoint(self, solver, wall_dt=np.inf, sim_dt=np.inf, iter=np.inf, write_num=1, set_num=1,parallel=False):
+    def set_checkpoint(self, solver, wall_dt=np.inf, sim_dt=np.inf, iter=np.inf,
+                                     parallel=False, mode="append"):
         """
 
         Parameters
@@ -47,15 +48,18 @@ class Checkpoint:
             Simulation time cadence for evaluating tasks (default: infinite)
         iter : int, optional
             Iteration cadence for evaluating tasks (default: infinite)
+        mode : string, optional
+            If "overwrite", checkpoints will always write checkpoint file 1.  If
+            "append," new checkpoints will be created but old checkpoints will
+            not be erased
         """
 
         self.checkpoint = solver.evaluator.add_file_handler(self.checkpoint_dir,
                                                             wall_dt=wall_dt,
                                                             sim_dt=sim_dt,
                                                             iter=iter,max_writes=1,
-                                                            write_num=write_num,
-                                                            set_num=set_num,
-                                                            parallel=parallel)
+                                                            parallel=parallel,
+                                                            mode=mode)
         self.checkpoint.add_system(solver.state, layout = self.layout)
 
     def restart(self, checkpoint_file, solver, cp_record=-1):
@@ -77,33 +81,4 @@ class Checkpoint:
             
         write, dt = solver.load_state(checkpoint_file, cp_record)
 
-        return write, set_num, dt
-
-    def find_output_counts(self):
-
-        if self.excluded_dirs:
-            subdirs = [x for x in self.data_dir.iterdir() if x.is_dir() and (x.name != "checkpoint" and x.name not in self.excluded_dirs)]
-        else:
-            subdirs = [x for x in self.data_dir.iterdir() if x.is_dir() and x.name != "checkpoint"]
-
-        counts = {}
-        sets = {}
-
-        for d in subdirs:
-            c = []
-            s = []
-            files = d.glob("**/*p0*h5")
-            for f in files:
-                stem = f.stem
-                try:
-                    s.append(int(self.set_re.match(stem).group(1)))
-                except:
-                    raise FileNotFoundError("Output filename not as expected.")
-                with h5py.File(str(f),mode='r') as infile:
-                    c.append(infile['scales']['write_number'][-1])
-            c = np.array(c)
-            s = np.array(s)
-            counts[d.name] = c.max()
-            sets[d.name] = s.max()
-
-        return counts,sets
+        return dt

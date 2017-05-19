@@ -51,7 +51,7 @@ from dedalus.extras import flow_tools
 import numpy as np
 
 try:
-    from dedalus.extras.checkpointing import Checkpoint
+    from tools.checkpointing import Checkpoint
     do_checkpointing = True
     checkpoint_min   = 30
 except:
@@ -132,56 +132,24 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     if epsilon < 1e-5:
         max_dt = atmosphere.buoyancy_time*0.05
         dt     = max_dt
+    if restart is None:
+        mode = "overwrite"
+    else:
+        mode = "append"
 
-  
-    if restart is None or start_new_files or not do_checkpointing:
-        slices_count, slices_set        = 1,1
-        profiles_count, profiles_set    = 1,1
-        scalar_count, scalar_set        = 1,1
-        coeffs_count, coeffs_set        = 1,1
-        chk_write = chk_set = 1
     if do_checkpointing:
         logger.info('checkpointing in {}'.format(data_dir))
-
-        #Find all of the directories we don't want to checkpoint in
-        import glob
-        good_dirs = ['slices', 'profiles', 'scalar', 'coeffs', 'checkpoint']
-        dirs = glob.glob('{:s}/*/'.format(data_dir))
-        found_dirs = [s_dir.split(data_dir)[-1].split('/')[0] for s_dir in dirs]
-        excluded_dirs = []
-        for found_dir in found_dirs:
-            if found_dir not in good_dirs: excluded_dirs.append(found_dir)
-
-        #Checkpoint
-        try:
-            checkpoint = Checkpoint(data_dir, excluded_dirs=excluded_dirs)
-        except:
-            checkpoint = Checkpoint(data_dir)
+        checkpoint = Checkpoint(data_dir)
 
         if restart is None:
             atmosphere.set_IC(solver)
         else:
             logger.info("restarting from {}".format(restart))
-            chk_write, chk_set, dt = checkpoint.restart(restart, solver)
-            if not start_new_files:
-                counts, sets = checkpoint.find_output_counts()
-                #All of the +1s make it so that we make a new file rather than overwriting the previous.
-                slices_count, slices_set            = counts['slices']+1,sets['slices']+1
-                profiles_count, profiles_set      = counts['profiles']+1,sets['profiles']+1
-                scalar_count, scalar_set            = counts['scalar']+1,sets['scalar']+1
-                try: #Allows for runs without coeffs
-                    coeffs_count, coeffs_set = counts['coeffs']+1, sets['coeffs']+1
-                except:
-                    coeffs_count, coeffs_set = 1, 1
-                chk_write += 1
-                chk_set   += 1
-            else:
-                chk_write = chk_set = 1
-        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, write_num=chk_write, set_num=chk_set)
+            dt = checkpoint.restart(restart, solver)
+
+        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
     else:
         atmosphere.set_IC(solver)
-
-
     
     if run_time_buoyancies != None:
         solver.stop_sim_time    = solver.sim_time + run_time_buoyancies*atmosphere.buoyancy_time
@@ -202,8 +170,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     else:
         coeffs_output=True
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
-                                slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set],\
-                                coeffs=[coeffs_count, coeffs_set])
+                                mode=mode)
     
     cfl_cadence = 1
     cfl_threshold=0.1
@@ -267,7 +234,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
         if do_checkpointing:
             try:
                 final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
-                final_checkpoint.set_checkpoint(solver, wall_dt=1, write_num=1, set_num=1)
+                final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
                 solver.step(dt) #clean this up in the future...works for now.
                 post.merge_analysis(data_dir+'/final_checkpoint/')
             except:

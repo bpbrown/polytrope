@@ -37,7 +37,8 @@ import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
 try:
-    from dedalus.extras.checkpointing import Checkpoint
+    from tools.checkpointing import Checkpoint
+    checkpoint_min = 30
     do_checkpointing=True
 except:
     logger.info("No checkpointing available; disabling capability")
@@ -126,15 +127,23 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     # initial conditions
     if restart is None:
-        atmosphere.set_IC(solver)
+        mode = "overwrite"
     else:
-        if do_checkpointing:
-            logger.info("restarting from {}".format(restart))
-            checkpoint.restart(restart, solver)
-        else:
-            logger.error("No checkpointing capability in this branch of Dedalus.  Aborting.")
-            raise
+        mode = "append"
+    if do_checkpointing:
+        logger.info("checkpointing in {}".format(data_dir))
+        checkpoint = Checkpoint(data_dir)
 
+        if restart is None:
+            atmosphere.set_IC(solver)
+        else:
+            logger.info("restarting from {}".format(restart))
+            dt = checkpoint.restart(restart, solver)
+        
+        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
+    else:
+        atmosphere.set_IC(solver)
+    
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
     
     max_dt = atmosphere.min_BV_time 
@@ -148,7 +157,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, mode=mode)
 
     
     cfl_cadence = 1
@@ -207,10 +216,20 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         logger.info('main loop time: {:e}'.format(elapsed_time))
         logger.info('Iterations: {:d}'.format(N_iterations))
         logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
-        logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
+        if N_iterations > 0:
+            logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
+
         
         logger.info('beginning join operation')
         if do_checkpointing:
+            try:
+                final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
+                final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
+                solver.step(dt) #clean this up in the future...works for now.
+                post.merge_analysis(data_dir+'/final_checkpoint/')
+            except:
+                print('cannot save final checkpoint')
+
             logger.info(data_dir+'/checkpoint/')
             post.merge_analysis(data_dir+'/checkpoint/')
 
@@ -223,7 +242,8 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             logger.info('main loop time: {:e}'.format(elapsed_time))
             logger.info('Iterations: {:d}'.format(N_iterations))
             logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
-            logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
+            if N_iterations > 0:
+                logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
  
             N_TOTAL_CPU = atmosphere.domain.distributor.comm_cart.size
 
@@ -236,12 +256,13 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             print('  startup time:', startup_time)
             print('main loop time:', main_loop_time)
             print('    total time:', total_time)
-            print('Iterations:', solver.iteration)
-            print('Average timestep:', solver.sim_time / n_steps)
-            print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
-            print('scaling:',
-                  ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
-                  ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
+            if N_iterations > 0:
+                print('Iterations:', solver.iteration)
+                print('Average timestep:', solver.sim_time / n_steps)
+                print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
+                print('scaling:',
+                      ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
+                      ' {:8.3g} {:8.3g} {:8.3g} {:8.3g} {:8.3g}'.format(startup_time,
                                                                     main_loop_time, 
                                                                     main_loop_time/n_steps, 
                                                                     main_loop_time/n_steps/(nx*nz), 
