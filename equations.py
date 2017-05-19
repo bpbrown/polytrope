@@ -1117,8 +1117,8 @@ class Multitrope(MultiLayerAtmosphere):
         self.del_ln_rho0.set_scales(1, keep_data=True)        
         self.del_s0['g'] = 1/self.gamma*self.del_ln_P0['g'] - self.del_ln_rho0['g']
 
-
-    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1):
+    def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1, split_diffusivities=False):
+        #TODO: Implement split_diffusivities
         logger.info("problem parameters (multitrope):")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         Rayleigh_top = Rayleigh
@@ -1147,26 +1147,48 @@ class Multitrope(MultiLayerAtmosphere):
         self.kappa['g'] *= self.chi_top
         self.kappa.set_scales(self.domain.dealias, keep_data=True)
         self.rho0.set_scales(self.domain.dealias, keep_data=True)
-        self.chi.set_scales(self.domain.dealias, keep_data=True)
+        self.chi_l.set_scales(self.domain.dealias, keep_data=True)
         if self.rho0['g'].shape[-1] != 0:
-            self.chi['g'] = self.kappa['g']/self.rho0['g']
-            self.chi.differentiate('z', out=self.del_chi)
-            self.chi.set_scales(1, keep_data=True)
+            self.chi_l['g'] = self.kappa['g']/self.rho0['g']
+            self.chi_l.differentiate('z', out=self.del_chi_l)
+            self.chi_l.set_scales(1, keep_data=True)
         
         logger.info("setting nu")
         if self.constant_Prandtl:
             self.kappa.set_scales(self.domain.dealias, keep_data=True)
             self.rho0.set_scales(self.domain.dealias, keep_data=True)
-            self.nu.set_scales(self.domain.dealias, keep_data=True)
+            self.nu_l.set_scales(self.domain.dealias, keep_data=True)
             if self.rho0['g'].shape[-1] != 0:
-                self.nu['g'] = (self.nu_top/self.chi_top)*self.kappa['g']/self.rho0['g']
-                self.nu.differentiate('z', out=self.del_nu)
-                self.nu.set_scales(1, keep_data=True)
+                self.nu_l['g'] = (self.nu_top/self.chi_top)*self.kappa['g']/self.rho0['g']
+                self.nu_l.differentiate('z', out=self.del_nu_l)
+                self.nu_l.set_scales(1, keep_data=True)
         else:
-            self.nu['g'] = self.nu_top
-            self.nu.differentiate('z', out=self.del_nu)
+            self.nu_l['g'] = self.nu_top
+            self.nu_l.differentiate('z', out=self.del_nu)
 
         # rescale kappa to correct values based on Rayleigh number derived chi
+
+        self.nu_r['g'] = 0
+        self.chi_r['g'] = 0
+        self.chi_l.set_scales(1, keep_data=True)
+        self.nu_l.set_scales(1, keep_data=True)
+        self.chi_r.set_scales(1, keep_data=True)
+        self.nu_r.set_scales(1, keep_data=True)
+        self.nu.set_scales(1, keep_data=True)
+        self.chi.set_scales(1, keep_data=True)
+        self.nu['g'] = self.nu_l['g'] + self.nu_r['g']
+        self.chi['g'] = self.chi_l['g'] + self.chi_r['g']
+        
+        self.chi_l.differentiate('z', out=self.del_chi_l)
+        self.chi_l.set_scales(1, keep_data=True)
+        self.nu_l.differentiate('z', out=self.del_nu_l)
+        self.nu_l.set_scales(1, keep_data=True)
+        self.chi_r.differentiate('z', out=self.del_chi_r)
+        self.chi_r.set_scales(1, keep_data=True)
+        self.nu_r.differentiate('z', out=self.del_nu_r)
+        self.nu_r.set_scales(1, keep_data=True)
+
+
 
         self.top_thermal_time = 1/self.chi_top
         self.thermal_time = self.Lz_cz**2/self.chi_top
@@ -1174,7 +1196,6 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("   nu_top = {:g}, chi_top = {:g}".format(self.nu_top, self.chi_top))            
         logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
                                                                           self.top_thermal_time))
-
     def get_flux(self, rho, T):
         rho.set_scales(1,keep_data=True)
         T_z = self._new_ncc()

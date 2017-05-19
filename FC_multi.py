@@ -17,6 +17,8 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
+    --run_time=<run_time>      Run time, in hours [default: 23.5]
+
     --rk222                    Use RK222 as timestepper
 
     --superstep                Superstep equations by using average rather than actual vertical grid spacing
@@ -50,6 +52,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       nx = None,
                       width=None,
                       single_chebyshev=False,
+                      run_time=23.5,
                       rk222=False,
                       superstep=False,
                       dense=False, nz_dense=64,
@@ -121,10 +124,6 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     # Build solver
     solver = problem.build_solver(ts)
 
-    if do_checkpointing:
-        checkpoint = Checkpoint(data_dir)
-        checkpoint.set_checkpoint(solver, wall_dt=1800)
-
     # initial conditions
     if restart is None:
         mode = "overwrite"
@@ -147,17 +146,19 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
     
     max_dt = atmosphere.min_BV_time 
-    max_dt = atmosphere.buoyancy_time*0.25
+    max_dt = atmosphere.buoyancy_time*0.1
 
     report_cadence = 1
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = np.inf
     solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.5*3600
+    solver.stop_wall_time = run_time*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, mode=mode)
+    solver.domain.dist.comm_cart.Barrier()
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, 
+                                    sim_dt=output_time_cadence, mode=mode)
 
     
     cfl_cadence = 1
@@ -303,6 +304,7 @@ if __name__ == "__main__":
                       single_chebyshev=args['--single_chebyshev'],
                       width=width,
                       nx=nx,
+                      run_time=float(args['--run_time']),
                       restart=(args['--restart']),
                       data_dir=data_dir,
                       verbose=args['--verbose'],

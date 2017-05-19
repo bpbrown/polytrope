@@ -132,6 +132,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     if epsilon < 1e-5:
         max_dt = atmosphere.buoyancy_time*0.05
         dt     = max_dt
+
     if restart is None:
         mode = "overwrite"
     else:
