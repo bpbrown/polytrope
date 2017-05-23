@@ -703,8 +703,8 @@ class Polytrope(Atmosphere):
         self.Rayleigh, self.Prandtl = Rayleigh, Prandtl
 
         # set nu and chi at top based on Rayleigh number
-        nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
-        chi_top = nu_top/Prandtl
+        self.nu_top = nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
+        self.chi_top = chi_top = nu_top/Prandtl
 
         if self.constant_diffusivities:
             # take constant nu, chi
@@ -1875,7 +1875,9 @@ class FC_equations_3d(FC_equations):
            
         super(FC_equations_3d, self)._set_subs(**kwargs)
                 
-    def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
+    def set_equations(self, Rayleigh, Prandtl,
+                      Taylor=None, theta=0,
+                      kx = 0, EVP_2 = False, 
                       easy_rho_momentum=False, easy_rho_energy=False, split_diffusivities=False):
 
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, split_diffusivities=split_diffusivities)
@@ -1887,7 +1889,24 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters.pop('chi_l')
  
         self._set_subs(split_diffusivities=split_diffusivities)
-        
+    
+        if Taylor:
+            self.rotating = True
+            self.problem.parameters['θ'] = theta
+            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
+            logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
+            self.problem.substitutions['Ωx'] = '0'
+            self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
+            self.problem.substitutions['Ωz'] = 'Ω*cos(θ)'
+            self.problem.substitutions['Coriolis_x'] = '(2*Ωy*w - 2*Ωz*v)'
+            self.problem.substitutions['Coriolis_y'] = '(2*Ωz*u - 2*Ωx*w)'
+            self.problem.substitutions['Coriolis_z'] = '(2*Ωx*v - 2*Ωy*u)'
+            self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Ω))'
+        else:
+            self.problem.substitutions['Coriolis_x'] = '0'
+            self.problem.substitutions['Coriolis_y'] = '0'
+            self.problem.substitutions['Coriolis_z'] = '0'
+
         self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(v), dx(w_z)))"
         self.viscous_term_v_l = " nu_l*(Lap(v, v_z) + 1/3*Div(dy(u), dy(v), dy(w_z)))"
         self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, v_z, dz(w_z)))"
@@ -1952,15 +1971,15 @@ class FC_equations_3d(FC_equations):
                                    "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
         logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + Coriolis_z + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
                                    "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + Coriolis_x + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
                                    "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
 
         logger.debug("Setting y-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(v) + dy(T1) + T0*dy(ln_rho1)                  - L_visc_v) = "
+        self.problem.add_equation(("(scale_momentum)*( dt(v) + Coriolis_y + dy(T1) + T0*dy(ln_rho1)                  - L_visc_v) = "
                                    "(scale_momentum)*(-T1*dy(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v)"))
 
         logger.debug("Setting energy equation")
@@ -2007,6 +2026,13 @@ class FC_equations_3d(FC_equations):
         analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
         analysis_tasks['volume'] = analysis_volume
 
+        if self.rotating:
+            analysis_scalar = self.analysis_tasks['scalar']
+            analysis_scalar.add_task("vol_avg(Rossby)", name="Rossby")
+
+            analysis_profile = self.analysis_tasks['profile']
+            analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
+        
         return self.analysis_tasks
             
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
