@@ -11,6 +11,12 @@ Options:
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3]
     --epsilon=<epsilon>                  The level of superadiabaticity of our polytrope background [default: 1e-4]
     --aspect=<aspect_ratio>              Physical aspect ratio of the atmosphere [default: 4]
+
+                                         Rotation keywords
+    --rotating                           Solve f-plane equations
+    --Co=<Co>                            Convective Rossby number
+    --Taylor=<Taylor>                    Taylor number [default: 1e4]
+    --theta=<theta>                      Angle between z and rotation vector omega [default: 0]
     
     --nz=<nz>                            vertical z (chebyshev) resolution [default: 128]
     --nx=<nx>                            Horizontal x (Fourier) resolution; if not set, nx=4*nz
@@ -59,6 +65,7 @@ except:
     do_checkpointing = False
 
 def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
+                   Taylor=None, theta=0,
                         nz=128, nx=None, ny=None, threeD=False, mesh=None,\
 			n_rho_cz=3, epsilon=1e-4, run_time=23.5, \
                         fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,\
@@ -89,11 +96,11 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     if epsilon < 1e-4:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-14, split_diffusivities=split_diffusivities)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=1e-14, split_diffusivities=split_diffusivities)
     elif epsilon > 1e-1:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-6, split_diffusivities=split_diffusivities)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=1e-6, split_diffusivities=split_diffusivities)
     else:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=1e-10, split_diffusivities=split_diffusivities)
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=1e-10, split_diffusivities=split_diffusivities)
 
     if fixed_flux:
         atmosphere.set_BC(fixed_flux=True, stress_free=True)
@@ -350,7 +357,20 @@ if __name__ == "__main__":
         data_dir +='_2D'
 
     #Base atmosphere
-    data_dir += "_nrhocz{}_Ra{}_Pr{}_eps{}_a{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'], args['--epsilon'], args['--aspect'])
+    data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
+    if args['--rotating']:
+        if args['--Co']:
+            Co = float(args['--Co'])
+            Taylor = float(args['--Rayleigh'])/float(args['--Prandtl'])/Co**2
+            data_dir += "_Co{}".format(args['--Co'])
+        else:
+            Taylor = float(args['--Taylor'])
+            Co = np.sqrt(float(args['--Rayleigh'])/float(args['--Prandtl'])/Taylor)
+            data_dir += "_Ta{}".format(args['--Taylor'])
+    else:
+        Taylor = None
+    data_dir += "_eps{}_a{}".format(args['--epsilon'], args['--aspect'])
+    
     if args['--label'] == None:
         data_dir += '/'
     else:
@@ -398,6 +418,8 @@ if __name__ == "__main__":
 
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
+                      Taylor=Taylor,
+                      theta=float(args['--theta']),
                       threeD=args['--3D'],
                       mesh=mesh,
                       nx = nx,
