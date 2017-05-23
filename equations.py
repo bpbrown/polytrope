@@ -1872,7 +1872,7 @@ class FC_equations_3d(FC_equations):
         if Taylor:
             self.rotating = True
             self.problem.parameters['θ'] = theta
-            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4*))
+            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
             logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
             self.problem.substitutions['Ωx'] = '0'
             self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
