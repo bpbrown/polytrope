@@ -364,7 +364,7 @@ if __name__ == "__main__":
             Taylor = float(args['--Rayleigh'])/float(args['--Prandtl'])/Co**2
             data_dir += "_Co{}".format(args['--Co'])
         else:
-            Taylor = float(args['--Rayleigh'])
+            Taylor = float(args['--Taylor'])
             Co = np.sqrt(float(args['--Rayleigh'])/float(args['--Prandtl'])/Taylor)
             data_dir += "_Ta{}".format(args['--Taylor'])
     else:

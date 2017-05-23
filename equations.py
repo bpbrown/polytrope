@@ -1870,8 +1870,9 @@ class FC_equations_3d(FC_equations):
         self._set_subs(split_diffusivities=split_diffusivities)
     
         if Taylor:
+            self.rotating = True
             self.problem.parameters['θ'] = theta
-            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor/4/self.Lz**4*self.nu_top**2)
+            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4*))
             logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
             self.problem.substitutions['Ωx'] = '0'
             self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
@@ -1884,7 +1885,6 @@ class FC_equations_3d(FC_equations):
             self.problem.substitutions['Coriolis_x'] = '0'
             self.problem.substitutions['Coriolis_y'] = '0'
             self.problem.substitutions['Coriolis_z'] = '0'
-            self.problem.substitutions['Rossby'] = '0'
 
         self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(v), dx(w_z)))"
         self.viscous_term_v_l = " nu_l*(Lap(v, v_z) + 1/3*Div(dy(u), dy(v), dy(w_z)))"
@@ -2004,11 +2004,12 @@ class FC_equations_3d(FC_equations):
         analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
         analysis_tasks['volume'] = analysis_volume
 
-        analysis_scalar = self.analysis_tasks['scalar']
-        analysis_scalar.add_task("vol_avg(Rossby)", name="Rossby")
+        if self.rotating:
+            analysis_scalar = self.analysis_tasks['scalar']
+            analysis_scalar.add_task("vol_avg(Rossby)", name="Rossby")
 
-        analysis_profile = self.analysis_tasks['profile']
-        analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
+            analysis_profile = self.analysis_tasks['profile']
+            analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
         
         return self.analysis_tasks
             
