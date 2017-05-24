@@ -50,7 +50,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
-    import equations
+    from stratified_dynamics import multitropes
     import os
     
     initial_time = time.time()
@@ -74,7 +74,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
         nz = nz_rz+nz_cz
         nz_list = [nz_rz, nz_cz]
 
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+    atmosphere = multitropes.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width,
                                          constant_Prandtl=constant_Prandtl,

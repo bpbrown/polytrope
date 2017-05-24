@@ -5,8 +5,14 @@ from mpi4py import MPI
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-from equations import *
-from atmospheres import *
+try:
+    from equations import *
+    from atmospheres import *
+except:
+    from sys import path
+    path.insert(0, './stratified_dynamics')
+    from equations import *
+    from atmospheres import *
 
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):

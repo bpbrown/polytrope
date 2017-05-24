@@ -40,7 +40,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5,
                       restart=None, nz=128, nx=None, data_dir='./'):
     import numpy as np
     import time
-    import equations
+    from stratified_dynamics import polytropes
     import os
     
     initial_time = time.time()
@@ -49,7 +49,7 @@ def FC_constant_kappa(Rayleigh=1e6, Prandtl=1, n_rho_cz=3.5,
 
     nx = 2
     
-    atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
+    atmosphere = polytropes.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
     atmosphere.set_IVP_problem(Rayleigh, Prandtl)
     
     if fixed_T:

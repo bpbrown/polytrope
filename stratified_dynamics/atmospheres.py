@@ -9,7 +9,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from ..tools import analysis
+try:
+    from tools import analysis
+except:
+    from sys import path
+    path.insert(0, './tools')
+    from ..tools import analysis
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])

@@ -22,7 +22,7 @@ import numpy as np
 import time
 import os
 import sys
-import equations
+from stratified_dynamics import polytropes
 
 import logging
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ Prandtl = 1
 
 n_rho_cz=3
 
-atmosphere = equations.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
+atmosphere = polytropes.FC_polytrope(nx=nx, nz=nz, constant_kappa=True, n_rho_cz=n_rho_cz)
 atmosphere.set_IVP_problem(Rayleigh, Prandtl)
 
 atmosphere.set_BC()

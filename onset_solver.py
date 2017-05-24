@@ -17,7 +17,7 @@ from scipy import interpolate
 
 
 from tools.eigentools.eigentools import Eigenproblem, CriticalFinder
-import equations
+from stratified_dynamics import polytropes, multitropes
 
 
 CW = MPI.COMM_WORLD
@@ -388,11 +388,11 @@ class OnsetSolver:
         #Initialize atmosphere
         if self._eqn_set == 0:
             if self._atmosphere == 0:
-                self.atmosphere = equations.FC_polytrope_2d(
+                self.atmosphere = polytropes.FC_polytrope_2d(
                                    dimensions=1, comm=MPI.COMM_SELF, 
                                    grid_dtype=np.complex128, **self.atmo_kwargs)
             elif self._atmosphere == 1:
-                self.atmosphere = equations.FC_multitrope(
+                self.atmosphere = multitropes.FC_multitrope(
                                    dimensions=1, comm=MPI.COMM_SELF, 
                                    grid_dtype=np.complex128, **self.atmo_kwargs)
         k = kx*2*np.pi/self.atmosphere.Lz
