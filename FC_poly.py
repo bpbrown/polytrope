@@ -25,15 +25,16 @@ Options:
     --mesh=<mesh>                        Processor mesh if distributing 3D run in 2D 
 
     --run_time=<run_time>                Run time, in hours [default: 23.5]
-    --run_time_buoy=<run_time>           Run time, in buoyancy times
+    --run_time_buoy=<run_time_buoy>      Run time, in buoyancy times
+    --run_time_iter=<run_time_iter>      Run time, number of iterations; if not set, n_iter=np.inf
 
-    --fixed_T                            Fixed Temperature boundary conditions (top and bottom)
-                                                (Default if no BCs specified)
+    --fixed_T                            Fixed Temperature boundary conditions (top and bottom; default if no BCs specified)
     --mixed_flux_T                       Fixed T (top) and flux (bottom) BCs
     --fixed_flux                         Fixed flux boundary conditions (top and bottom)
     --const_nu                           If flagged, use constant nu 
     --const_chi                          If flagged, use constant chi 
-
+    --dynamic_diffusivities              If flagged, use equations formulated in terms of dynamic diffusivities (μ,κ)
+    
     --restart=<restart_file>             Restart from checkpoint
     --start_new_files                    Start new files while checkpointing
 
@@ -45,6 +46,7 @@ Options:
     --label=<label>                      Additional label for run output directory
     --out_cadence=<out_cadence>          The fraction of a buoyancy time to output data at [default: 0.1]
     --no_coeffs                          If flagged, coeffs will not be output
+    --no_join                            If flagged, skip join operation at end of run.
 
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
 """
@@ -57,22 +59,26 @@ from dedalus.extras import flow_tools
 import numpy as np
 
 try:
-    from dedalus.extras.checkpointing import Checkpoint
+    from tools.checkpointing import Checkpoint
     do_checkpointing = True
     checkpoint_min   = 30
 except:
     logger.info('not importing checkpointing')
     do_checkpointing = False
 
-def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
+
+def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                    Taylor=None, theta=0,
-                        nz=128, nx=None, ny=None, threeD=False, mesh=None,\
-			n_rho_cz=3, epsilon=1e-4, run_time=23.5, \
-                        fixed_T=False, fixed_flux=False, mixed_flux_T=False, const_mu=True, const_kappa=True,\
-                        restart=None, start_new_files=False, \
-                        rk222=False, safety_factor=0.2, run_time_buoyancies=None, \
-                        data_dir='./', out_cadence=0.1, no_coeffs=False, verbose=False,
-                        split_diffusivities=False):
+                        nz=128, nx=None, ny=None, threeD=False, mesh=None,
+                        n_rho_cz=3, epsilon=1e-4,
+                        run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
+                        fixed_T=False, fixed_flux=False, mixed_flux_T=False,
+                        const_mu=True, const_kappa=True,
+                        dynamic_diffusivities=False, split_diffusivities=False,
+                        restart=None, start_new_files=False,
+                        rk222=False, safety_factor=0.2,
+                        data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
+                        verbose=False):
     import time
     import equations
     import os
@@ -92,16 +98,25 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     else:
-        atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+        if dynamic_diffusivities:
+            atmosphere = equations.FC_polytrope_2d_kappa(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+                                        epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                        fig_dir=data_dir)
+        else:
+            atmosphere = equations.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     if epsilon < 1e-4:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=1e-14, split_diffusivities=split_diffusivities)
+        ncc_cutoff = 1e-14
     elif epsilon > 1e-1:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=1e-6, split_diffusivities=split_diffusivities)
+        ncc_cutoff = 1e-6
     else:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=1e-10, split_diffusivities=split_diffusivities)
-
+        ncc_cutoff = 1e-10
+    if threeD:
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
+    else:
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
+    
     if fixed_flux:
         atmosphere.set_BC(fixed_flux=True, stress_free=True)
     elif mixed_flux_T:
@@ -140,62 +155,31 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
         max_dt = atmosphere.buoyancy_time*0.05
         dt     = max_dt
 
-  
-    if restart is None or start_new_files or not do_checkpointing:
-        slices_count, slices_set        = 1,1
-        profiles_count, profiles_set    = 1,1
-        scalar_count, scalar_set        = 1,1
-        coeffs_count, coeffs_set        = 1,1
-        chk_write = chk_set = 1
+    if restart is None:
+        mode = "overwrite"
+    else:
+        mode = "append"
+
     if do_checkpointing:
         logger.info('checkpointing in {}'.format(data_dir))
-
-        #Find all of the directories we don't want to checkpoint in
-        import glob
-        good_dirs = ['slices', 'profiles', 'scalar', 'coeffs', 'checkpoint']
-        dirs = glob.glob('{:s}/*/'.format(data_dir))
-        found_dirs = [s_dir.split(data_dir)[-1].split('/')[0] for s_dir in dirs]
-        excluded_dirs = []
-        for found_dir in found_dirs:
-            if found_dir not in good_dirs: excluded_dirs.append(found_dir)
-
-        #Checkpoint
-        try:
-            checkpoint = Checkpoint(data_dir, excluded_dirs=excluded_dirs)
-        except:
-            checkpoint = Checkpoint(data_dir)
+        checkpoint = Checkpoint(data_dir)
 
         if restart is None:
             atmosphere.set_IC(solver)
         else:
             logger.info("restarting from {}".format(restart))
-            chk_write, chk_set, dt = checkpoint.restart(restart, solver)
-            if not start_new_files:
-                counts, sets = checkpoint.find_output_counts()
-                #All of the +1s make it so that we make a new file rather than overwriting the previous.
-                slices_count, slices_set            = counts['slices']+1,sets['slices']+1
-                profiles_count, profiles_set      = counts['profiles']+1,sets['profiles']+1
-                scalar_count, scalar_set            = counts['scalar']+1,sets['scalar']+1
-                try: #Allows for runs without coeffs
-                    coeffs_count, coeffs_set = counts['coeffs']+1, sets['coeffs']+1
-                except:
-                    coeffs_count, coeffs_set = 1, 1
-                chk_write += 1
-                chk_set   += 1
-            else:
-                chk_write = chk_set = 1
-        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, write_num=chk_write, set_num=chk_set)
+            dt = checkpoint.restart(restart, solver)
+
+        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
     else:
         atmosphere.set_IC(solver)
-
-
     
     if run_time_buoyancies != None:
         solver.stop_sim_time    = solver.sim_time + run_time_buoyancies*atmosphere.buoyancy_time
     else:
         solver.stop_sim_time    = 100*atmosphere.thermal_time
     
-    solver.stop_iteration   = np.inf
+    solver.stop_iteration   = solver.iteration + run_time_iter
     solver.stop_wall_time   = run_time*3600
     report_cadence = 1
     output_time_cadence = out_cadence*atmosphere.buoyancy_time
@@ -209,8 +193,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
     else:
         coeffs_output=True
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
-                                slices=[slices_count, slices_set], profiles=[profiles_count, profiles_set], scalar=[scalar_count, scalar_set],\
-                                coeffs=[coeffs_count, coeffs_set])
+                                mode=mode)
     
     cfl_cadence = 1
     cfl_threshold=0.1
@@ -233,27 +216,61 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
 
     try:
         start_time = time.time()
+        start_iter = solver.iteration
         logger.info('starting main loop')
-        while solver.ok:
-
+        good_solution = True
+        first_step = True
+        while solver.ok and good_solution:
             dt = CFL.compute_dt()
             # advance
             solver.step(dt)
 
-            if threeD and solver.iteration % Hermitian_cadence == 0:
+            effective_iter = solver.iteration - start_iter
+
+            if threeD and effective_iter % Hermitian_cadence == 0:
                 for field in solver.state.fields:
                     field.require_grid_space()
 
             # update lists
-            if solver.iteration % report_cadence == 0:
+            if effective_iter % report_cadence == 0:
+                Re_avg = flow.grid_average('Re')
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration-start_iter, solver.sim_time, (solver.sim_time-start_sim_time)/atmosphere.buoyancy_time, dt)
                 if verbose:
-                    log_string += '\n\t\tRe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                    log_string += '\n\t\tRe: {:8.5e}/{:8.5e}'.format(Re_avg, flow.max('Re'))
                     log_string += '; Pe: {:8.5e}/{:8.5e}'.format(flow.grid_average('Pe'), flow.max('Pe'))
                     log_string += '; Nu: {:8.5e}/{:8.5e}'.format(flow.grid_average('Nusselt'), flow.max('Nusselt'))
                 else:
-                    log_string += 'Re: {:8.5e}/{:8.5e}'.format(flow.grid_average('Re'), flow.max('Re'))
+                    log_string += 'Re: {:8.3e}/{:8.3e}'.format(Re_avg, flow.max('Re'))
                 logger.info(log_string)
+                
+            if not np.isfinite(Re_avg):
+                good_solution = False
+                logger.info("Terminating run.  Trapped on Reynolds = {}".format(Re_avg))
+                    
+            if first_step:
+                if verbose:
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    import matplotlib.pyplot as plt
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,1,1)
+                    ax.spy(solver.pencils[0].L, markersize=1, markeredgewidth=0.0)
+                    fig.savefig(data_dir+"sparsity_pattern.png", dpi=1200)
+
+                    import scipy.sparse.linalg as sla
+                    LU = sla.splu(solver.pencils[0].LHS.tocsc(), permc_spec='NATURAL')
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,2,1)
+                    ax.spy(LU.L.A, markersize=1, markeredgewidth=0.0)
+                    ax = fig.add_subplot(1,2,2)
+                    ax.spy(LU.U.A, markersize=1, markeredgewidth=0.0)
+                    fig.savefig(data_dir+"sparsity_pattern_LU.png", dpi=1200)
+
+                    logger.info("{} nonzero entries in LU".format(LU.nnz))
+                    logger.info("{} nonzero entries in LHS".format(solver.pencils[0].LHS.tocsc().nnz))
+                    logger.info("{} fill in factor".format(LU.nnz/solver.pencils[0].LHS.tocsc().nnz))
+                first_step = False
+                start_time = time.time()
     except:
         logger.error('Exception raised, triggering end of main loop.')
         raise
@@ -263,29 +280,30 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
         # Print statistics
         elapsed_time = end_time - start_time
         elapsed_sim_time = solver.sim_time
-        N_iterations = solver.iteration 
+        N_iterations = solver.iteration-1
         logger.info('main loop time: {:e}'.format(elapsed_time))
         logger.info('Iterations: {:d}'.format(N_iterations))
         logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
         if N_iterations > 0:
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
         
-        logger.info('beginning join operation')
+        if not no_join:
+            logger.info('beginning join operation')
         if do_checkpointing:
             try:
                 final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
-                final_checkpoint.set_checkpoint(solver, wall_dt=1, write_num=1, set_num=1)
+                final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
                 solver.step(dt) #clean this up in the future...works for now.
                 post.merge_analysis(data_dir+'/final_checkpoint/')
             except:
                 print('cannot save final checkpoint')
-
-            logger.info(data_dir+'/checkpoint/')
-            post.merge_analysis(data_dir+'/checkpoint/')
-
-        for task in analysis_tasks.keys():
-            logger.info(analysis_tasks[task].base_path)
-            post.merge_analysis(analysis_tasks[task].base_path)
+            if not no_join:
+                logger.info(data_dir+'/checkpoint/')
+                post.merge_analysis(data_dir+'/checkpoint/')
+        if not no_join:
+            for task in analysis_tasks.keys():
+                logger.info(analysis_tasks[task].base_path)
+                post.merge_analysis(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
 
@@ -308,10 +326,10 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
             print('  startup time:', startup_time)
             print('main loop time:', main_loop_time)
             print('    total time:', total_time)
-            if N_iterations > 0:
-                print('    iterations:', solver.iteration)
-                print(' loop sec/iter:', main_loop_time/solver.iteration)
-                print('    average dt:', solver.sim_time / n_steps)
+            if n_steps > 0:
+                print('    iterations:', n_steps)
+                print(' loop sec/iter:', main_loop_time/n_steps)
+                print('    average dt:', solver.sim_time/n_steps)
                 print("          N_cores, Nx, Nz, startup     main loop,   main loop/iter, main loop/iter/grid, n_cores*main loop/iter/grid")
                 print('scaling:',
                     ' {:d} {:d} {:d}'.format(N_TOTAL_CPU,nx,nz),
@@ -325,6 +343,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,\
 if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
+    from numpy import inf as np_inf
     
     import sys
     # save data in directory named after script
@@ -340,6 +359,8 @@ if __name__ == "__main__":
     elif args['--fixed_flux']:
         data_dir += '_flux'
 
+    if args['--dynamic_diffusivities']:
+        data_dir += '_dynamic'
     if args['--verbose']:
         #Diffusivities
         if args['--const_nu']:
@@ -415,7 +436,13 @@ if __name__ == "__main__":
     run_time_buoy = args['--run_time_buoy']
     if run_time_buoy != None:
         run_time_buoy = float(run_time_buoy)
-
+        
+    run_time_iter = args['--run_time_iter']
+    if run_time_iter != None:
+        run_time_iter = int(float(run_time_iter))
+    else:
+        run_time_iter = np_inf
+        
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       Taylor=Taylor,
@@ -430,11 +457,13 @@ if __name__ == "__main__":
                       epsilon=float(args['--epsilon']),
                       run_time=float(args['--run_time']),
                       run_time_buoyancies=run_time_buoy,
+                      run_time_iter=run_time_iter,
                       fixed_T=args['--fixed_T'],
                       fixed_flux=args['--fixed_flux'],
                       mixed_flux_T=args['--mixed_flux_T'],
                       const_mu=const_mu,
                       const_kappa=const_kappa,
+                      dynamic_diffusivities=args['--dynamic_diffusivities'],
                       restart=(args['--restart']),
                       start_new_files=start_new_files,
                       rk222=rk222,
@@ -442,5 +471,6 @@ if __name__ == "__main__":
                       out_cadence=float(args['--out_cadence']),
                       data_dir=data_dir,
                       no_coeffs=args['--no_coeffs'],
+                      no_join=args['--no_join'],
                       split_diffusivities=args['--split_diffusivities'],
                       verbose=args['--verbose'])
