@@ -23,6 +23,7 @@ Options:
 
     
     --fixed_flux               Fixed flux thermal BCs
+    --dynamic_diffusivities    If flagged, use equations formulated in terms of dynamic diffusivities (μ,κ)
 
     --rk222                    Use RK222 as timestepper
 
@@ -64,6 +65,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       oz=False,
                       fixed_flux=False,
                       run_time=23.5, run_time_buoyancies=np.inf, run_time_iter=np.inf,
+                      dynamic_diffusivities=False,
                       no_coeffs=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
@@ -102,7 +104,14 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             nz = nz_rz+nz_cz
             nz_list = [nz_rz, nz_cz]
 
-    atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+    if dynamic_diffusivities:
+        atmosphere = equations.FC_multitrope_2d_kappa(nx=nx, nz=nz_list, stiffness=stiffness, 
+                                         n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
+                                         verbose=verbose, width=width,
+                                         constant_Prandtl=constant_Prandtl,
+                                         stable_top=stable_top)
+    else:
+        atmosphere = equations.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width,
                                          constant_Prandtl=constant_Prandtl,
@@ -300,6 +309,8 @@ if __name__ == "__main__":
     data_dir = sys.argv[0].split('.py')[0]
     if args['--fixed_flux']:
         data_dir += '_flux'
+    if args['--dynamic_diffusivities']:
+        data_dir += '_dynamic'
     if args['--oz']:
         data_dir += '_oz'
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
@@ -345,6 +356,7 @@ if __name__ == "__main__":
                       no_coeffs=args['--no_coeffs'],
                       oz=args['--oz'],
                       fixed_flux=args['--fixed_flux'],
+                      dynamic_diffusivities=args['--dynamic_diffusivities'],
                       dense=args['--dense'],
                       nz_dense=int(args['--nz_dense']),
                       rk222=args['--rk222'],

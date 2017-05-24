@@ -829,6 +829,7 @@ class Multitrope(MultiLayerAtmosphere):
         Lz_cz, Lz_rz, Lz = self._calculate_Lz(n_rho_cz, self.m_cz, n_rho_rz, self.m_rz)
         self.Lz_cz = Lz_cz
         self.Lz_rz = Lz_rz
+        self.aspect_ratio = aspect_ratio
         
         Lx = Lz_cz*aspect_ratio
         
@@ -994,18 +995,18 @@ class Multitrope(MultiLayerAtmosphere):
             width = self.match_width
         return 1/2*(1-f((z-center)/width))
          
-    def _compute_kappa_profile(self, kappa_ratio):
-        # start with a simple profile, adjust amplitude later (in _set_diffusivities)
-        kappa_top = 1
+    def _compute_step_profile(self, step_ratio, invert_profile=False):
+        # a simple, smooth step function with amplitudes 1 and step_ratio
+        # on either side of the matching region
         Phi = self.match_Phi(self.z)
         inv_Phi = 1-Phi
         
-        self.kappa = self._new_ncc()
-        if self.stable_bottom:
-            self.kappa['g'] = (Phi*kappa_ratio+inv_Phi)*kappa_top
+        self.profile = self._new_ncc()
+        if invert_profile:
+            self.profile['g'] = Phi + inv_Phi*step_ratio
         else:
-            self.kappa['g'] = (Phi+inv_Phi*kappa_ratio)*kappa_top
-        self.necessary_quantities['kappa'] = self.kappa
+            self.profile['g'] = Phi*step_ratio + inv_Phi
+        self.necessary_quantities['profile'] = self.profile
 
 
     def _set_atmosphere_parameters(self,
@@ -1063,28 +1064,26 @@ class Multitrope(MultiLayerAtmosphere):
         self.scale_continuity['g'] = 1.
         self.scale_momentum['g'] = 1.
         self.scale_energy['g'] = 1.
-        #self.scale['g'] = self.T0['g']
-        #self.scale['g'] = (self.Lz+1 - self.z)/(self.Lz+1)
 
+        self.kappa = self._new_ncc()
         if atmosphere_type2:
             logger.info("ATMOSPHERE TYPE 2")
             # specify T0_z as smoothly matched profile
-            # for now, hijack compute_kappa_profile (this could be cleaned up),
-            # but grad T ratio has inverse relationship to kappa_ratio
-            self._compute_kappa_profile(1/kappa_ratio)
+            # grad T ratio has inverse relationship to kappa_ratio
+            self._compute_step_profile(1/kappa_ratio, invert_profile=not(self.stable_bottom))
             flux_top = -1
-            # copy out kappa profile, which is really grad T
-            self.T0_z['g'] = self.kappa['g']/flux_top
+            self.T0_z['g'] = self.profile['g']/flux_top
             # now invert grad T for kappa
             logger.info("Solving for kappa")
             self.kappa['g'] = flux_top/self.T0_z['g']
         else:
             # specify kappa as smoothly matched profile
-            self._compute_kappa_profile(kappa_ratio)
+            self._compute_step_profile(kappa_ratio, invert_profile=not(self.stable_bottom))
+            self.kappa['g'] = self.profile['g']
             logger.info("Solving for T0")
             # start with an arbitrary -1 at the top, which will be rescaled after _set_diffusivites
             flux_top = -1
-            self.T0_z['g'] = flux_top/self.kappa['g']
+            self.T0_z['g'] = flux_top/self.profile['g']
             
         self.T0_z.antidifferentiate('z',('right',0), out=self.T0)
         # need T0_zz in multitrope
@@ -1123,8 +1122,8 @@ class Multitrope(MultiLayerAtmosphere):
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1, split_diffusivities=None):
         logger.info("problem parameters (multitrope):")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
-        Rayleigh_top = Rayleigh
-        Prandtl_top = Prandtl
+        self.Rayleigh = Rayleigh_top = Rayleigh
+        self.Prandtl = Prandtl_top = Prandtl
 
         self.constant_mu = False
         self.constant_kappa = False
@@ -1143,9 +1142,9 @@ class Multitrope(MultiLayerAtmosphere):
             # scaling from the rz.  This is a guess.
             self.chi_top = np.exp(self.n_rho_rz)*self.chi_top
 
-        #Reset kappa. Allows reuse of atmosphere.
+        #Reset kappa. Allows reuse of atmosphere.  But this is incorrect if we do type=2 atmospheres
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
-        self._compute_kappa_profile(kappa_ratio)
+        self._compute_step_profile(kappa_ratio, invert_profile=not(self.stable_bottom))
 
         logger.info('setting chi')
 
@@ -1729,6 +1728,8 @@ class FC_equations_2d_kappa(FC_equations_2d):
     def _set_diffusivities(self, *args, **kwargs):
         super(FC_equations_2d_kappa, self)._set_diffusivities(*args, **kwargs)
         self.kappa = self._new_ncc()
+        self.chi.set_scales(1, keep_data=True)
+        self.rho0.set_scales(1, keep_data=True)
         self.kappa['g'] = self.chi['g']*self.rho0['g']
         self.problem.parameters['κ'] = self.kappa
         if self.constant_kappa:
@@ -2350,7 +2351,96 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
         c0 = 1
         self.c_IC['g'] = c0*(1-taper)
         self.f_IC['g'] = self.c_IC['g']
+
+class FC_multitrope_2d_kappa(FC_equations_2d_kappa, Multitrope):
+    def __init__(self, *args, **kwargs):
+        super(FC_multitrope_2d_kappa, self).__init__() 
+        Multitrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+    def set_IC(self, solver, A0=1e-3, **kwargs):
+        # initial conditions
+        self.T_IC = solver.state['T1']
+        self.ln_rho_IC = solver.state['ln_rho1']
+
+        noise = self.global_noise(**kwargs)
+        noise.set_scales(self.domain.dealias, keep_data=True)
+        self.T_IC.set_scales(self.domain.dealias, keep_data=True)
+        z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
+        if self.stable_bottom:
+            # set taper safely in the mid-CZ to avoid leakage of coeffs into RZ chebyshev coeffs
+            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
+            taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
+        else:
+            taper = self.match_Phi(z_dealias, center=self.Lz_cz)
+            taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
+
+        # this will broadcast power back into relatively high Tz; consider widening taper.
+        self.T_IC['g'] = self.epsilon*A0*noise['g']*self.T0['g']*taper
+        self.filter_field(self.T_IC, **kwargs)
+        self.ln_rho_IC['g'] = 0
         
+        logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
+
+
+    def initialize_output(self, solver, data_dir, *args, **kwargs):
+        super(FC_multitrope_2d_kappa, self).initialize_output(solver, data_dir, *args, **kwargs)
+
+        #This creates an output file that contains all of the useful atmospheric info at the beginning of the run
+        import h5py
+        import os
+        from dedalus.core.field import Field
+        dir = data_dir + '/atmosphere/'
+        file = dir + 'atmosphere.h5'
+        if self.domain.dist.comm_cart.rank == 0:
+            if not os.path.exists('{:s}'.format(dir)):
+                os.mkdir('{:s}'.format(dir))
+        if self.domain.dist.comm_cart.rank == 0:
+            f = h5py.File('{:s}'.format(file), 'w')
+        key_set = list(self.problem.parameters.keys())
+        logger.debug("Outputing atmosphere parameters for {}".format(key_set))
+        for key in key_set:
+            if 'scale' in key:
+                continue
+            if type(self.problem.parameters[key]) == Field:
+                field_key = True
+                self.problem.parameters[key].set_scales(1, keep_data=True)
+            else:
+                field_key = False
+            if field_key:
+                try:
+                    array = self.problem.parameters[key]['g'][0,:]
+                except:
+                    logger.error("key error on atmosphere output {}".format(key))
+                        
+                this_chunk      = np.zeros(self.nz)
+                global_chunk    = np.zeros(self.nz)
+                n_per_cpu       = int(self.nz/self.domain.dist.comm_cart.size)
+                i_chunk_0 = self.domain.dist.comm_cart.rank*(n_per_cpu)
+                i_chunk_1 = (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)
+                this_chunk[i_chunk_0:i_chunk_1] = array
+                self.domain.dist.comm_cart.Allreduce(this_chunk, global_chunk, op=MPI.SUM)
+                if self.domain.dist.comm_cart.rank == 0:
+                    f[key] = global_chunk                        
+            elif self.domain.dist.comm_cart.rank == 0:
+                f[key] = self.problem.parameters[key]
+                
+        if self.domain.dist.comm_cart.rank == 0:
+            f['dimensions']     = 2
+            f['nx']             = self.nx
+            f['nz']             = self.nz
+            f['z']              = self.domain.grid(axis=-1, scales=1)
+            f['m_ad']           = self.m_ad
+            f['m']              = self.m_ad - self.epsilon
+            f['epsilon']        = self.epsilon
+            f['n_rho_cz']       = self.n_rho_cz
+            f['rayleigh']       = self.Rayleigh
+            f['prandtl']        = self.Prandtl
+            f['aspect_ratio']   = self.aspect_ratio
+            f['atmosphere_name']= self.atmosphere_name
+            f.close()
+            
+        return self.analysis_tasks
             
 # needs to be tested again and double-checked
 class AN_equations(Equations):
