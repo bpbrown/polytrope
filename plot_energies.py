@@ -97,7 +97,15 @@ def plot_energies(data, times, output_path='./'):
     ax2.set_xlabel("time")
     ax2.set_ylabel("Nu")
     figs["Nu_AB17"] = fig_Nu2
-    
+
+    fig_nrho = plt.figure()
+    ax1 = fig_nrho.add_subplot(1,1,1)
+    ax1.plot(t, data['n_rho'], label=r'$n_\rho$')
+    ax1.legend()
+    ax1.set_ylabel(r'$n_\rho$')
+    ax2.set_xlabel("time")
+    figs["n_rho"] = fig_nrho
+
     for key in figs.keys():
         figs[key].savefig(output_path+'scalar_{}.png'.format(key))
     
