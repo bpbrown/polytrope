@@ -167,7 +167,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     report_cadence = 1
     output_time_cadence   = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time  = run_time_buoyancies
-    solver.stop_iteration = run_time_iter
+    solver.stop_iteration = solver.iteration + run_time_iter
     solver.stop_wall_time = run_time*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
@@ -204,6 +204,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     try:
         logger.info("starting main loop")
         start_time = time.time()
+        start_iter = solver.iteration
         good_solution = True
         first_step = True
         while solver.ok and good_solution:
@@ -212,8 +213,10 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             # advance
             solver.step(dt)
 
+            effective_iter = solver.iteration - start_iter
+
             # update lists
-            if solver.iteration % report_cadence == 0:
+            if effective_iter % report_cadence == 0:
                 Re_avg = flow.grid_average('Re')
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time)
                 log_string += 'dt: {:8.3e}'.format(dt)

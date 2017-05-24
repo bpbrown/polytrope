@@ -112,7 +112,10 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         ncc_cutoff = 1e-6
     else:
         ncc_cutoff = 1e-10
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
+    if threeD:
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
+    else:
+        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
     
     if fixed_flux:
         atmosphere.set_BC(fixed_flux=True, stress_free=True)
@@ -176,7 +179,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     else:
         solver.stop_sim_time    = 100*atmosphere.thermal_time
     
-    solver.stop_iteration   = run_time_iter
+    solver.stop_iteration   = solver.iteration + run_time_iter
     solver.stop_wall_time   = run_time*3600
     report_cadence = 1
     output_time_cadence = out_cadence*atmosphere.buoyancy_time
@@ -213,6 +216,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
 
     try:
         start_time = time.time()
+        start_iter = solver.iteration
         logger.info('starting main loop')
         good_solution = True
         first_step = True
@@ -221,12 +225,14 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
             # advance
             solver.step(dt)
 
-            if threeD and solver.iteration % Hermitian_cadence == 0:
+            effective_iter = solver.iteration - start_iter
+
+            if threeD and effective_iter % Hermitian_cadence == 0:
                 for field in solver.state.fields:
                     field.require_grid_space()
 
             # update lists
-            if solver.iteration % report_cadence == 0:
+            if effective_iter % report_cadence == 0:
                 Re_avg = flow.grid_average('Re')
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration-start_iter, solver.sim_time, (solver.sim_time-start_sim_time)/atmosphere.buoyancy_time, dt)
                 if verbose:
