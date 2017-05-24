@@ -22,7 +22,7 @@ from cycler import cycler
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-import analysis
+from tools import analysis
 
 def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
     figs = {}

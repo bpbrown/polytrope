@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import brewer2mpl
 
-import analysis
+from tools import analysis
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])

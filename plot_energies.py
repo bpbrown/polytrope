@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-import analysis
+from tools import analysis
 
 def plot_energies(data, times, output_path='./'):
     t = times

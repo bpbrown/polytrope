@@ -11,7 +11,7 @@ Options:
     --fast                    Plot "fast" CFL version (using mean z-spacing rather than grid spacing)
 """
 import numpy as np
-import analysis
+from tools import analysis
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])

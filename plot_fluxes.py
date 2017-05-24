@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
-import analysis
+from tools import analysis
 
 def plot_flows(averages, z, output_path='./'):
     figs = {}

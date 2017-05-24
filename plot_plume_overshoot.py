@@ -13,7 +13,7 @@ Options:
     --mark=<mark>             Mark special depth
 """
 import numpy as np
-import analysis
+from tools import analysis
 
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])

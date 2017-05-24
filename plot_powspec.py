@@ -10,7 +10,7 @@ Options:
     --fields=<fields>         Comma separated list of fields to plot [default: s,w]
 """
 import numpy as np
-import analysis
+from tools import analysis
 
 import matplotlib
 matplotlib.use('Agg')
