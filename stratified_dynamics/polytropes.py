@@ -11,8 +11,8 @@ try:
 except:
     from sys import path
     path.insert(0, './stratified_dynamics')
-    from equations import *
-    from atmospheres import *
+    from stratified_dynamics.equations import *
+    from stratified_dynamics.atmospheres import *
 
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):
