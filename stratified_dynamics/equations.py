@@ -132,8 +132,8 @@ class FC_equations(Equations):
         
         self.problem.substitutions['h_flux_z'] = 'w*(h)'
         self.problem.substitutions['kappa_flux_mean'] = '-rho0*chi*dz(T0)'
-        self.problem.substitutions['kappa_flux_fluc'] = '-rho_full*chi*dz(T1) - rho_fluc*chi*dz(T0)'
-        self.problem.substitutions['kappa_flux_z'] = '((kappa_flux_mean) + (kappa_flux_fluc))'
+        self.problem.substitutions['kappa_flux_fluc'] = '(-rho_full*chi*dz(T1) - rho_fluc*chi*dz(T0))'
+        self.problem.substitutions['kappa_flux_z'] = '(kappa_flux_mean + kappa_flux_fluc)'
         self.problem.substitutions['KE_flux_z'] = 'w*(KE)'
         self.problem.substitutions['PE_flux_z'] = 'w*(PE)'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*σxz + w*σzz)'

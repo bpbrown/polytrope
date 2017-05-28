@@ -14,7 +14,7 @@ Options:
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
     --single_chebyshev         Use a single chebyshev domain across both stable and unstable regions.  Useful at low stiffness.
     --nx=<nx>                  Horizontal x (Fourier) resolution; if not set, nx=4*nz_cz
-    --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3.5]
+    --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 3]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 1]
 
     --run_time=<run_time>                Run time, in hours [default: 23.5]
@@ -166,7 +166,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     report_cadence = 1
     output_time_cadence   = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time  = run_time_buoyancies
+    solver.stop_sim_time  = run_time_buoyancies*atmosphere.buoyancy_time
     solver.stop_iteration = solver.iteration + run_time_iter
     solver.stop_wall_time = run_time*3600
 
