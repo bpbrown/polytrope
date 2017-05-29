@@ -34,7 +34,7 @@ else:
 for data_type in data_types:
     logger.info("merging {}".format(data_type))
     try:
-        post.merge_process_files(base_path+data_type)
+        post.merge_process_files(base_path+data_type, cleanup=True)
     except:
         logger.info("missing {}".format(data_type))
         
