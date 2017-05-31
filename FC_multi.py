@@ -45,13 +45,6 @@ logger = logging.getLogger(__name__)
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
-try:
-    from tools.checkpointing import Checkpoint
-    checkpoint_min = 30
-    do_checkpointing=True
-except:
-    logger.info("No checkpointing available; disabling capability")
-    do_checkpointing=False
 import numpy as np
     
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
@@ -71,9 +64,12 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
-    from stratified_dynamics import multitropes
     import os
     from dedalus.core.future import FutureField
+    from stratified_dynamics import multitropes
+    from tools.checkpointing import Checkpoint
+    
+    checkpoint_min = 30
     
     initial_time = time.time()
 
@@ -145,25 +141,25 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         mode = "overwrite"
     else:
         mode = "append"
-    if do_checkpointing:
-        logger.info("checkpointing in {}".format(data_dir))
-        checkpoint = Checkpoint(data_dir)
-
-        if restart is None:
-            atmosphere.set_IC(solver)
-        else:
-            logger.info("restarting from {}".format(restart))
-            dt = checkpoint.restart(restart, solver)
         
-        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
-    else:
+    logger.info("checkpointing in {}".format(data_dir))
+    checkpoint = Checkpoint(data_dir)
+
+    if restart is None:
         atmosphere.set_IC(solver)
+        dt = None
+    else:
+        logger.info("restarting from {}".format(restart))
+        dt = checkpoint.restart(restart, solver)
+        
+    checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
     
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
     
     max_dt = atmosphere.min_BV_time 
     max_dt = atmosphere.buoyancy_time*0.1
-
+    if dt is None: dt = max_dt/5
+        
     report_cadence = 1
     output_time_cadence   = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time  = run_time_buoyancies*atmosphere.buoyancy_time
@@ -172,12 +168,11 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, 
-                                    sim_dt=output_time_cadence, mode=mode)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, coeffs_output=not(no_coeffs), sim_dt=output_time_cadence, mode=mode)
 
     
     cfl_cadence = 1
-    CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
+    CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
     if superstep:
@@ -275,17 +270,16 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
         
         logger.info('beginning join operation')
-        if do_checkpointing:
-            try:
-                final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
-                final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
-                solver.step(dt) #clean this up in the future...works for now.
-                post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=True)
-            except:
-                print('cannot save final checkpoint')
+        try:
+            final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
+            final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
+            solver.step(dt) #clean this up in the future...works for now.
+            post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=True)
+        except:
+            print('cannot save final checkpoint')
 
-            logger.info(data_dir+'/checkpoint/')
-            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+        logger.info(data_dir+'/checkpoint/')
+        post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
 
         for task in analysis_tasks:
             logger.info(analysis_tasks[task].base_path)

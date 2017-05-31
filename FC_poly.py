@@ -58,15 +58,6 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 import numpy as np
 
-try:
-    from tools.checkpointing import Checkpoint
-    do_checkpointing = True
-    checkpoint_min   = 30
-except:
-    logger.info('not importing checkpointing')
-    do_checkpointing = False
-
-
 def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                    Taylor=None, theta=0,
                         nz=128, nx=None, ny=None, threeD=False, mesh=None,
@@ -80,9 +71,12 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                         data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
                         verbose=False):
     import time
-    from stratified_dynamics import polytropes
     import os
     import sys
+    from stratified_dynamics import polytropes    
+    from tools.checkpointing import Checkpoint
+    
+    checkpoint_min   = 30
     
     initial_time = time.time()
 
@@ -112,6 +106,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         ncc_cutoff = 1e-6
     else:
         ncc_cutoff = 1e-10
+        
     if threeD:
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=ncc_cutoff, split_diffusivities=split_diffusivities)
     else:
@@ -153,19 +148,17 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     else:
         mode = "append"
 
-    if do_checkpointing:
-        logger.info('checkpointing in {}'.format(data_dir))
-        checkpoint = Checkpoint(data_dir)
+    logger.info('checkpointing in {}'.format(data_dir))
+    checkpoint = Checkpoint(data_dir)
 
-        if restart is None:
-            atmosphere.set_IC(solver)
-        else:
-            logger.info("restarting from {}".format(restart))
-            dt = checkpoint.restart(restart, solver)
-
-        checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
-    else:
+    if restart is None:
         atmosphere.set_IC(solver)
+        dt = None
+    else:
+        logger.info("restarting from {}".format(restart))
+        dt = checkpoint.restart(restart, solver)
+
+    checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
     
     if run_time_buoyancies != None:
         solver.stop_sim_time    = solver.sim_time + run_time_buoyancies*atmosphere.buoyancy_time
@@ -181,19 +174,14 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
     
-    if no_coeffs:
-        coeffs_output=False
-    else:
-        coeffs_output=True
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
-                                mode=mode)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode)
 
     #Set up timestep defaults
     max_dt = output_time_cadence/2
-    dt = max_dt/5
-
+    if dt is None: dt = max_dt
+        
     cfl_cadence = 1
-    cfl_threshold=0.1
+    cfl_threshold = 0.1
     CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=cfl_threshold)
     if threeD:
@@ -286,7 +274,6 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         
         if not no_join:
             logger.info('beginning join operation')
-        if do_checkpointing:
             try:
                 final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
                 final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
@@ -294,10 +281,10 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                 post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=True)
             except:
                 print('cannot save final checkpoint')
-            if not no_join:
-                logger.info(data_dir+'/checkpoint/')
-                post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
-        if not no_join:
+                
+            logger.info(data_dir+'/checkpoint/')
+            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+            
             for task in analysis_tasks.keys():
                 logger.info(analysis_tasks[task].base_path)
                 post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)

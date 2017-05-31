@@ -32,12 +32,6 @@ logger = logging.getLogger(__name__)
 import dedalus.public as de
 from dedalus.tools  import post
 from dedalus.extras import flow_tools
-try:
-    from dedalus.extras.checkpointing import Checkpoint
-    do_checkpointing=True
-except:
-    logger.info("No checkpointing available; disabling capability")
-    do_checkpointing=False
 
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                       n_rho_cz=1, n_rho_rz=5, 
@@ -50,8 +44,10 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
-    from stratified_dynamics import multitropes
     import os
+    from stratified_dynamics import multitropes
+    from tools.checkpointing import Checkpoint
+
     
     initial_time = time.time()
 
@@ -100,26 +96,28 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
     # Build solver
     solver = problem.build_solver(ts)
 
-    if do_checkpointing:
-        checkpoint = Checkpoint(data_dir)
-        checkpoint.set_checkpoint(solver, wall_dt=1800)
+    if restart is None:
+        mode = "overwrite"
+    else:
+        mode = "append"
+
+    checkpoint = Checkpoint(data_dir)
+    checkpoint.set_checkpoint(solver, wall_dt=1800, mode=mode)
 
     # initial conditions
     if restart is None:
         atmosphere.set_IC(solver)
+        dt = None
     else:
-        if do_checkpointing:
-            logger.info("restarting from {}".format(restart))
-            checkpoint.restart(restart, solver)
-        else:
-            logger.error("No checkpointing capability in this branch of Dedalus.  Aborting.")
-            raise
-
+        logger.info("restarting from {}".format(restart))
+        dt = checkpoint.restart(restart, solver)
+        
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
     
     max_dt = atmosphere.min_BV_time 
     max_dt = atmosphere.buoyancy_time*0.25
-
+    if dt is None: dt = max_dt
+    
     report_cadence = 1
     output_time_cadence = 0.1*atmosphere.buoyancy_time
     solver.stop_sim_time = np.inf
@@ -132,7 +130,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
 
     
     cfl_cadence = 1
-    CFL = flow_tools.CFL(solver, initial_dt=max_dt, cadence=cfl_cadence, safety=cfl_safety_factor,
+    CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=cfl_cadence, safety=cfl_safety_factor,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
     CFL.add_velocities(('u', 'w'))
