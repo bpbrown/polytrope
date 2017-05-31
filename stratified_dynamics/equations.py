@@ -104,29 +104,6 @@ class Equations():
         field = self.domain.new_field()
         return field
 
-        
-    def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
-        if derivative or dz:
-            f_bc=self._new_ncc()
-            f.differentiate('z', out=f_bc)
-            BC_text += "_z"
-        else:
-            f_bc = f
-
-        BC_field = f_bc.interpolate(z=z)
-
-        try:
-            BC = BC_field['g'][0][0]
-        except:
-            BC = BC_field['g']
-            logger.error("shape of BC_field {}".format(BC_field['g'].shape))
-            logger.error("BC = {}".format(BC))
-
-        if np.abs(BC) < tol:
-            BC = 0
-        logger.info("Calculating boundary condition z={:7g}, {}={:g}".format(z, BC_text, BC))
-        return BC
-
     def _set_subs(self):
         pass
 
@@ -196,10 +173,6 @@ class Equations():
 class FC_equations(Equations):
     def __init__(self, **kwargs):
         super(FC_equations, self).__init__(**kwargs)
-        self.T1_left    = 0
-        self.T1_right   = 0
-        self.T1_z_left  = 0
-        self.T1_z_right = 0
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
         self.problem_type = 'EVP_2'
@@ -562,10 +535,9 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
 
         # double check implementation of variabile chi and background coupling term.
-        #self.problem.substitutions['Q_z'] = "(-T1_z)"
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.source                   = " Cv_inv*(chi*(T0_zz))" # - Qcool_z/rho_full)"
+        self.source                   = " Cv_inv*(chi*(T0_zz))" 
         if not self.constant_kappa:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
