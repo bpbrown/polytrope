@@ -481,7 +481,6 @@ class FC_equations_2d(FC_equations):
 
     def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=True,
                           mode="overwrite", **kwargs):
-        #  slices, profiles, and scalar are all [write_num, set_num]
 
         analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir, full_output=full_output,
                                                                         mode=mode, **kwargs)
@@ -532,7 +531,7 @@ class FC_equations_2d_kappa(FC_equations_2d):
         
         self.problem.substitutions['L_thermal']  = " κ/rho0*Cv_inv*(κT0*-1*ln_rho1 + κT1)"
         self.problem.substitutions['NL_thermal'] = " κ/rho0*Cv_inv*(κT0*(exp(-ln_rho1)+ln_rho1) + κT1*(exp(-ln_rho1)-1))"
-        self.problem.substitutions['source_terms'] = "0"        
+        self.problem.substitutions['source_terms'] = "0"  # these should not be zero...      
         self.problem.substitutions['NL_visc_heat'] = " Cv_inv*μ/rho0*(dx(u)*σxx + w_z*σzz + σxz**2)"
 
         self.problem.add_equation("dz(u) - u_z = 0")
@@ -579,6 +578,7 @@ class FC_equations_2d_kappa(FC_equations_2d):
             self.mu.differentiate('z', out=self.del_ln_mu)
             self.del_ln_mu['g'] /= self.mu['g']
             self.problem.parameters['del_ln_μ'] = self.del_ln_mu
+        # redefine nu and chi for outputs
 
     def set_thermal_BC(self, fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None):
         if not(fixed_flux) and not(fixed_temperature) and not(mixed_temperature_flux) and not(mixed_flux_temperature):

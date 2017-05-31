@@ -106,6 +106,14 @@ def plot_energies(data, times, output_path='./'):
     ax2.set_xlabel("time")
     figs["n_rho"] = fig_nrho
 
+    fig_Re = plt.figure()
+    ax1 = fig_Re.add_subplot(1,1,1)
+    ax1.plot(t, data['Re_rms'], label=r'Re$_\mathrm{rms}$')
+    ax1.legend()
+    ax1.set_ylabel(r'Re$_\mathrm{rms}$')
+    ax2.set_xlabel("time")
+    figs["Re_rms"] = fig_Re
+    
     for key in figs.keys():
         figs[key].savefig(output_path+'scalar_{}.png'.format(key))
     

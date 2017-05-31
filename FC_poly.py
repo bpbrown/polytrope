@@ -148,13 +148,6 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     logger.info("full atm HS check")
     atmosphere.check_atmosphere(make_plots = False, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
 
-    #Set up timestep defaults
-    max_dt = atmosphere.buoyancy_time*0.05
-    dt = max_dt/5
-    if epsilon < 1e-5:
-        max_dt = atmosphere.buoyancy_time*0.05
-        dt     = max_dt
-
     if restart is None:
         mode = "overwrite"
     else:
@@ -194,7 +187,11 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         coeffs_output=True
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=coeffs_output,\
                                 mode=mode)
-    
+
+    #Set up timestep defaults
+    max_dt = output_time_cadence/2
+    dt = max_dt/5
+
     cfl_cadence = 1
     cfl_threshold=0.1
     CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=cfl_cadence, safety=cfl_safety_factor,
