@@ -51,11 +51,7 @@ Options:
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
 """
 import logging
-logger = logging.getLogger(__name__)
 
-import dedalus.public as de
-from dedalus.tools  import post
-from dedalus.extras import flow_tools
 import numpy as np
 
 def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
@@ -70,6 +66,11 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                         rk222=False, safety_factor=0.2,
                         data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
                         verbose=False):
+
+    import dedalus.public as de
+    from dedalus.tools  import post
+    from dedalus.extras import flow_tools
+
     import time
     import os
     import sys
@@ -328,7 +329,8 @@ if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
     from numpy import inf as np_inf
-    
+
+    import os
     import sys
     # save data in directory named after script
     #   these lines really are all about setting up the output directory name
@@ -336,6 +338,7 @@ if __name__ == "__main__":
     if data_dir[-1] != '/':
         data_dir += '/'
     data_dir += sys.argv[0].split('.py')[0]
+
     #BCs
 
     if args['--fixed_T'] and args['--verbose']:
@@ -380,8 +383,23 @@ if __name__ == "__main__":
         data_dir += '/'
     else:
         data_dir += '_{}/'.format(args['--label'])
+
+    from dedalus.tools.config import config
+    
+    config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
+    config['logging']['file_level'] = 'DEBUG'
+
+    import mpi4py.MPI
+    if mpi4py.MPI.COMM_WORLD.rank == 0:
+        if not os.path.exists('{:s}/'.format(data_dir)):
+            os.mkdir('{:s}/'.format(data_dir))
+        logdir = os.path.join(data_dir,'logs')
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+
+    logger = logging.getLogger(__name__)
     logger.info("saving run in: {}".format(data_dir))
-  
+
 
     #Timestepper type
     if args['--rk222']:

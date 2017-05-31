@@ -34,17 +34,12 @@ Options:
     --oz                       Do system with convection zone on the bottom rather than top (exoplanets)
 
     --width=<width>            Width of erf transition between two polytropes
-    
+    --root_dir=<root_dir>      Root directory to save data dir in [default: ./]    
     --label=<label>            Additional label for run output directory
     --no_coeffs                If flagged, coeffs will not be output
     --verbose                  Produce diagnostic plots
 """
 import logging
-logger = logging.getLogger(__name__)
-
-import dedalus.public as de
-from dedalus.tools  import post
-from dedalus.extras import flow_tools
 import numpy as np
     
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
@@ -62,6 +57,11 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       dynamic_diffusivities=False,
                       no_coeffs=False,
                       restart=None, data_dir='./', verbose=False):
+
+    import dedalus.public as de
+    from dedalus.tools  import post
+    from dedalus.extras import flow_tools
+
     import numpy as np
     import time
     import os
@@ -315,10 +315,14 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
 if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
-    
+
+    import os
     import sys
     # save data in directory named after script
-    data_dir = sys.argv[0].split('.py')[0]
+    data_dir = args['--root_dir']
+    if data_dir[-1] != '/':
+        data_dir += '/'
+    data_dir += sys.argv[0].split('.py')[0]
     if args['--fixed_flux']:
         data_dir += '_flux'
     if args['--dynamic_diffusivities']:
@@ -334,6 +338,22 @@ if __name__ == "__main__":
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
+
+    from dedalus.tools.config import config
+    
+    config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
+    config['logging']['file_level'] = 'DEBUG'
+
+    import mpi4py.MPI
+    if mpi4py.MPI.COMM_WORLD.rank == 0:
+        if not os.path.exists('{:s}/'.format(data_dir)):
+            os.mkdir('{:s}/'.format(data_dir))
+        logdir = os.path.join(data_dir,'logs')
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+
+    logger = logging.getLogger(__name__)
+
     logger.info("saving run in: {}".format(data_dir))
 
     nx =  args['--nx']
