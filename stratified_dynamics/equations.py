@@ -367,7 +367,7 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
-    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=True,
+    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
                           mode="overwrite", **kwargs):
 
         analysis_tasks = OrderedDict()
@@ -1031,7 +1031,7 @@ class FC_equations_3d(FC_equations):
             self.problem.meta[key]['z']['dirichlet'] = True
 
         
-    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=True,
+    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
                           mode="overwrite", **kwargs):
 
         analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output, coeffs_output=coeffs_output,
