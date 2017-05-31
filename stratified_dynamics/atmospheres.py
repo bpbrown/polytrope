@@ -75,42 +75,7 @@ class Atmosphere:
             self.Ly = self.domain.bases[1].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
             self.ny = self.domain.bases[1].coeff_size
             self.delta_y = self.Ly/self.ny
-        
-
-    def filter_field(self, field,frac=0.25, fancy_filter=False):
-        dom = field.domain
-        logger.info("filtering field with frac={}".format(frac))
-        if fancy_filter:
-            logger.debug("filtering using field_filter approach.  Please check.")
-            local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-            coeff = []
-            for i in range(dom.dim)[::-1]:
-                logger.info("i = {}".format(i))
-                coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
-            logger.info(coeff)
-            cc = np.meshgrid(*coeff)
-            field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
-
-            for i in range(len(cc)):
-                logger.info("cc {} shape {}".format(i, cc[i].shape))
-                logger.info("local slice {}".format(local_slice[i]))
-                logger.info("field_filter shape {}".format(field_filter.shape))
-
-        
-            for i in range(dom.dim):
-                logger.info("trying i={}".format(i))
-                field_filter = field_filter | (cc[i][local_slice[i]] > frac)
-        
-            # broken for 3-D right now; works for 2-D.  Nope, broken now in 2-D as well... what did I do?
-            field['c'][field_filter] = 0j
-        else:
-            logger.debug("filtering using set_scales approach.  Please check.")
-            orig_scale = field.meta[:]['scale']
-            field.set_scales(frac, keep_data=True)
-            field['c']
-            field['g']
-            field.set_scales(orig_scale, keep_data=True)
-            
+                    
     def _new_ncc(self):
         field = self.domain.new_field()
         if self.dimensions > 1:
