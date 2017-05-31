@@ -394,9 +394,8 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
-    def initialize_output(self, solver, data_dir, full_output=False,
+    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=True,
                           mode="overwrite", **kwargs):
-        #  slices, profiles, and scalar are all [write_num, set_num]
 
         analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
@@ -967,6 +966,7 @@ class FC_equations_3d(FC_equations):
             self.problem.substitutions['Coriolis_z'] = '(2*Ωx*v - 2*Ωy*u)'
             self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Ω))'
         else:
+            self.rotating = False
             self.problem.substitutions['Coriolis_x'] = '0'
             self.problem.substitutions['Coriolis_y'] = '0'
             self.problem.substitutions['Coriolis_z'] = '0'
@@ -1059,11 +1059,10 @@ class FC_equations_3d(FC_equations):
             self.problem.meta[key]['z']['dirichlet'] = True
 
         
-    def initialize_output(self, solver, data_dir, full_output=False,
+    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=True,
                           mode="overwrite", **kwargs):
-        #  slices, profiles, and scalar are all [write_num, set_num]
 
-        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output,
+        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output, coeffs_output=coeffs_output,
                                                                         mode=mode, **kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False,
