@@ -65,6 +65,40 @@ class Equations():
 
         return noise_field
 
+    def filter_field(self, field,frac=0.25, fancy_filter=False):
+        dom = field.domain
+        logger.info("filtering field with frac={}".format(frac))
+        if fancy_filter:
+            logger.debug("filtering using field_filter approach.  Please check.")
+            local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
+            coeff = []
+            for i in range(dom.dim)[::-1]:
+                logger.info("i = {}".format(i))
+                coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+            logger.info(coeff)
+            cc = np.meshgrid(*coeff)
+            field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
+
+            for i in range(len(cc)):
+                logger.info("cc {} shape {}".format(i, cc[i].shape))
+                logger.info("local slice {}".format(local_slice[i]))
+                logger.info("field_filter shape {}".format(field_filter.shape))
+
+        
+            for i in range(dom.dim):
+                logger.info("trying i={}".format(i))
+                field_filter = field_filter | (cc[i][local_slice[i]] > frac)
+        
+            # broken for 3-D right now; works for 2-D.  Nope, broken now in 2-D as well... what did I do?
+            field['c'][field_filter] = 0j
+        else:
+            logger.debug("filtering using set_scales approach.  Please check.")
+            orig_scale = field.meta[:]['scale']
+            field.set_scales(frac, keep_data=True)
+            field['c']
+            field['g']
+            field.set_scales(orig_scale, keep_data=True)
+            
 class FC_equations(Equations):
     def __init__(self, **kwargs):
         super(FC_equations, self).__init__(**kwargs)
@@ -79,7 +113,7 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
 
-    def _set_subs(self, split_diffusivities=False):
+    def _set_subs(self):
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
         # output parameters        
@@ -94,17 +128,6 @@ class FC_equations(Equations):
         self.problem.substitutions['s_mean'] = '((1/Cv_inv)*log(T0) - ln_rho0)'
         self.problem.substitutions['epsilon'] = 'plane_avg(log(T0**(1/(gamma-1))/rho0)/log(T0))'
         self.problem.substitutions['m_ad']    = '((gamma-1)**-1)'
-
-        if split_diffusivities:
-            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
-            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
-            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
-        else:
-            self.problem.substitutions['nu']  = '(nu_l)'
-            self.problem.substitutions['del_nu']  = '(del_nu_l)'
-            self.problem.substitutions['chi'] = '(chi_l)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l)'
 
         self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
@@ -368,7 +391,7 @@ class FC_equations_2d(FC_equations):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
 
-    def _set_subs(self, **kwargs):
+    def _set_subs(self):
         # 2-D specific subs
         self.problem.substitutions['ω_y']         = '( u_z  - dx(w))'        
         self.problem.substitutions['enstrophy']   = '(ω_y**2)'
@@ -392,7 +415,7 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
 
-        super(FC_equations_2d, self)._set_subs(**kwargs)
+        super(FC_equations_2d, self)._set_subs()
         
     def set_equations(self, Rayleigh, Prandtl, kx = 0, EVP_2 = False, 
                       split_diffusivities=False):
@@ -409,17 +432,28 @@ class FC_equations_2d(FC_equations):
             self.problem.parameters.pop('nu_l')
             self.problem.parameters.pop('chi_l')
 
-        self._set_subs(split_diffusivities=split_diffusivities)
+        # define nu and chi for output
+        if split_diffusivities:
+            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
+            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
+        else:
+            self.problem.substitutions['nu']  = '(nu_l)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l)'
+            self.problem.substitutions['chi'] = '(chi_l)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l)'
+        self._set_subs()
         
         self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
         self.viscous_term_u_r = " nu_r*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
         self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
         
         if not self.constant_mu:
             self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
-            self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
             self.viscous_term_u_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σxz"
+            self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
             self.viscous_term_w_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σzz"
 
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
@@ -435,7 +469,7 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
 
         # double check implementation of variabile chi and background coupling term.
-        self.problem.substitutions['Q_z'] = "(-T1_z)"
+        #self.problem.substitutions['Q_z'] = "(-T1_z)"
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.source                   = " Cv_inv*(chi*(T0_zz))" # - Qcool_z/rho_full)"
@@ -518,6 +552,9 @@ class FC_equations_2d_kappa(FC_equations_2d):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
 
+        # define nu and chi for outputs
+        self.problem.substitutions['nu']  = 'μ/rho0*exp(-ln_rho1)'
+        self.problem.substitutions['chi'] = 'κ/rho0*exp(-ln_rho1)'        
         self._set_subs()
 
         self.problem.substitutions['L_visc_w'] = " μ/rho0*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)) + del_ln_μ*σzz)"                
@@ -529,30 +566,30 @@ class FC_equations_2d_kappa(FC_equations_2d):
         self.problem.substitutions['κT0'] = "(del_ln_κ*T0_z + T0_zz)"
         self.problem.substitutions['κT1'] = "(del_ln_κ*T1_z + Lap(T1, T1_z))"
         
-        self.problem.substitutions['L_thermal']  = " κ/rho0*Cv_inv*(κT0*-1*ln_rho1 + κT1)"
-        self.problem.substitutions['NL_thermal'] = " κ/rho0*Cv_inv*(κT0*(exp(-ln_rho1)+ln_rho1) + κT1*(exp(-ln_rho1)-1))"
-        self.problem.substitutions['source_terms'] = "0"  # these should not be zero...      
-        self.problem.substitutions['NL_visc_heat'] = " Cv_inv*μ/rho0*(dx(u)*σxx + w_z*σzz + σxz**2)"
+        self.problem.substitutions['L_thermal']  =   " κ/rho0*Cv_inv*(κT0*-1*ln_rho1 + κT1)"
+        self.problem.substitutions['NL_thermal'] =   " κ/rho0*Cv_inv*(κT0*(exp(-ln_rho1)+ln_rho1) + κT1*(exp(-ln_rho1)-1))"
+        self.problem.substitutions['source_terms'] = " κ/rho_full*Cv_inv*(T0_zz + del_ln_κ*T0_z)"        
+        self.problem.substitutions['NL_visc_heat'] = " μ/rho_full*Cv_inv*(dx(u)*σxx + w_z*σzz + σxz**2)"
 
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
 
         logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z     + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + NL_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1)   + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + NL_visc_u)"))
 
         logger.debug("Setting continuity equation")
         self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
         logger.debug("Setting energy equation")
-        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
     def _set_diffusivities(self, *args, **kwargs):
         super(FC_equations_2d_kappa, self)._set_diffusivities(*args, **kwargs)
@@ -578,8 +615,7 @@ class FC_equations_2d_kappa(FC_equations_2d):
             self.mu.differentiate('z', out=self.del_ln_mu)
             self.del_ln_mu['g'] /= self.mu['g']
             self.problem.parameters['del_ln_μ'] = self.del_ln_mu
-        # redefine nu and chi for outputs
-
+                    
     def set_thermal_BC(self, fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None):
         if not(fixed_flux) and not(fixed_temperature) and not(mixed_temperature_flux) and not(mixed_flux_temperature):
             mixed_flux_temperature = True
@@ -811,8 +847,18 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters['Prandtl'] = Prandtl
             self.problem.parameters.pop('nu_l')
             self.problem.parameters.pop('chi_l')
- 
-        self._set_subs(split_diffusivities=split_diffusivities)
+                # define nu and chi for output
+        if split_diffusivities:
+            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
+            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
+        else:
+            self.problem.substitutions['nu']  = '(nu_l)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l)'
+            self.problem.substitutions['chi'] = '(chi_l)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l)'
+        self._set_subs()
     
         if Taylor:
             self.rotating = True
@@ -1091,8 +1137,6 @@ class AN_equations(Equations):
         analysis_profile.add_task("plane_avg(dz(s_fluc))", name="grad_s_fluc")        
         analysis_profile.add_task("plane_avg(dz(s_mean))", name="grad_s_mean")        
         analysis_profile.add_task("plane_avg(dz(s_fluc + s_mean))", name="grad_s_tot")        
-        analysis_profile.add_task("plane_avg(Cv_inv*(chi*(T0_zz + T0_z*del_ln_rho0) + del_chi*T0_z))",
-                                  name="T1_source_terms")
         
         analysis_tasks['profile'] = analysis_profile
 
