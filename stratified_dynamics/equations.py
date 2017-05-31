@@ -1,4 +1,5 @@
 import numpy as np
+from mpi4py import MPI
 
 from collections import OrderedDict
 
@@ -13,6 +14,69 @@ class Equations():
         self.dimensions=dimensions
         self.problem_type = ''
         pass
+
+    def _set_domain(self, nx=256, Lx=4,
+                          ny=256, Ly=4,
+                          nz=128, Lz=1,
+                          grid_dtype=np.float64, comm=MPI.COMM_WORLD, mesh=None):
+        self.mesh=mesh
+        
+        if not isinstance(nz, list):
+            nz = [nz]
+        if not isinstance(Lz, list):
+            Lz = [Lz]   
+
+        if len(nz)>1:
+            logger.info("Setting compound basis in vertical (z) direction")
+            z_basis_list = []
+            Lz_interface = 0.
+            for iz, nz_i in enumerate(nz):
+                Lz_top = Lz[iz]+Lz_interface
+                z_basis = de.Chebyshev('z', nz_i, interval=[Lz_interface, Lz_top], dealias=3/2)
+                z_basis_list.append(z_basis)
+                Lz_interface = Lz_top
+            self.compound = True
+            z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
+        elif len(nz)==1:
+            logger.info("Setting single chebyshev basis in vertical (z) direction")
+            self.compound = False
+            z_basis = de.Chebyshev('z', nz[0], interval=[0, Lz[0]], dealias=3/2)
+        
+        #z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
+        if self.dimensions > 1:
+            x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
+        if self.dimensions > 2:
+            y_basis = de.Fourier(  'y', ny, interval=[0., Ly], dealias=3/2)
+        if self.dimensions == 1:
+            bases = [z_basis]
+        elif self.dimensions == 2:
+            bases = [x_basis, z_basis]
+        elif self.dimensions == 3:
+            bases = [x_basis, y_basis, z_basis]
+        else:
+            logger.error('>3 dimensions not implemented')
+        
+        self.domain = de.Domain(bases, grid_dtype=grid_dtype, comm=comm, mesh=mesh)
+        
+        self.z = self.domain.grid(-1) # need to access globally-sized z-basis
+        self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
+        self.nz = self.domain.bases[-1].coeff_size
+
+        self.z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
+
+        if self.dimensions == 1:
+            self.x, self.Lx, self.nx, self.delta_x = None, 0, None, None
+            self.y, self.Ly, self.ny, self.delta_y = None, 0, None, None
+        if self.dimensions > 1:
+            self.x = self.domain.grid(0)
+            self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
+            self.nx = self.domain.bases[0].coeff_size
+            self.delta_x = self.Lx/self.nx
+        if self.dimensions > 2:
+            self.y = self.domain.grid(1)
+            self.Ly = self.domain.bases[1].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
+            self.ny = self.domain.bases[1].coeff_size
+            self.delta_y = self.Ly/self.ny
     
     def set_IVP_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
         self.problem_type = 'IVP'
@@ -25,6 +89,22 @@ class Equations():
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
+    def get_problem(self):
+        return self.problem
+
+    def _new_ncc(self):
+        field = self.domain.new_field()
+        if self.dimensions > 1:
+            field.meta['x']['constant'] = True
+        if self.dimensions > 2:
+            field.meta['y']['constant'] = True            
+        return field
+
+    def _new_field(self):
+        field = self.domain.new_field()
+        return field
+
+        
     def at_boundary(self, f, z=0, tol=1e-12, derivative=False, dz=False, BC_text='BC'):        
         if derivative or dz:
             f_bc=self._new_ncc()
@@ -71,10 +151,24 @@ class Equations():
         if fancy_filter:
             logger.debug("filtering using field_filter approach.  Please check.")
             local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-            coeff = []
+            coeff = []                
             for i in range(dom.dim)[::-1]:
-                logger.info("i = {}".format(i))
-                coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+                logger.info("building filter: i = {}".format(i))
+                if i == np.max(dom.dim)-1 and self.compound:
+                    # special operation on the compound basis
+                    for nz in self.nz_set:
+                        logger.info("nz: {} out of {}".format(nz, self.nz_set))
+                        if first_subbasis:
+                            compound_set = np.linspace(0,1,nz,endpoint=False)
+                            first_subbasis=False
+                        else:
+                            compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
+                    logger.debug("compound set shape {}".format(compound_set.shape))
+                    logger.debug("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
+                    coeff.append(compound_set)
+                else:
+                    coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
+                
             logger.info(coeff)
             cc = np.meshgrid(*coeff)
             field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')

@@ -33,64 +33,7 @@ class Atmosphere:
             self.fig_dir += '/'
         if self.domain.dist.comm_cart.rank == 0 and not os.path.exists(self.fig_dir):
             os.mkdir(self.fig_dir)
-                
-    def _set_domain(self, nx=256, Lx=4,
-                          ny=256, Ly=4,
-                          nz=128, Lz=1,
-                          grid_dtype=np.float64, comm=MPI.COMM_WORLD, mesh=None):
-        self.mesh=mesh
-
-        z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
-        if self.dimensions > 1:
-            x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
-        if self.dimensions > 2:
-            y_basis = de.Fourier(  'y', ny, interval=[0., Ly], dealias=3/2)
-        if self.dimensions == 1:
-            bases = [z_basis]
-        elif self.dimensions == 2:
-            bases = [x_basis, z_basis]
-        elif self.dimensions == 3:
-            bases = [x_basis, y_basis, z_basis]
-        else:
-            logger.error('>3 dimensions not implemented')
-        
-        self.domain = de.Domain(bases, grid_dtype=grid_dtype, comm=comm, mesh=mesh)
-        
-        self.z = self.domain.grid(-1) # need to access globally-sized z-basis
-        self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
-        self.nz = self.domain.bases[-1].coeff_size
-
-        self.z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
-
-        if self.dimensions == 1:
-            self.x, self.Lx, self.nx, self.delta_x = None, 0, None, None
-            self.y, self.Ly, self.ny, self.delta_y = None, 0, None, None
-        if self.dimensions > 1:
-            self.x = self.domain.grid(0)
-            self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
-            self.nx = self.domain.bases[0].coeff_size
-            self.delta_x = self.Lx/self.nx
-        if self.dimensions > 2:
-            self.y = self.domain.grid(1)
-            self.Ly = self.domain.bases[1].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
-            self.ny = self.domain.bases[1].coeff_size
-            self.delta_y = self.Ly/self.ny
-                    
-    def _new_ncc(self):
-        field = self.domain.new_field()
-        if self.dimensions > 1:
-            field.meta['x']['constant'] = True
-        if self.dimensions > 2:
-            field.meta['y']['constant'] = True            
-        return field
-
-    def _new_field(self):
-        field = self.domain.new_field()
-        return field
-
-    def get_problem(self):
-        return self.problem
-
+            
     def evaluate_at_point(self, f, z=0):
         return f.interpolate(z=z)
 
@@ -426,106 +369,7 @@ class Atmosphere:
                 logger.info("Problems in plot_atmosphere: atm full of NaNs?")
         self.test_hydrostatic_balance(make_plots=make_plots, **kwargs)
         self.check_that_atmosphere_is_set()
-
-
-class MultiLayerAtmosphere(Atmosphere):
-    def __init__(self, *args, **kwargs):
-        super(MultiLayerAtmosphere, self).__init__(*args, **kwargs)
         
-    def _set_domain(self, nx=256, Lx=4, nz=[128, 128], Lz=[1,1], grid_dtype=np.float64, comm=MPI.COMM_WORLD):
-        '''
-        Specify 2-D domain, with compund basis in z-direction.
-
-        First entries in nz, Lz are the bottom entries (build upwards).
-        '''
-        if len(nz) != len(Lz):
-            logger.error("nz {} has different number of elements from Lz {}".format(nz, Lz))
-            raise
-                
-        if self.dimensions > 1:
-            x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
-
-        if len(nz)>1:
-            logger.info("Setting compound basis in vertical (z) direction")
-            z_basis_list = []
-            Lz_interface = 0.
-            for iz, nz_i in enumerate(nz):
-                Lz_top = Lz[iz]+Lz_interface
-                z_basis = de.Chebyshev('z', nz_i, interval=[Lz_interface, Lz_top], dealias=3/2)
-                z_basis_list.append(z_basis)
-                Lz_interface = Lz_top
-
-            z_basis = de.Compound('z', tuple(z_basis_list),  dealias=3/2)
-        elif len(nz)==1:
-            logger.info("Setting single chebyshev basis in vertical (z) direction")
-            z_basis = de.Chebyshev('z', nz[0], interval=[0, Lz[0]], dealias=3/2)
-        else:
-            logger.error("error in specification of vertical basis")
-            
-             
-        logger.info("    Using nx = {}, Lx = {}".format(nx, Lx))
-        logger.info("          nz = {}, nz_tot = {}, Lz = {}".format(nz, np.sum(nz), Lz))
-      
-        if self.dimensions == 2:
-            self.domain = de.Domain([x_basis, z_basis], grid_dtype=grid_dtype, comm=comm)
-        elif self.dimensions == 1:
-            self.domain = de.Domain([z_basis], grid_dtype=grid_dtype, comm=comm)
-       
-        if self.dimensions > 1:
-            self.x = self.domain.grid(0)
-            self.Lx = self.domain.bases[0].interval[1] - self.domain.bases[0].interval[0] # global size of Lx
-            self.nx = self.domain.bases[0].coeff_size
-            self.delta_x = self.Lx/self.nx
-        
-        self.z = self.domain.grid(-1) # need to access globally-sized z-basis
-        self.Lz = self.domain.bases[-1].interval[1] - self.domain.bases[-1].interval[0] # global size of Lz
-        self.nz = self.domain.bases[-1].coeff_size
-        self.nz_set = nz
-        
-        self.z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
-
-    def filter_field(self, field,frac=0.25, fancy_filter=False):
-        logger.info("compound domain: filtering field with frac={}".format(frac))
-        dom = field.domain
-        if dom.dim < 3:
-            fancy_filter=True
-            
-        if fancy_filter:
-            logger.info("filtering using field_filter approach.  Robust for 2-D.")
-
-            local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-            coeff = []
-            first_subbasis = True
-            for i in range(dom.dim)[::-1]:
-                if i == np.max(dom.dim)-1:
-                    # special operation on the compound basis
-                    for nz in self.nz_set:
-                        logger.info("nz: {} out of {}".format(nz, self.nz_set))
-                        if first_subbasis:
-                            compound_set = np.linspace(0,1,nz,endpoint=False)
-                            first_subbasis=False
-                        else:
-                            compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
-                    logger.debug("compound set shape {}".format(compound_set.shape))
-                    logger.debug("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
-                    coeff.append(compound_set)
-                else:
-                    coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
-            cc = np.meshgrid(*coeff)
-            for i in range(len(cc)):
-                logger.debug("cc {} shape {}".format(i, cc[i].shape))
-            field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
-
-            for i in range(dom.dim):
-                field_filter = field_filter | (cc[i][local_slice] > frac)
-            field['c'][field_filter] = 0j
-        else:
-            logger.info("filtering using set_scales approach; this may not have the desired behaviour on a compound domain.  Please check.")
-            orig_scale = field.meta[:]['scale']
-            field.set_scales(frac, keep_data=True)
-            field['c']
-            field['g']
-            field.set_scales(orig_scale, keep_data=True)
 
 class Polytrope(Atmosphere):
     '''
@@ -767,7 +611,7 @@ class Polytrope(Atmosphere):
         self.chi.set_scales(1, keep_data=True)
 
                       
-class Multitrope(MultiLayerAtmosphere):
+class Multitrope(Atmosphere):
     '''
     Multiple joined polytropes.  Currently two are supported, unstable on top, stable below.  To be generalized.
 
@@ -1025,7 +869,7 @@ class Multitrope(MultiLayerAtmosphere):
         logger.info("   m_rz = {:g}, stiffness = {:g}".format(self.m_rz, self.stiffness))
     
     def _set_atmosphere(self, atmosphere_type2=False):
-        super(MultiLayerAtmosphere, self)._set_atmosphere()
+        super(Multitrope, self)._set_atmosphere()
         
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
 
