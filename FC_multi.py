@@ -34,9 +34,14 @@ Options:
     --oz                       Do system with convection zone on the bottom rather than top (exoplanets)
 
     --width=<width>            Width of erf transition between two polytropes
+    
     --root_dir=<root_dir>      Root directory to save data dir in [default: ./]    
     --label=<label>            Additional label for run output directory
+    --out_cadence=<out_cad>    The fraction of a buoyancy time to output data at [default: 0.1]
+    --writes=<writes>          Writes per file [default: 20]
     --no_coeffs                If flagged, coeffs will not be output
+    --no_join                  If flagged, skip join operation at end of run
+
     --verbose                  Produce diagnostic plots
 """
 import logging
@@ -55,7 +60,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
                       fixed_flux=False,
                       run_time=23.5, run_time_buoyancies=np.inf, run_time_iter=np.inf,
                       dynamic_diffusivities=False,
-                      no_coeffs=False,
+                      max_writes=20,out_cadence=0.1, no_coeffs=False, no_join=False,
                       restart=None, data_dir='./', verbose=False):
 
     import dedalus.public as de
@@ -157,18 +162,18 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
     
     max_dt = atmosphere.min_BV_time 
-    max_dt = atmosphere.buoyancy_time*0.1
+    max_dt = atmosphere.buoyancy_time*out_cadence
     if dt is None: dt = max_dt/5
         
     report_cadence = 1
-    output_time_cadence   = 0.1*atmosphere.buoyancy_time
+    output_time_cadence = out_cadence*atmosphere.buoyancy_time
     solver.stop_sim_time  = run_time_buoyancies*atmosphere.buoyancy_time
     solver.stop_iteration = solver.iteration + run_time_iter
     solver.stop_wall_time = run_time*3600
 
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, coeffs_output=not(no_coeffs), sim_dt=output_time_cadence, mode=mode)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, coeffs_output=not(no_coeffs), sim_dt=output_time_cadence, max_writes=max_writes, mode=mode)
 
     
     cfl_cadence = 1
@@ -278,12 +283,13 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
         except:
             print('cannot save final checkpoint')
 
-        logger.info(data_dir+'/checkpoint/')
-        post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+        if not(no_join):
+            logger.info(data_dir+'/checkpoint/')
+            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
 
-        for task in analysis_tasks:
-            logger.info(analysis_tasks[task].base_path)
-            post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)
+            for task in analysis_tasks:
+                logger.info(analysis_tasks[task].base_path)
+                post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)
 
         if (atmosphere.domain.distributor.rank==0):
  
@@ -386,12 +392,15 @@ if __name__ == "__main__":
                       data_dir=data_dir,
                       verbose=args['--verbose'],
                       no_coeffs=args['--no_coeffs'],
+                      no_join=args['--no_join'],
+                      out_cadence=float(args['--out_cadence']),
                       oz=args['--oz'],
                       fixed_flux=args['--fixed_flux'],
                       dynamic_diffusivities=args['--dynamic_diffusivities'],
                       dense=args['--dense'],
                       nz_dense=int(args['--nz_dense']),
                       rk222=args['--rk222'],
+                      max_writes=int(float(args['--writes'])),
                       superstep=args['--superstep'],
                       run_time=float(args['--run_time']),
                       run_time_buoyancies=run_time_buoy,

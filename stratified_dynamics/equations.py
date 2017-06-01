@@ -368,12 +368,12 @@ class FC_equations(Equations):
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
     def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
-                          mode="overwrite", **kwargs):
+                          max_writes=20, mode="overwrite", **kwargs):
 
         analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
 
-        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False,
+        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=max_writes, parallel=False,
                                                              mode=mode, **kwargs)
         analysis_profile.add_task("plane_avg(T1)", name="T1")
         analysis_profile.add_task("plane_avg(T_full)", name="T_full")
@@ -425,7 +425,7 @@ class FC_equations(Equations):
         
         analysis_tasks['profile'] = analysis_profile
 
-        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False,
+        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=max_writes, parallel=False,
                                                             mode=mode, **kwargs)
         analysis_scalar.add_task("vol_avg(KE)", name="KE")
         analysis_scalar.add_task("vol_avg(PE)", name="PE")
@@ -579,12 +579,12 @@ class FC_equations_2d(FC_equations):
                 
 
     def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=True,
-                          mode="overwrite", **kwargs):
+                          max_writes=20, mode="overwrite", **kwargs):
 
         analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir, full_output=full_output,
-                                                                        mode=mode, **kwargs)
+                                                                        max_writes=max_writes, mode=mode, **kwargs)
         
-        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False,
+        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
                                                             mode=mode, **kwargs)
         analysis_slice.add_task("s_fluc", name="s")
         analysis_slice.add_task("s_fluc - plane_avg(s_fluc)", name="s'")
@@ -595,7 +595,7 @@ class FC_equations_2d(FC_equations):
         analysis_tasks['slice'] = analysis_slice
 
         if coeffs_output:
-            analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=20, parallel=False,
+            analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=max_writes, parallel=False,
                                                                mode=mode, **kwargs)
             analysis_coeff.add_task("s_fluc", name="s", layout='c')
             analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
@@ -1032,12 +1032,12 @@ class FC_equations_3d(FC_equations):
 
         
     def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
-                          mode="overwrite", **kwargs):
+                          max_writes=20, mode="overwrite", **kwargs):
 
         analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output, coeffs_output=coeffs_output,
-                                                                        mode=mode, **kwargs)
+                                                                        max_writes=max_writes, mode=mode, **kwargs)
         
-        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False,
+        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
                                                            mode=mode, **kwargs)
         analysis_slice.add_task("interp(s_fluc,                     y={})".format(self.Ly/2), name="s")
         analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), y={})".format(self.Ly/2), name="s'")
@@ -1053,7 +1053,7 @@ class FC_equations_3d(FC_equations):
         analysis_slice.add_task("interp(ω_z,                        z={})".format(0.5*self.Lz),  name="vorticity_z midplane")
         analysis_tasks['slice'] = analysis_slice
 
-        analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=20, parallel=False, 
+        analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=max_writes, parallel=False, 
                                                             mode=mode, **kwargs)
         analysis_volume.add_task("enstrophy", name="enstrophy")
         analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
@@ -1158,11 +1158,11 @@ class AN_equations(Equations):
 
         logger.info("Starting with s perturbations of amplitude A0 = {:g}".format(A0))
 
-    def initialize_output(self, solver, data_dir, **kwargs):
+    def initialize_output(self, solver, data_dir, max_writes=20, **kwargs):
         analysis_tasks = OrderedDict()
         self.analysis_tasks = analysis_tasks
         
-        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=20, parallel=False, **kwargs)
+        analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False, **kwargs)
         analysis_slice.add_task("s", name="s")
         analysis_slice.add_task("s - plane_avg(s)", name="s'")
         analysis_slice.add_task("u", name="u")
@@ -1171,7 +1171,7 @@ class AN_equations(Equations):
         analysis_slice.add_task("vorticity", name="vorticity")
         analysis_tasks['slice'] = analysis_slice
         
-        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=20, parallel=False, **kwargs)
+        analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=max_writes, parallel=False, **kwargs)
         analysis_profile.add_task("plane_avg(KE)", name="KE")
         analysis_profile.add_task("plane_avg(PE)", name="PE")
         analysis_profile.add_task("plane_avg(IE)", name="IE")
@@ -1205,7 +1205,7 @@ class AN_equations(Equations):
         
         analysis_tasks['profile'] = analysis_profile
 
-        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=20, parallel=False, **kwargs)
+        analysis_scalar = solver.evaluator.add_file_handler(data_dir+"scalar", max_writes=max_writes, parallel=False, **kwargs)
         analysis_scalar.add_task("vol_avg(KE)", name="KE")
         analysis_scalar.add_task("vol_avg(PE)", name="PE")
         analysis_scalar.add_task("vol_avg(IE)", name="IE")
