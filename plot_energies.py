@@ -3,7 +3,7 @@ Plot energies from joint analysis files.
 
 Usage:
     plot_energies.py join <base_path>
-    plot_energies.py <files>... [--output=<output>]
+    plot_energies.py <base_path> [--output=<output>]
 
 Options:
     --output=<output>  Output directory; if blank a guess based on likely case name will be made
@@ -129,6 +129,8 @@ if __name__ == "__main__":
     from dedalus.tools import logging
     from dedalus.tools import post
     from dedalus.tools.parallel import Sync
+    import glob
+    import os
 
     args = docopt(__doc__)
 
@@ -138,7 +140,7 @@ if __name__ == "__main__":
         if args['--output'] is not None:
             output_path = pathlib.Path(args['--output']).absolute()
         else:
-            data_dir = args['<files>'][0].split('/')[0]
+            data_dir = args['<base_path>'][0].split('/')[0]
             data_dir += '/'
             output_path = pathlib.Path(data_dir).absolute()
         # Create output directory if needed
@@ -147,6 +149,8 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         logger.info("output to {}".format(output_path))
-        main(args['<files>'], output_path=str(output_path)+'/')
+        file_glob = os.path.join(args['<base_path>'],"scalar_s*.h5")
+        files = glob.glob(file_glob)
+        main(files, output_path=str(output_path)+'/')
 
 
