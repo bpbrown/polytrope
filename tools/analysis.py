@@ -69,15 +69,18 @@ class Scalar(DedalusData):
             logger.debug("opening {}".format(filename))
             f = h5py.File(filename, flag='r')
             # clumsy
-            for key in self.keys:
-                if N == 1:
-                    self.data[key] = f['tasks'][key][:]
-                    logger.debug("{} shape {}".format(key, self.data[key].shape))
-                else:
-                    self.data[key] = np.append(self.data[key], f['tasks'][key][:], axis=0)
+            try:
+                for key in self.keys:
+                    if N == 1:
+                        self.data[key] = f['tasks'][key][:]
+                        logger.debug("{} shape {}".format(key, self.data[key].shape))
+                    else:
+                        self.data[key] = np.append(self.data[key], f['tasks'][key][:], axis=0)
 
-            N += 1
-            self.times = np.append(self.times, f['scales']['sim_time'][:])
+                N += 1
+                self.times = np.append(self.times, f['scales']['sim_time'][:])
+            except KeyError:
+                logger.warning("file {} is missing a key. Skipping...".format(filename))
             f.close()
             
         for key in self.keys:
