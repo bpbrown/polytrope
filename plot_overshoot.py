@@ -101,71 +101,38 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         return f/np.max(np.abs(f))
 
     norm_diag = OrderedDict()
-    #norm_diag['enstrophy'] = ('enstrophy', norm(averages['enstrophy']))
-    #norm_diag['KE'] = ('KE', norm(averages['KE']))
-    
-    #norm_diag['KE_flux'] = ('KE_flux', norm(averages['KE_flux_z']))
 
-    try:
-        #norm_diag['grad_s'] = (r'$\nabla (s_0+s_1)$', norm(averages['grad_s_tot']))
-        norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
-        try:
-            norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot']))
-        except:
-            # hard coded and not correct for low stiffness (when m_cz !~ 1.5 and our gravity estimate is off)
-            logger.info("estimating brunt; this will introduce errors due to gravity estimate")
-            norm_diag['brunt'] = (r'$\omega^2/N^2_{HC}$', norm(averages['enstrophy']-((1.5+1)*averages['grad_s_tot']*(gamma-1)/gamma)))
-
-    except:
-        logger.info("Missing grad_s from outputs; trying numeric gradient option")
-        dz = np.gradient(z)
-        try:
-            #norm_diag['grad_s*'] = (r'$\nabla (s_0+s_1)^*$', np.gradient(norm(averages['s_tot']), dz))
-            norm_diag['grad_s_mean*'] = (r'$\nabla (s_0)^*$', np.gradient(norm(averages['s_mean']), dz))
-        except:
-            logger.info("Missing s_tot from outputs")
-
+    norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
+    norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot']))
     norm_diag['s_mean'] = (r'$s_0$', norm(averages['s_mean']))
     norm_diag['s_tot'] = (r'$s_0+s_1$', norm(averages['s_tot']))
 
     stiff_threshold = stiffness**(-0.5)
 
-    try:
-        #norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
-        #stiff_threshold = np.max(norm(averages['s_fluc_std'])) # max value
-        #logger.info("std dev thresh: {}".format(stiff_threshold))
-        logger.info("skipping s_fluc_std")
-    except:
-        logger.info("Missing s_fluc_std from outputs")
+    #norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
+    #stiff_threshold = np.max(norm(averages['s_fluc_std'])) # max value
+    #logger.info("std dev thresh: {}".format(stiff_threshold))
         
     # estimate penetration depths
     overshoot_depths = OrderedDict()
-    roots = OrderedDict()
-
     
-    def poor_mans_root(z, f):
-        i_near = (np.abs(f)).argmin()
-        return z[i_near], f[i_near], i_near
-    
+    linear_root_quantities = ['KE_flux', 'grad_s', 'grad_s_mean', 'grad_s_tot', 's_mean', 's_tot', 'brunt']
+    entropy_quantities = ['s_mean', 's_tot']
     for key in norm_diag:
-        if key=="KE_flux" or key=='grad_s' or key=='grad_s_mean' or key=='grad_s_tot' or key=="s_mean" or key=="s_tot" or key=="brunt":
+        if key in linear_root_quantities:
             threshold = 0
-            if key=="s_tot" or key=="s_mean":
+            if key in entropy_quantities:
                 # grab the top of the atmosphere value
                 threshold = norm_diag[key][1][-1]
                 logger.info("key: {} has threshold {}".format(key, threshold))
                 
-            root_color = 'blue'
             criteria = norm_diag[key][1] - threshold
-            if key=="KE_flux":
-                root_color = 'darkgreen'
+
         else:
             threshold = stiff_threshold #1e-2
-            root_color = 'red'
             criteria = np.log(norm_diag[key][1])-np.log(threshold)
+            
         logger.info("key {}".format(key))
-        
-        z_root_poor, f, i = poor_mans_root(z, criteria)
         
         z_search = np.copy(z)
         criteria_search = np.copy(criteria)
@@ -178,9 +145,7 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         z_root = interp_bisect_root(z_search, criteria_search, a=a, b=b)
  
         overshoot_depths[key] = z_root
-        roots[key] = (z_root, root_color)
         
-        logger.debug("poor man: {:>10s} : found root z={}".format(key, z_root_poor))
         logger.debug("  bisect: {:>10s} : found root z={}".format(key, z_root))
 
     if verbose:
