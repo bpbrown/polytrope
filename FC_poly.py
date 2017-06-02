@@ -44,7 +44,8 @@ Options:
     
     --root_dir=<root_dir>                Root directory to save data dir in [default: ./]
     --label=<label>                      Additional label for run output directory
-    --out_cadence=<out_cadence>          The fraction of a buoyancy time to output data at [default: 0.1]
+    --out_cadence=<out_cad>              The fraction of a buoyancy time to output data at [default: 0.1]
+    --writes=<writes>                    Writes per file [default: 20]
     --no_coeffs                          If flagged, coeffs will not be output
     --no_join                            If flagged, skip join operation at end of run.
 
@@ -54,18 +55,19 @@ import logging
 
 import numpy as np
 
-def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
-                   Taylor=None, theta=0,
-                        nz=128, nx=None, ny=None, threeD=False, mesh=None,
-                        n_rho_cz=3, epsilon=1e-4,
-                        run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
-                        fixed_T=False, fixed_flux=False, mixed_flux_T=False,
-                        const_mu=True, const_kappa=True,
-                        dynamic_diffusivities=False, split_diffusivities=False,
-                        restart=None, start_new_files=False,
-                        rk222=False, safety_factor=0.2,
-                        data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
-                        verbose=False):
+def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
+                 Taylor=None, theta=0,
+                 nz=128, nx=None, ny=None, threeD=False, mesh=None,
+                 n_rho_cz=3, epsilon=1e-4,
+                 run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
+                 fixed_T=False, fixed_flux=False, mixed_flux_T=False,
+                 const_mu=True, const_kappa=True,
+                 dynamic_diffusivities=False, split_diffusivities=False,
+                 restart=None, start_new_files=False,
+                 rk222=False, safety_factor=0.2,
+                 max_writes=20,
+                 data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
+                 verbose=False):
 
     import dedalus.public as de
     from dedalus.tools  import post
@@ -175,7 +177,7 @@ def FC_polytrope(  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
     
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
 
     #Set up timestep defaults
     max_dt = output_time_cadence/2
@@ -446,33 +448,34 @@ if __name__ == "__main__":
         run_time_iter = np_inf
         
     FC_polytrope(Rayleigh=float(args['--Rayleigh']),
-                      Prandtl=float(args['--Prandtl']),
-                      Taylor=Taylor,
-                      theta=float(args['--theta']),
-                      threeD=args['--3D'],
-                      mesh=mesh,
-                      nx = nx,
-                      ny = ny,
-                      nz = nz,
-                      aspect_ratio=float(args['--aspect']),
-                      n_rho_cz=float(args['--n_rho_cz']),
-                      epsilon=float(args['--epsilon']),
-                      run_time=float(args['--run_time']),
-                      run_time_buoyancies=run_time_buoy,
-                      run_time_iter=run_time_iter,
-                      fixed_T=args['--fixed_T'],
-                      fixed_flux=args['--fixed_flux'],
-                      mixed_flux_T=args['--mixed_flux_T'],
-                      const_mu=const_mu,
-                      const_kappa=const_kappa,
-                      dynamic_diffusivities=args['--dynamic_diffusivities'],
-                      restart=(args['--restart']),
-                      start_new_files=start_new_files,
-                      rk222=rk222,
-                      safety_factor=float(args['--safety_factor']),
-                      out_cadence=float(args['--out_cadence']),
-                      data_dir=data_dir,
-                      no_coeffs=args['--no_coeffs'],
-                      no_join=args['--no_join'],
-                      split_diffusivities=args['--split_diffusivities'],
-                      verbose=args['--verbose'])
+                 Prandtl=float(args['--Prandtl']),
+                 Taylor=Taylor,
+                 theta=float(args['--theta']),
+                 threeD=args['--3D'],
+                 mesh=mesh,
+                 nx = nx,
+                 ny = ny,
+                 nz = nz,
+                 aspect_ratio=float(args['--aspect']),
+                 n_rho_cz=float(args['--n_rho_cz']),
+                 epsilon=float(args['--epsilon']),
+                 run_time=float(args['--run_time']),
+                 run_time_buoyancies=run_time_buoy,
+                 run_time_iter=run_time_iter,
+                 fixed_T=args['--fixed_T'],
+                 fixed_flux=args['--fixed_flux'],
+                 mixed_flux_T=args['--mixed_flux_T'],
+                 const_mu=const_mu,
+                 const_kappa=const_kappa,
+                 dynamic_diffusivities=args['--dynamic_diffusivities'],
+                 restart=(args['--restart']),
+                 start_new_files=start_new_files,
+                 rk222=rk222,
+                 safety_factor=float(args['--safety_factor']),
+                 out_cadence=float(args['--out_cadence']),
+                 max_writes=int(float(args['--writes'])),
+                 data_dir=data_dir,
+                 no_coeffs=args['--no_coeffs'],
+                 no_join=args['--no_join'],
+                 split_diffusivities=args['--split_diffusivities'],
+                 verbose=args['--verbose'])
