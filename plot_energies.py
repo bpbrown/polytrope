@@ -135,12 +135,12 @@ if __name__ == "__main__":
     args = docopt(__doc__)
 
     if args['join']:
-        post.merge_analysis(args['<base_path>'])
+        post.merge_process_files(args['<base_path>'])
     else:
         if args['--output'] is not None:
             output_path = pathlib.Path(args['--output']).absolute()
         else:
-            data_dir = args['<base_path>'][0].split('/')[0]
+            data_dir = args['<base_path>'].split('/')[0]
             data_dir += '/'
             output_path = pathlib.Path(data_dir).absolute()
         # Create output directory if needed
