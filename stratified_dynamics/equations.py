@@ -903,7 +903,7 @@ class FC_equations_3d(FC_equations):
                         
     def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
                       kx = 0, EVP_2 = False, 
-                      constant_mu=False, constant_kappa=False, split_diffusivities=False):
+                      split_diffusivities=False):
         
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, split_diffusivities=split_diffusivities)
         self._set_parameters()
@@ -951,7 +951,7 @@ class FC_equations_3d(FC_equations):
         self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, v_z, dz(w_z)))"
         # here, nu and chi are constants        
         
-        if not constant_mu:
+        if not self.constant_mu:
             self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
             self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
             self.viscous_term_v_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σyz"
@@ -980,7 +980,7 @@ class FC_equations_3d(FC_equations):
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff   = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + dy(T1)*dy(ln_rho1) + T1_z*dz(ln_rho1))"
         self.source =                   " Cv_inv*(chi*(T0_zz))" # - Qcool_z/rho_full)"
-        if not constant_kappa:
+        if not self.constant_kappa:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source                += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
