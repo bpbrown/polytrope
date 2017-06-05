@@ -3,10 +3,11 @@ Plot energies from joint analysis files.
 
 Usage:
     plot_energies.py join <base_path>
-    plot_energies.py <base_path> [--output=<output>]
+    plot_energies.py <base_path> [--output=<output> --unjoined]
 
 Options:
     --output=<output>  Output directory; if blank a guess based on likely case name will be made
+    --unjoined         Use unjoined scalar files
 
 """
 import numpy as np
@@ -149,8 +150,14 @@ if __name__ == "__main__":
                 if not output_path.exists():
                     output_path.mkdir()
         logger.info("output to {}".format(output_path))
-        file_glob = os.path.join(args['<base_path>'],"scalar_s*.h5")
+        base_path = args['<base_path>']
+        if args['--unjoined']:
+            logger.info("Using unjoined output...")
+            file_glob = os.path.join(base_path,"scalar_s*/*p0.h5")
+        else:
+            file_glob = os.path.join(base_path,"scalar_s*.h5")
         files = glob.glob(file_glob)
+        print(files)
         main(files, output_path=str(output_path)+'/')
 
 

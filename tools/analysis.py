@@ -13,14 +13,9 @@ class DedalusData():
         
         self.verbose = verbose
 
-        # properly order files for read in based on set number
-        matches = re.findall(r'_s\d+.h5', '{:}'.format(files))
-        # strip out pre and post fix for sorting
-        for i, match in enumerate(matches):
-            matches[i] = int(match.split('.h5')[0].split('_s')[1])
 
-        self.files = [x for (y,x) in sorted(zip(matches,files), key=lambda pair: pair[0])]
-        #self.files = sorted(files, key=lambda x: int(x.split('.h5')[0].split('_s')[1]))
+        files.sort(key=lambda x: int(re.search(r'_s(\d+)',x).group(1)))
+        self.files = files
         logger.debug("opening: {}".format(self.files))
         
         if keys is None:
