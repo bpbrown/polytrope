@@ -177,7 +177,7 @@ def plot_profiles(data, z, output_path='./'):
         figs[key].savefig(output_path+'profiles_{}.png'.format(key), dpi=600)
 
 def main(files, output_path='./', overshoot=False, timetrace=False):
-    logger.info("opening {}".format(files))
+    logger.debug("opening {}".format(files))
     data = analysis.Profile(files)
     averages = data.average
     std_devs = data.std_dev
