@@ -39,7 +39,7 @@ def plot_diagnostics(z, norm_diag, roots, output_path='/.', boundary=None):
 
         apjfig.ax.axvline(x=roots[key], linestyle='dotted', color=color)
         min_plot = min(min_plot, np.min(np.abs(norm_diag[key][1])))
-        logger.info("{} : {} : {}".format(key, norm_diag[key][0], norm_diag[key][1]))
+        logger.debug("{} : {} : {}".format(key, norm_diag[key][0], norm_diag[key][1]))
     min_plot = max(plot_floor, min_plot)
 
     #apjfig.ax.axhline(y=1e-2, color='black', linestyle='dashed')
@@ -65,13 +65,14 @@ def plot_overshoot_times(times, overshoot, average_overshoot=None, output_path='
     ref_depth = overshoot[ref]
     min_z = 100
     max_z = 0
-    logger.info("reference depth:")
-    logger.info("{} -- {}".format(ref, ref_depth))
+
+    logger.info("overshoot locations with time (reference depth = {})".format(ref))
+    logger.info("{:12s} : {}".format(ref, ref_depth))
     for key in overshoot:
         if key!=ref and key!='grad_s':
             color = next(apjfig.ax._get_lines.prop_cycler)['color']
             #logger.info("{:10s} -- OV: {}".format(key, ref_depth - overshoot[key]))
-            logger.info("{:10s} : {}".format(key, overshoot[key]))
+            logger.info("{:12s} : {}".format(key, overshoot[key]))
             q = overshoot[key] #np.abs(overshoot[key]-ref_depth)
             apjfig.ax.plot(times, q, label=key, color=color)
             if average_overshoot is not None:
@@ -122,7 +123,6 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
             if key in entropy_quantities:
                 # grab the top of the atmosphere value
                 threshold = norm_diag[key][1][-1]
-                logger.info("key: {} has threshold {}".format(key, threshold))
                 
             criteria = norm_diag[key][1] - threshold
 
@@ -130,7 +130,7 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
             threshold = stiff_threshold
             criteria = np.log(norm_diag[key][1])-np.log(threshold)
             
-        logger.info("key {}".format(key))
+        logger.debug("key: {} has threshold {}".format(key, threshold))
         
         z_search = np.copy(z)
         criteria_search = np.copy(criteria)
@@ -180,7 +180,7 @@ def analyze_case(files, verbose=False, output_path=None):
     import re
     
     data = analysis.Profile(files)
-    logger.info("read in data from {}".format(data.files))
+    logger.debug("read in data from {}".format(data.files))
 
     averages = data.average
     std_devs = data.std_dev
@@ -207,8 +207,10 @@ def analyze_case(files, verbose=False, output_path=None):
     logger.info("overshoot: case has stiffness of {}".format(stiffness))
     
     overshoot_depths = diagnose_overshoot(averages, z, stiffness, output_path=str(output_path)+'/', verbose=verbose)
+
+    logger.info("overshoot in time-averaged profile")
     for key in overshoot_depths:
-        print("{} --> z={}".format(key, overshoot_depths[key]))
+        logger.info("{:12s} --> z={}".format(key, overshoot_depths[key]))
 
     if verbose:
         avgs, std_dev = overshoot_time_trace(data.data, z, times, stiffness, average_overshoot=overshoot_depths, output_path=str(output_path)+'/')
@@ -278,6 +280,7 @@ def plot_overshoot(stiffness, overshoot, std_dev, output_path='./', linear=False
     
     logger.info("reference depth:")
     logger.info("{} -- {}".format(ref, ref_depth))
+
     for key in overshoot:
         if key!=ref and key!='grad_s':
             color = next(apjfig.ax._get_lines.prop_cycler)['color']
