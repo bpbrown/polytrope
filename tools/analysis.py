@@ -430,3 +430,9 @@ def interp_newton_root(z, f, z0=None, a=None, b=None):
     z_root = z_root_2
         
     return z_root
+
+def cumulative_avg(data):
+    lens = np.arange(len(data)) + 1
+    ca = np.cumsum(data)/lens
+
+    return ca

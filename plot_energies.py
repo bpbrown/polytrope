@@ -25,8 +25,10 @@ def plot_energies(data, times, output_path='./'):
     t = times
         
     figs = {}
+    two_size = (16,8)
+    one_size = (8,8)
     
-    fig_energies = plt.figure(figsize=(16,8))
+    fig_energies = plt.figure(figsize=two_size)
     ax1 = fig_energies.add_subplot(2,1,1)
     ax1.semilogy(t, data['KE'], label="KE")
     ax1.semilogy(t, data['PE'], label="PE")
@@ -46,7 +48,7 @@ def plot_energies(data, times, output_path='./'):
     ax2.legend()
     figs["energies"]=fig_energies
 
-    fig_KE = plt.figure(figsize=(16,8))
+    fig_KE = plt.figure(figsize=two_size)
     ax1 = fig_KE.add_subplot(1,1,1)
     ax1.plot(t, data['KE'], label="KE")
     ax1.plot(t, data['PE']-data['PE'][0], label="PE-PE$_0$")
@@ -61,7 +63,7 @@ def plot_energies(data, times, output_path='./'):
     ax1.set_ylabel("energy")
     figs["fluctuating_energies"] = fig_KE
 
-    fig_KE_only = plt.figure(figsize=(16,8))
+    fig_KE_only = plt.figure(figsize=two_size)
     ax1 = fig_KE_only.add_subplot(2,1,1)
     ax1.plot(t, data['KE'], label="KE")
     ax1.legend()
@@ -73,7 +75,7 @@ def plot_energies(data, times, output_path='./'):
     ax2.set_ylabel("energy")
     figs["KE"] = fig_KE_only
  
-    fig_Nu = plt.figure(figsize=(16,8))
+    fig_Nu = plt.figure(figsize=two_size)
     ax1 = fig_Nu.add_subplot(2,1,1)
     ax1.plot(t, data['Nusselt_G75'], label="Nu_G75")
     ax1.plot(t, data['Nusselt_AB17'], label="Nu_AB17")
@@ -87,34 +89,44 @@ def plot_energies(data, times, output_path='./'):
     ax2.set_ylabel("Nu")
     figs["Nu"] = fig_Nu
 
-    fig_Nu2 = plt.figure(figsize=(16,8))
+    fig_Nu2 = plt.figure(figsize=two_size)
     ax1 = fig_Nu2.add_subplot(2,1,1)
     ax1.plot(t, data['Nusselt_AB17'], label="Nu_AB17")
-    ax1.legend()
+    #ax1.legend()
     ax1.set_ylabel("Nu")
     ax2 = fig_Nu2.add_subplot(2,1,2)
     ax2.semilogy(t, np.abs(data['Nusselt_AB17']), label="Nu_AB17")
-    ax2.legend()
+    #ax2.legend()
     ax2.set_xlabel("time")
     ax2.set_ylabel("Nu")
     figs["Nu_AB17"] = fig_Nu2
 
-    fig_nrho = plt.figure()
+    fig_nrho = plt.figure(figsize=one_size)
     ax1 = fig_nrho.add_subplot(1,1,1)
     ax1.plot(t, data['n_rho'], label=r'$n_\rho$')
-    ax1.legend()
+    #ax1.legend()
     ax1.set_ylabel(r'$n_\rho$')
-    ax2.set_xlabel("time")
+    ax1.set_xlabel("time")
     figs["n_rho"] = fig_nrho
 
-    fig_Re = plt.figure()
+    fig_Re = plt.figure(figsize=one_size)
     ax1 = fig_Re.add_subplot(1,1,1)
     ax1.plot(t, data['Re_rms'], label=r'Re$_\mathrm{rms}$')
-    ax1.legend()
+    #ax1.legend()
     ax1.set_ylabel(r'Re$_\mathrm{rms}$')
-    ax2.set_xlabel("time")
+    ax1.set_xlabel("time")
     figs["Re_rms"] = fig_Re
-    
+
+    fig_equil = plt.figure(figsize=one_size)
+    ax1 = fig_equil.add_subplot(111)
+    ax1.plot(t, data['flux_equilibration'], label=r'instantanous')
+    ax1.plot(t, analysis.cumulative_avg(data['flux_equilibration']), label=r'cumulative average')
+    ax1.axhline(0,alpha=0.4,color='k')
+    ax1.legend()
+    ax1.set_ylabel(r'$F_{bottom} - F_{top}$')
+    ax1.set_xlabel("time")
+    figs["flux_equilibration"] = fig_equil
+        
     for key in figs.keys():
         figs[key].savefig(output_path+'scalar_{}.png'.format(key))
     
