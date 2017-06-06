@@ -157,7 +157,6 @@ if __name__ == "__main__":
         else:
             file_glob = os.path.join(base_path,"scalar_s*.h5")
         files = glob.glob(file_glob)
-        print(files)
         main(files, output_path=str(output_path)+'/')
 
 
