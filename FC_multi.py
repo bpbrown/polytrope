@@ -279,17 +279,17 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
             final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
             solver.step(dt) #clean this up in the future...works for now.
-            post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=True)
+            post.merge_process_files(data_dir+'/final_checkpoint/')
         except:
             print('cannot save final checkpoint')
 
         if not(no_join):
             logger.info(data_dir+'/checkpoint/')
-            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+            post.merge_process_files(data_dir+'/checkpoint/')
 
             for task in analysis_tasks:
                 logger.info(analysis_tasks[task].base_path)
-                post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)
+                post.merge_process_files(analysis_tasks[task].base_path)
 
         if (atmosphere.domain.distributor.rank==0):
  
