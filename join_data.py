@@ -1,12 +1,12 @@
 '''
-Join sets of dedalus output data.
+Join distributed dedalus output data.
 
 Usage:
-      join_data.py <case>... [--data_type=<data_type> --no-cleanup]
+      join_data.py <case>... [--data_type=<data_type> --cleanup]
 
 Options:
       --data_type=<data_type>      Type of data to join; if provided join a single data.
-      --no-cleanup                 Prevent cleanup operation after join
+      --cleanup                    Cleanup after join
 
 '''
 
@@ -25,7 +25,7 @@ args = docopt(__doc__)
 data_dir = args['<case>'][0]
 base_path = os.path.abspath(data_dir)+'/'
 
-cleanup = not(args['--no-cleanup'])
+cleanup = args['--cleanup']
 
 logger.info("joining data from Dedalus run {:s}".format(data_dir))
 

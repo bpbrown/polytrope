@@ -17,6 +17,6 @@ for data_type in data_types:
     target = "{}/{}_s{}".format(data_type, data_type, iteration)
     logger.info("merging {}".format(target))
     try:
-        post.merge_process_files_single_set(base_path+target, cleanup=True)
+        post.merge_process_files_single_set(base_path+target)
     except:
         logger.info("target {} not found".format(target))
