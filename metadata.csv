@@ -1,0 +1,11 @@
+Rayleigh,Ra = (\d+),float
+Stiffness,stiffness = (\d+),float
+n_rho_cz,n_rho_cz = (\d+),int
+n_rho_rz,n_rho_rz = (\d+),int
+nx, Global coeff shape: \[\d+ (\d+)\],int
+nz, Global coeff shape: \[(\d+) \d+\],int
+cores, Mesh: \[(\d+)\],int
+walltime,main loop time: ([0-9e\+\-.]+),float
+iter/sec,iter/sec: ([0-9.]+),float
+dt,Average timestep: ([0-9.e\-\+]+),float
+total iter,Iterations: (\d+),int
