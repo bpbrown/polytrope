@@ -2,7 +2,7 @@ Rayleigh,Ra = (\d+),float
 Stiffness,stiffness = (\d+),float
 n_rho_cz,n_rho_cz = (\d+),int
 n_rho_rz,n_rho_rz = (\d+),int
-nx, Global coeff shape: \[\d+ (\d+)\],int
+nx, Global coeff shape: \[\d+ (\d+)\],2*int
 nz, Global coeff shape: \[(\d+) \d+\],int
 cores, Mesh: \[(\d+)\],int
 walltime,main loop time: ([0-9e\+\-.]+),float

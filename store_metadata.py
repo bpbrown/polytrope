@@ -35,6 +35,8 @@ class Metadata():
             dtype = int
         elif dtype_str == 'float':
             dtype = float
+        elif dtype_str == '2*int':
+            dtype = lambda x: 2*int(x)
         else:
             dtype = str
         return dtype
