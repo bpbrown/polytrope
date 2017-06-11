@@ -102,20 +102,21 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
     norm_diag = OrderedDict()
 
     norm_diag['grad_s_mean'] = (r'$\nabla (s_0)$', norm(averages['grad_s_mean']))
+    norm_diag['grad_s_tot'] = (r'$\nabla (s_0 + s_1)$', norm(averages['grad_s_tot']))
     norm_diag['brunt'] = (r'$\omega^2/N^2$', norm(averages['enstrophy'] - averages['brunt_squared_tot']))
     norm_diag['s_mean'] = (r'$s_0$', norm(averages['s_mean']))
     norm_diag['s_tot'] = (r'$s_0+s_1$', norm(averages['s_tot']))
 
     stiff_threshold = stiffness**(-0.5)
 
-    #norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
+    norm_diag['s_fluc_std'] = (r'$\delta(s_1)$', norm(averages['s_fluc_std']))
     #stiff_threshold = np.max(norm(averages['s_fluc_std'])) # max value
     #logger.info("std dev thresh: {}".format(stiff_threshold))
         
     # estimate penetration depths
     overshoot_depths = OrderedDict()
     
-    linear_root_quantities = ['KE_flux', 'grad_s', 'grad_s_mean', 'grad_s_tot', 's_mean', 's_tot', 'brunt']
+    linear_root_quantities = ['KE_flux', 'grad_s_mean', 'grad_s_tot', 's_mean', 's_tot', 'brunt']
     entropy_quantities = ['s_mean', 's_tot']
     for key in norm_diag:
         if key in linear_root_quantities:
@@ -134,12 +135,15 @@ def diagnose_overshoot(averages, z, stiffness, boundary=None, output_path='./', 
         
         z_search = np.copy(z)
         criteria_search = np.copy(criteria)
+        a = None
+        b = None
+
         if key=='grad_s_mean':
             a = np.min(z)
             b = np.max(z)
-        else:
-            a = None
-            b = None
+        elif key=='s_tot':
+            a = np.min(z)
+
         z_root = interp_bisect_root(z_search, criteria_search, a=a, b=b)
  
         overshoot_depths[key] = z_root
