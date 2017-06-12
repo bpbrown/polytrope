@@ -135,4 +135,3 @@ if __name__ == "__main__":
     metadata = Metadata(base_path)
     metadata.get_metadata()
     metadata.upload_metadata("Equilibration Study")
-    #print(metadata.values)
