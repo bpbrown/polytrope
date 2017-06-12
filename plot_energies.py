@@ -117,16 +117,26 @@ def plot_energies(data, times, output_path='./'):
     ax1.set_xlabel("time")
     figs["Re_rms"] = fig_Re
 
-    fig_equil = plt.figure(figsize=one_size)
-    ax1 = fig_equil.add_subplot(111)
-    ax1.plot(t, data['flux_equilibration'], label=r'instantanous')
-    ax1.plot(t, analysis.cumulative_avg(data['flux_equilibration']), label=r'cumulative average')
-    ax1.axhline(0,alpha=0.4,color='k')
-    ax1.legend()
-    ax1.set_ylabel(r'$F_{bottom} - F_{top}$')
-    ax1.set_xlabel("time")
-    figs["flux_equilibration"] = fig_equil
-        
+    try:
+        fig_equil = plt.figure(figsize=two_size)
+        ax1 = fig_equil.add_subplot(211)
+        ax1.plot(t, data['flux_equilibration'], label=r'instantanous')
+        ax1.plot(t, analysis.cumulative_avg(data['flux_equilibration']), label=r'cumulative average')
+        ax1.axhline(0,alpha=0.4,color='k')
+        ax1.legend()
+        ax1.set_ylabel(r'$F_{top} - F_{bottom}$')
+        ax1.set_xlabel("time")
+        ax2 = fig_equil.add_subplot(212)
+        ax2.plot(t, data['flux_equilibration_pct'], label=r'instantanous')
+        ax2.plot(t, analysis.cumulative_avg(data['flux_equilibration_pct']), label=r'cumulative average')
+        ax2.axhline(0,alpha=0.4,color='k')
+        ax2.legend()
+        ax2.set_ylabel(r'$(F_{top} - F_{bottom})/F_{bottom}$')
+        ax2.set_xlabel("time")
+
+        figs["flux_equilibration"] = fig_equil
+    except KeyError:
+        logger.info("This appears to be an older run. Skipping flux equilibration.")
     for key in figs.keys():
         figs[key].savefig(output_path+'scalar_{}.png'.format(key))
     
