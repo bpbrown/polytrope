@@ -9,6 +9,8 @@ Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
     --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 1e4]
+    --m_rz=<m_rz>              Polytropic index of stable layer [default: 3]
+    
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
@@ -47,7 +49,7 @@ Options:
 import logging
 import numpy as np
     
-def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
+def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, 
                       n_rho_cz=3.5, n_rho_rz=1, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
@@ -107,13 +109,13 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4,
             nz_list = [nz_rz, nz_cz]
 
     if dynamic_diffusivities:
-        atmosphere = multitropes.FC_multitrope_2d_kappa(nx=nx, nz=nz_list, stiffness=stiffness, 
+        atmosphere = multitropes.FC_multitrope_2d_kappa(nx=nx, nz=nz_list, stiffness=stiffness, m_rz=m_rz,
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width,
                                          constant_Prandtl=constant_Prandtl,
                                          stable_top=stable_top)
     else:
-        atmosphere = multitropes.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
+        atmosphere = multitropes.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, m_rz=m_rz,
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width,
                                          constant_Prandtl=constant_Prandtl,
@@ -381,6 +383,7 @@ if __name__ == "__main__":
     FC_convection(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
+                      m_rz=float(args['--m_rz']),
                       n_rho_cz=float(args['--n_rho_cz']),
                       n_rho_rz=float(args['--n_rho_rz']),
                       nz_rz=int(args['--nz_rz']),
