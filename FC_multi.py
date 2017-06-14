@@ -48,6 +48,9 @@ Options:
 """
 import logging
 import numpy as np
+import os
+import sys
+import time
     
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, 
                       n_rho_cz=3.5, n_rho_rz=1, 
@@ -63,15 +66,45 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3,
                       run_time=23.5, run_time_buoyancies=np.inf, run_time_iter=np.inf,
                       dynamic_diffusivities=False,
                       max_writes=20,out_cadence=0.1, no_coeffs=False, no_join=False,
-                      restart=None, data_dir='./', verbose=False):
+                      restart=None, data_dir='./', verbose=False, label=None):
 
+    # save data in directory named after script
+    if data_dir[-1] != '/':
+        data_dir += '/'
+    data_dir += sys.argv[0].split('.py')[0]
+    if fixed_flux:
+        data_dir += '_flux'
+    if dynamic_diffusivities:
+        data_dir += '_dynamic'
+    if oz:
+        data_dir += '_oz'
+    data_dir += "_nrhocz{}_Ra{}_S{}".format(n_rho_cz, Rayleigh, --stiffness)
+    if width:
+        data_dir += "_erf{}".format(width)
+    if label:
+        data_dir += "_{}".format(label)
+    data_dir += '/'
+
+    from dedalus.tools.config import config
+    
+    config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
+    config['logging']['file_level'] = 'DEBUG'
+
+    import mpi4py.MPI
+    if mpi4py.MPI.COMM_WORLD.rank == 0:
+        if not os.path.exists('{:s}/'.format(data_dir)):
+            os.mkdir('{:s}/'.format(data_dir))
+        logdir = os.path.join(data_dir,'logs')
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+    logger = logging.getLogger(__name__)
+    logger.info("saving run in: {}".format(data_dir))
+    
     import dedalus.public as de
     from dedalus.tools  import post
     from dedalus.extras import flow_tools
 
-    import numpy as np
-    import time
-    import os
+
     from dedalus.core.future import FutureField
     from stratified_dynamics import multitropes
     from tools.checkpointing import Checkpoint
@@ -319,54 +352,20 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3,
                                                                     main_loop_time/n_steps/(nx*nz), 
                                                                     N_TOTAL_CPU*main_loop_time/n_steps/(nx*nz)))
             print('-' * 40)
+    return data_dir
 
 if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
 
-    import os
-    import sys
-    # save data in directory named after script
-    data_dir = args['--root_dir']
-    if data_dir[-1] != '/':
-        data_dir += '/'
-    data_dir += sys.argv[0].split('.py')[0]
-    if args['--fixed_flux']:
-        data_dir += '_flux'
-    if args['--dynamic_diffusivities']:
-        data_dir += '_dynamic'
-    if args['--oz']:
-        data_dir += '_oz'
-    data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
-    if args['--width'] is not None:
-        data_dir += "_erf{}".format(args['--width'])
-        width = float(args['--width'])
-    else:
-        width = None
-    if args['--label'] is not None:
-        data_dir += "_{}".format(args['--label'])
-    data_dir += '/'
-
-    from dedalus.tools.config import config
-    
-    config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
-    config['logging']['file_level'] = 'DEBUG'
-
-    import mpi4py.MPI
-    if mpi4py.MPI.COMM_WORLD.rank == 0:
-        if not os.path.exists('{:s}/'.format(data_dir)):
-            os.mkdir('{:s}/'.format(data_dir))
-        logdir = os.path.join(data_dir,'logs')
-        if not os.path.exists(logdir):
-            os.mkdir(logdir)
-
-    logger = logging.getLogger(__name__)
-
-    logger.info("saving run in: {}".format(data_dir))
-
     nx =  args['--nx']
     if nx is not None:
         nx = int(nx)
+
+    if args['--width'] is not None:
+        width = float(args['--width'])
+    else:
+        width = None
 
     run_time_buoy = args['--run_time_buoy']
     if run_time_buoy != None:
@@ -392,7 +391,7 @@ if __name__ == "__main__":
                       width=width,
                       nx=nx,
                       restart=(args['--restart']),
-                      data_dir=data_dir,
+                      data_dir=args['--root_dir'],
                       verbose=args['--verbose'],
                       no_coeffs=args['--no_coeffs'],
                       no_join=args['--no_join'],
