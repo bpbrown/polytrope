@@ -10,7 +10,9 @@ Options:
     --Prandtl=<Prandtl>                  Prandtl number = nu/kappa [default: 1]
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3]
     --epsilon=<epsilon>                  The level of superadiabaticity of our polytrope background [default: 1e-4]
+    --gamma=<gamma>                      Gamma of ideal gas (cp/cv) [default: 5/3]
     --aspect=<aspect_ratio>              Physical aspect ratio of the atmosphere [default: 4]
+
 
                                          Rotation keywords
     --rotating                           Solve f-plane equations
@@ -58,7 +60,7 @@ import numpy as np
 def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                  Taylor=None, theta=0,
                  nz=128, nx=None, ny=None, threeD=False, mesh=None,
-                 n_rho_cz=3, epsilon=1e-4,
+                 n_rho_cz=3, epsilon=1e-4, gamma=5/3,
                  run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
                  fixed_T=False, fixed_flux=False, mixed_flux_T=False,
                  const_mu=True, const_kappa=True,
@@ -92,16 +94,16 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
 
     if threeD:
         atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                        epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                        epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     else:
         if dynamic_diffusivities:
             atmosphere = polytropes.FC_polytrope_2d_kappa(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                        epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                        epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
         else:
             atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                        epsilon=epsilon, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                        epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     if epsilon < 1e-4:
         ncc_cutoff = 1e-14
@@ -331,6 +333,7 @@ if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
     from numpy import inf as np_inf
+    from fractions import Fraction
 
     import os
     import sys
@@ -459,6 +462,7 @@ if __name__ == "__main__":
                  aspect_ratio=float(args['--aspect']),
                  n_rho_cz=float(args['--n_rho_cz']),
                  epsilon=float(args['--epsilon']),
+                 gamma=float(Fraction(args['--gamma'])),
                  run_time=float(args['--run_time']),
                  run_time_buoyancies=run_time_buoy,
                  run_time_iter=run_time_iter,
