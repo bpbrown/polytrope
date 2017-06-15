@@ -102,7 +102,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
     import mpi4py.MPI
     if mpi4py.MPI.COMM_WORLD.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
-            os.mkdir('{:s}/'.format(data_dir))
+            os.makedirs('{:s}/'.format(data_dir))
         logdir = os.path.join(data_dir,'logs')
         if not os.path.exists(logdir):
             os.mkdir(logdir)
@@ -171,7 +171,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
         
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
-            os.mkdir('{:s}/'.format(data_dir))
+            os.makedirs('{:s}/'.format(data_dir))
 
     if rk222:
         logger.info("timestepping using RK222")
