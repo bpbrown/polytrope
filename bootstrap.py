@@ -2,7 +2,9 @@ import os
 import re
 import logging
 import numpy as np
+import time
 from FC_multi import FC_convection
+
 
 def bootstrap(init_file, Ra_end, flags, nx=None, nz=None, nproc=None, run_function=FC_convection, step_run_time=50.):
     """bootstrap run_function in steps of 10 from Ra_start to Ra_end. The function assumes Ra_start has already been run.
@@ -14,6 +16,7 @@ def bootstrap(init_file, Ra_end, flags, nx=None, nz=None, nproc=None, run_functi
     step_run_time: the amount of simulation time to run each step
     """
 
+    bootstrap_start = time.time()
     logger = logging.getLogger(__name__)
 
     Ra_start = float(re.search("Ra(\d+)",init_file).groups()[0])
@@ -58,9 +61,11 @@ def bootstrap(init_file, Ra_end, flags, nx=None, nz=None, nproc=None, run_functi
             flags['nz']  = nz[i]
         dir_name = run_function(**flags)
         restart_file = os.path.join(dir_name,"final_checkpoint","final_checkpoint_s1.h5")
-        
+
+    bootstrap_stop = time.time()
     print("================")
     print("Beginning target run.")
+    flags['run_time'] -= (bootstrap_stop - bootstrap_start)/3600. 
     flags['Rayleigh'] = Ra_end
     if nx[-1]:
         flags['nx'] = nx[-1]
