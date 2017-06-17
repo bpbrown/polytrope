@@ -50,8 +50,7 @@ def bootstrap(init_file, Ra_end, flags, nx=None, nz=None, nproc=None, run_functi
     Ra = Ra_start
     restart_file = init_file
     for i in range(n_steps-1):
-        print("Step {}".format(i))
-        print("================")
+        logger.info("Bootstrap step {}".format(i))
         Ra *= 10
         flags['Rayleigh'] = Ra
         flags['restart'] = restart_file
@@ -63,8 +62,10 @@ def bootstrap(init_file, Ra_end, flags, nx=None, nz=None, nproc=None, run_functi
         restart_file = os.path.join(dir_name,"final_checkpoint","final_checkpoint_s1.h5")
 
     bootstrap_stop = time.time()
-    print("================")
-    print("Beginning target run.")
+    m, s = divmod(bootstrap_stop-bootstrap_start, 60)
+    h, m = divmod(m, 60)
+    logger.info("Bootstraping complete. Total wall time = {:d} h: {:d} m: {:5.2f} s".format(int(h),int(m),s))
+    logger.info("Beginning target run.")
     flags['run_time'] -= (bootstrap_stop - bootstrap_start)/3600. 
     flags['Rayleigh'] = Ra_end
     flags['restart'] = restart_file
