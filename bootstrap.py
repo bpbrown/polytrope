@@ -67,6 +67,7 @@ def bootstrap(init_file, Ra_end, flags, nx=None, nz=None, nproc=None, run_functi
     print("Beginning target run.")
     flags['run_time'] -= (bootstrap_stop - bootstrap_start)/3600. 
     flags['Rayleigh'] = Ra_end
+    flags['restart'] = restart_file
     if nx[-1]:
         flags['nx'] = nx[-1]
     if nz[-1]:
