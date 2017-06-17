@@ -3,6 +3,7 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
+    FC_multi.py [options] bootstrap
     FC_multi.py [options]
 
 Options:
@@ -46,6 +47,12 @@ Options:
     --no_join                  If flagged, skip join operation at end of run
 
     --verbose                  Produce diagnostic plots
+
+    --init_file=<init_file>    The equilibrated, low Ra run from which the bootstrap process begins
+    --ra_end=<ra_end>          Ending Rayleigh number [default: 1e6]
+    --bsp_nx=<bsp_nx>          If supplied, a list of length equal to the number of steps giving x resolutions
+    --bsp_nz=<bsp_nz>          If supplied, a list of length equal to the number of steps giving z resolutions
+    --bsp_step=<bsp_step> The time in buoyancy  [default: 50.]
 """
 import logging
 import numpy as np
@@ -95,7 +102,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
     import mpi4py.MPI
     if mpi4py.MPI.COMM_WORLD.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
-            os.mkdir('{:s}/'.format(data_dir))
+            os.makedirs('{:s}/'.format(data_dir))
         logdir = os.path.join(data_dir,'logs')
         if not os.path.exists(logdir):
             os.mkdir(logdir)
@@ -164,7 +171,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
         
     if atmosphere.domain.distributor.rank == 0:
         if not os.path.exists('{:s}/'.format(data_dir)):
-            os.mkdir('{:s}/'.format(data_dir))
+            os.makedirs('{:s}/'.format(data_dir))
 
     if rk222:
         logger.info("timestepping using RK222")
@@ -204,7 +211,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
         
     report_cadence = 1
     output_time_cadence = out_cadence*atmosphere.buoyancy_time
-    solver.stop_sim_time  = run_time_buoyancies*atmosphere.buoyancy_time
+    solver.stop_sim_time  = solver.sim_time + run_time_buoyancies*atmosphere.buoyancy_time
     solver.stop_iteration = solver.iteration + run_time_iter
     solver.stop_wall_time = run_time*3600
 
@@ -357,12 +364,13 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
     return data_dir
 
 if __name__ == "__main__":
+    from bootstrap import bootstrap
     from docopt import docopt
     args = docopt(__doc__)
+    logger = logging.getLogger(__name__)
     nx =  args['--nx']
     if nx is not None:
         nx = int(nx)
-
 
     if args['--width'] is not None:
         width = float(args['--width'])
@@ -380,33 +388,47 @@ if __name__ == "__main__":
         run_time_iter = int(float(run_time_iter))
     else:
         run_time_iter = np.inf
+
+    kwargs = {"Rayleigh":float(args['--Rayleigh']),
+              "Prandtl":float(args['--Prandtl']),
+              "stiffness":float(args['--stiffness']),
+              "m_rz":float(args['--m_rz']),
+              "gamma":float(Fraction(args['--gamma'])),
+              "n_rho_cz":float(args['--n_rho_cz']),
+              "n_rho_rz":float(args['--n_rho_rz']),
+              "nz_rz":int(args['--nz_rz']),
+              "nz_cz":int(args['--nz_cz']),
+              "single_chebyshev":args['--single_chebyshev'],
+              "width":width,
+              "nx":nx,
+              "restart":(args['--restart']),
+              "data_dir":args['--root_dir'],
+              "verbose":args['--verbose'],
+              "no_coeffs":args['--no_coeffs'],
+              "no_join":args['--no_join'],
+              "out_cadence":float(args['--out_cadence']),
+              "oz":args['--oz'],
+              "fixed_flux":args['--fixed_flux'],
+              "dynamic_diffusivities":args['--dynamic_diffusivities'],
+              "dense":args['--dense'],
+              "nz_dense":int(args['--nz_dense']),
+              "rk222":args['--rk222'],
+              "max_writes":int(float(args['--writes'])),
+              "superstep":args['--superstep'],
+              "run_time":float(args['--run_time']),
+              "run_time_buoyancies":run_time_buoy,
+              "run_time_iter":run_time_iter}
+    if args['bootstrap']:
+        logger.info("Bootstrapping...")
+        if args['--init_file']:
+            init_file = args['--init_file']
+        else:
+            raise ValueError("Must specify a starting file if bootstrapping")
+        ra_end = float(args['--ra_end'])
         
-    FC_convection(Rayleigh=float(args['--Rayleigh']),
-                      Prandtl=float(args['--Prandtl']),
-                      stiffness=float(args['--stiffness']),
-                      m_rz=float(args['--m_rz']),
-                      gamma=float(Fraction(args['--gamma'])),
-                      n_rho_cz=float(args['--n_rho_cz']),
-                      n_rho_rz=float(args['--n_rho_rz']),
-                      nz_rz=int(args['--nz_rz']),
-                      nz_cz=int(args['--nz_cz']),
-                      single_chebyshev=args['--single_chebyshev'],
-                      width=width,
-                      nx=nx,
-                      restart=(args['--restart']),
-                      data_dir=args['--root_dir'],
-                      verbose=args['--verbose'],
-                      no_coeffs=args['--no_coeffs'],
-                      no_join=args['--no_join'],
-                      out_cadence=float(args['--out_cadence']),
-                      oz=args['--oz'],
-                      fixed_flux=args['--fixed_flux'],
-                      dynamic_diffusivities=args['--dynamic_diffusivities'],
-                      dense=args['--dense'],
-                      nz_dense=int(args['--nz_dense']),
-                      rk222=args['--rk222'],
-                      max_writes=int(float(args['--writes'])),
-                      superstep=args['--superstep'],
-                      run_time=float(args['--run_time']),
-                      run_time_buoyancies=run_time_buoy,
-                      run_time_iter=run_time_iter)
+        bsp_step_time = float(args['--bsp_step'])
+        bsp_nx = args['--bsp_nx']
+        bsp_nz = args['--bsp_nz']
+        bootstrap(init_file,ra_end,kwargs,nx=bsp_nx,nz=bsp_nz,step_run_time=bsp_step_time)
+    else:
+        FC_convection(**kwargs)
