@@ -2,7 +2,7 @@
 Plot flux difference and its moving average to determine equilibration
 
 Usage:
-    plot_equilibration.py [options] <base_path> 
+    plot_equilibration.py [options] <files>
 
 Options:
     --output=<output>          Output directory; if blank a guess based on likely case name will be made [default: None]
@@ -17,6 +17,9 @@ import numpy as np
 import h5py
 from join_temporal import join_temporal
 import matplotlib.pyplot as plt
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
 
 try:
     plt.style.use('modern')
@@ -26,7 +29,7 @@ except OSError:
 if __name__ == "__main__":
     args = docopt(__doc__)
 
-    base = args['<base_path>']
+    base = args['<files>']
     rolling = [int(i) for i in args['--rolling'].split(',')]
     output = args['--output']
     wallclock = args['--wallclock']
@@ -34,7 +37,7 @@ if __name__ == "__main__":
     if output == 'None':
         output = os.path.join(base,"plots")
         if not os.path.exists(output):
-            os.path.makedirs(output)
+            os.makedirs(output)
 
     dfname = os.path.join(base,'scalar','scalar_joined.h5')
     try:
@@ -48,6 +51,8 @@ if __name__ == "__main__":
     if fep.shape[1] != 1:
         # compatibility with older runs that had mistaken fep diagnostic output
         fep = fep[:,:,0].mean(axis=1)
+    else:
+        fep = fep[:,0,0]
     
     flux_equil_pct = pd.Series(fep,index=df['scales/sim_time'][:])
     rm = []

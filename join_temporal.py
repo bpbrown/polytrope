@@ -21,7 +21,7 @@ from dedalus.tools  import post
 from docopt import docopt
 
 def join_temporal(base_path,data_types=None, cleanup=False):
-    logger.info("joining data in time from Dedalus run {:s}".format(data_dir))
+    logger.info("joining data in time from Dedalus run {:s}".format(base_path))
     if data_types is None:
         data_types = ['scalar', 'profiles']
     
@@ -36,7 +36,7 @@ def join_temporal(base_path,data_types=None, cleanup=False):
             logger.info("missing {}".format(data_type))
             raise
     
-    logger.info("done temporal join operation for {:s}".format(data_dir))
+    logger.info("done temporal join operation for {:s}".format(base_path))
 
 if __name__ == "__main__":
 
