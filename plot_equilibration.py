@@ -16,6 +16,8 @@ import pandas as pd
 import numpy as np
 import h5py
 from join_temporal import join_temporal
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
