@@ -204,7 +204,6 @@ class ImageStack():
             image.update_image(fields[i].T)
             
     def write(self, data_dir, name, i_fig):
-        logger.debug("png size: {}".format(self.fig.get_size_inches()*self.fig.dpi))
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
         self.fig.savefig(figure_file, dpi=self.dpi_png)
         logger.info("writting {:s}".format(figure_file))
@@ -215,7 +214,7 @@ class ImageStack():
 class Image():
     def __init__(self, field_name, imax, cbax,
                  xstr='x/H', ystr='z/H',
-                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=False, units=True,
+                 static_scale = True, float_scale=False, fixed_lim=None, even_scale=False,
                  **kwargs):
 
         self.xstr = xstr
@@ -229,9 +228,7 @@ class Image():
         self.fixed_lim = fixed_lim
         self.even_scale = even_scale
         self.static_scale = static_scale
-        
-        self.units = units
-        
+                
         self.colortable = Colortable(self.field_name, **kwargs)
         self.add_labels(self.field_name)
         
@@ -279,25 +276,7 @@ class Image():
         cbax = self.cbax
         cmap = self.colortable.cmap
         
-        if self.units:
-            xm, ym = self.create_limits_mesh(x, y)
-
-            if self.colortable.special_norm:
-                cz_min, cz_max = cz_scale
-                im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1, norm=self.colortable.Normalize(match1=cz_min, match2=cz_max))
-            else:
-                im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
-            plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]                
-            imax.axis(plot_extent)
-            
-        else:
-            im = imax.imshow(data, zorder=1, aspect='auto',
-                             interpolation='none', origin='lower',
-                             cmap=cmap)
-            shape = data.shape
-            plot_extent = [-0.5, shape[1] - 0.5, -0.5, shape[0] - 0.5]
-            imax.axis(plot_extent)
-
+        xm, ym = self.create_limits_mesh(x, y)
 
         if self.colortable.special_norm:
             cz_min, cz_max = cz_scale
@@ -308,12 +287,20 @@ class Image():
                                   np.linspace(cz_max, ct_max, 100)])
             locs = [ct_min, cz_min, 0, cz_max, ct_max]
             ticks=ticker.FixedLocator(locs)
-            cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
-                              ticks=ticks, norm=self.colortable.Normalize(match1=cz_min, match2=cz_max),
-                              spacing='proportional', boundaries=boundaries)
+            norm = self.colortable.Normalize(match1=cz_min, match2=cz_max)
+
         else:
-            cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
-                              ticks=ticker.MaxNLocator(nbins=5, prune='both'),  spacing='proportional')
+            ticks=ticker.MaxNLocator(nbins=5, prune='both')
+            boundaries=None
+            norm=None
+
+        im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1, norm=norm)
+        plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]                
+        imax.axis(plot_extent)
+                        
+        cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
+                              ticks=ticks, norm=norm,
+                              spacing='proportional', boundaries=boundaries)
                         
         cb.formatter.set_powerlimits((4, 3))
         cb.ax.tick_params(axis='x',direction='in',labeltop='on')
@@ -328,10 +315,7 @@ class Image():
     def update_image(self, data):
         im = self.im
         
-        if self.units:
-            im.set_array(np.ravel(data))
-        else:
-            im.set_data(data)
+        im.set_array(np.ravel(data))
 
         #if not self.static_scale or self.float_scale:
         #image_min, image_max = self.get_scale(data, fixed_lim=self.fixed_lim, even_scale=self.even_scale)
@@ -397,7 +381,6 @@ def main(files, fields, output_path='./', output_name='snapshot',
     # select down to the data you wish to plot
     data_list = []
     for field in fields:
-        logger.info(data.data[field].shape)
         data_list.append(data.data[field][0,:])
         
     imagestack = ImageStack(data.x, data.z, data_list, fields, stretch=stretch)
@@ -420,7 +403,7 @@ def main(files, fields, output_path='./', output_name='snapshot',
         current_data = []
         for field in fields:
             current_data.append(data.data[field][i,:])
-                    
+            
         imagestack.update(current_data)
         if not static_scale:
             for i_im, image in enumerate(imagestack.images):
