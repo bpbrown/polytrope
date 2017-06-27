@@ -6,8 +6,10 @@ Usage:
     plot_slices.py <files>... [options]
 
 Options:
-    --output=<output>  Output directory; if blank a guess based on likely case name will be made
-    --fields=<fields>  Comma separated list of fields to plot [default: s',enstrophy]
+    --output=<output>    Output directory; if blank a guess based on likely case name will be made
+    --fields=<fields>    Comma separated list of fields to plot [default: s',enstrophy]
+    --stretch=<stretch>  Do stretched 2-sided color bar on specified fields; useful when there is high dynamic range, e.g., between convection and g-modes.
+    
 """
 import numpy as np
 
@@ -16,6 +18,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import brewer2mpl
+import matplotlib.colors as mcolors
 
 from tools import analysis
 
@@ -25,8 +28,8 @@ logger = logging.getLogger(__name__.split('.')[-1])
 class Colortable():
     def __init__(self, field,
                  reverse_scale=True, float_scale=False, logscale=False,
-                 color_map=None):
-
+                 color_map=None, stretch=[]):
+          
         if color_map is None:
             if field=='enstrophy':
                 self.color_map = ('BuPu', 'sequential', 9)
@@ -39,8 +42,53 @@ class Colortable():
         self.float_scale = float_scale
         self.logscale = logscale
 
-        self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_scale).mpl_colormap
+        if field in stretch:
+            # build our own colormap, combining an existing one with two hsv ramps
+            colors2 = np.flipud(plt.cm.RdYlBu(np.linspace(0, 1, 256)))
+            hsv_mid = mcolors.rgb_to_hsv(colors2[:,0:3])
+            
+            n_hsv=256
+            hsv = np.zeros((n_hsv,3))
+            hsv_target = [0.7, 0.25, 1]
+            logger.debug("HSV blue start: {:5.2f} {:5.2f} {:5.2f}".format(hsv_mid[0,0],hsv_mid[0,1],hsv_mid[0,2]))
+            logger.debug("HSV blue end  : {:5.2f} {:5.2f} {:5.2f}".format(hsv_target[0],hsv_target[1],hsv_target[2]))
 
+            hsv[:,0] = np.linspace(hsv_target[0], hsv_mid[0,0], n_hsv)
+            hsv[:,1] = np.linspace(hsv_target[1], hsv_mid[0,1], n_hsv)
+            hsv[:,2] = np.linspace(hsv_target[2], hsv_mid[0,2], n_hsv)
+            colors1 = np.ones((n_hsv, 4))
+            colors1[:,0:3] = mcolors.hsv_to_rgb(hsv)
+            
+            n_hsv=256
+            hsv = np.zeros((n_hsv,3))
+            hsv_target = [1, 0.25, 1]
+            logger.debug("HSV red  start: {:5.2f} {:5.2f} {:5.2f}".format(hsv_mid[-1,0],hsv_mid[-1,1],hsv_mid[-1,2]))
+            logger.debug("HSV red  end  : {:5.2f} {:5.2f} {:5.2f}".format(hsv_target[0],hsv_target[1],hsv_target[2]))
+
+            hsv[:,0] = np.linspace(hsv_mid[-1,0], hsv_target[0], n_hsv)
+            hsv[:,1] = np.linspace(hsv_mid[-1,1], hsv_target[1], n_hsv)
+            hsv[:,2] = np.linspace(hsv_mid[-1,2], hsv_target[2], n_hsv)
+            colors3 = np.ones((n_hsv, 4))
+            colors3[:,0:3] = mcolors.hsv_to_rgb(hsv)
+
+            # combine them and build a new colormap
+            colors = np.vstack((colors1, colors2, colors3))
+            self.special_norm=True
+            self.cmap = mcolors.LinearSegmentedColormap.from_list('three_map', colors)
+        else:
+            self.special_norm=False
+            self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_scale).mpl_colormap
+
+    class Normalize(mcolors.Normalize):
+        def __init__(self, vmin=None, vmax=None, match1=None, match2=None, clip=False):
+            self.match1 = match1
+            self.match2 = match2
+            mcolors.Normalize.__init__(self, vmin, vmax, clip)
+
+        def __call__(self, value, clip=None):
+            x, y = [self.vmin, self.match1, self.match2, self.vmax], [0, 0.25, 0.75, 1]
+            return np.ma.masked_array(np.interp(value, x, y))
+        
 class ImageStack():
     def __init__(self, x, y, fields, field_names,
                  true_aspect_ratio=True, vertical_stack=True, scale=3.0,
@@ -113,10 +161,27 @@ class ImageStack():
                 row += 1
                 cindex = 0
 
+
             image = Image(field_name,imax,cbax, **kwargs)
-            image.add_image(fig,x,y,field.T)
-            
             static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
+            cz_min, cz_max = image.get_scale(field[:,np.int(field.shape[-1]/2):], percent_cut=0.5*percent_cut)
+            if np.abs(cz_min) > np.abs(static_min):
+                static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
+                cz_min, cz_max = image.get_scale(field[:,0:np.int(field.shape[-1]/2)], percent_cut=0.25*percent_cut, even_scale=True)
+                
+            def order_values(a,b):
+                if np.abs(a) > np.abs(b):
+                    temp_storage = a
+                    a = b
+                    b = temp_storage
+                return a,b
+            
+            cz_min,static_min = order_values(cz_min, static_min)
+            cz_max,static_max = order_values(cz_max, static_max)
+            
+            image.add_image(fig,x,y,field.T,
+                            cz_scale=(cz_min, cz_max),
+                            ct_scale=(static_min, static_max))
             
             image.set_scale(static_min, static_max)
 
@@ -166,12 +231,9 @@ class Image():
         
         self.units = units
         
-        self.set_colortable(**kwargs)
-        self.add_labels(self.field_name)
-
-    def set_colortable(self, **kwargs):
         self.colortable = Colortable(self.field_name, **kwargs)
-
+        self.add_labels(self.field_name)
+        
     def add_labels(self, fname):
         imax = self.imax
         cbax = self.cbax
@@ -210,8 +272,8 @@ class Image():
         ym[-1, :] = y[-1] + yd[-1] / 2.
 
         return xm, ym
-           
-    def add_image(self, fig, x, y, data):
+
+    def add_image(self, fig, x, y, data, cz_scale=None, ct_scale=None):
         imax = self.imax
         cbax = self.cbax
         cmap = self.colortable.cmap
@@ -219,7 +281,11 @@ class Image():
         if self.units:
             xm, ym = self.create_limits_mesh(x, y)
 
-            im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
+            if self.colortable.special_norm:
+                cz_min, cz_max = cz_scale
+                im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1, norm=self.colortable.Normalize(match1=cz_min, match2=cz_max))
+            else:
+                im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1)
             plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]                
             imax.axis(plot_extent)
             
@@ -231,10 +297,26 @@ class Image():
             plot_extent = [-0.5, shape[1] - 0.5, -0.5, shape[0] - 0.5]
             imax.axis(plot_extent)
 
-        cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
-                          ticks=ticker.MaxNLocator(nbins=5, prune='both'))
 
+        if self.colortable.special_norm:
+            cz_min, cz_max = cz_scale
+            ct_min, ct_max = self.get_scale(data)
+            logger.debug("image min/max {} {}".format(ct_min, ct_max))
+            boundaries=np.hstack([np.linspace(ct_min, cz_min, 100),
+                                  np.linspace(cz_min, cz_max, 100),
+                                  np.linspace(cz_max, ct_max, 100)])
+            locs = [ct_min, cz_min, 0, cz_max, ct_max]
+            ticks=ticker.FixedLocator(locs)
+            cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
+                              ticks=ticks, norm=self.colortable.Normalize(match1=cz_min, match2=cz_max),
+                              spacing='proportional', boundaries=boundaries)
+        else:
+            cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
+                              ticks=ticker.MaxNLocator(nbins=5, prune='both'),  spacing='proportional')
+                        
         cb.formatter.set_powerlimits((4, 3))
+        cb.ax.tick_params(axis='x',direction='in',labeltop='on')
+        cb.ax.tick_params(axis='x',direction='in',labelbottom='off')
         cb.update_ticks()
         self.im = im
 
@@ -299,7 +381,10 @@ class Image():
 
     
 
-def main(files, fields, output_path='./', output_name='snapshot', static_scale=False, profile_files=None):
+def main(files, fields, output_path='./', output_name='snapshot',
+         static_scale=False, stretch=[],
+         profile_files=None):
+    
     from mpi4py import MPI
 
     comm_world = MPI.COMM_WORLD
@@ -314,7 +399,7 @@ def main(files, fields, output_path='./', output_name='snapshot', static_scale=F
         logger.info(data.data[field].shape)
         data_list.append(data.data[field][0,:])
         
-    imagestack = ImageStack(data.x, data.z, data_list, fields)
+    imagestack = ImageStack(data.x, data.z, data_list, fields, stretch=stretch)
 
     scale_late = True
     if static_scale:
@@ -371,8 +456,14 @@ if __name__ == "__main__":
             if sync.comm.rank == 0:
                 if not output_path.exists():
                     output_path.mkdir()
-        fields = args['--fields'].split(',')
         logger.info("output to {}".format(output_path))
+
+        fields = args['--fields'].split(',')
+        if args['--stretch']:
+            stretch = args['--stretch'].split(',')
+        else:
+            stretch = []
+            
         
         def accumulate_files(filename,start,count,file_list):
             #print(filename, start, count)
@@ -381,8 +472,7 @@ if __name__ == "__main__":
             
         file_list = []
         post.visit_writes(args['<files>'],  accumulate_files, file_list=file_list)
-        #print(file_list)
         if len(file_list) > 0:
-            main(file_list, fields, output_path=str(output_path)+'/')
+            main(file_list, fields, stretch=stretch, output_path=str(output_path)+'/')
 
 
