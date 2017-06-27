@@ -28,27 +28,7 @@ try:
 except OSError:
     print("modern style not found. using default.")
 
-if __name__ == "__main__":
-    args = docopt(__doc__)
-
-    base = args['<files>']
-    rolling = [int(i) for i in args['--rolling'].split(',')]
-    output = args['--output']
-    wallclock = args['--wallclock']
-
-    if output == 'None':
-        output = os.path.join(base,"plots")
-        if not os.path.exists(output):
-            os.makedirs(output)
-
-    dfname = os.path.join(base,'scalar','scalar_joined.h5')
-    try:
-        df = h5py.File(dfname,"r")
-    except OSError:
-        logger.info("Temporally joined scalar file not found. Attempting temporal join...")
-        join_temporal(base,data_types=['scalar',])
-        df = h5py.File(dfname,"r")
-
+def plot_equilibration(df, output_path):
     fep = df['tasks/flux_equilibration_pct']
     if fep.shape[1] != 1:
         # compatibility with older runs that had mistaken fep diagnostic output
@@ -79,3 +59,26 @@ if __name__ == "__main__":
     ax.set_ylim(-1.25,1.25)
     plt.tight_layout()
     fig.savefig(os.path.join(output,"flux_equilib.png"),dpi=300)
+    return fig
+
+if __name__ == "__main__":
+    args = docopt(__doc__)
+
+    base = args['<files>']
+    rolling = [int(i) for i in args['--rolling'].split(',')]
+    output = args['--output']
+    wallclock = args['--wallclock']
+
+    if output == 'None':
+        output = os.path.join(base,"plots")
+        if not os.path.exists(output):
+            os.makedirs(output)
+
+    dfname = os.path.join(base,'scalar','scalar_joined.h5')
+    try:
+        df = h5py.File(dfname,"r")
+    except OSError:
+        logger.info("Temporally joined scalar file not found. Attempting temporal join...")
+        join_temporal(base,data_types=['scalar',])
+        df = h5py.File(dfname,"r")
+    plot_equilibration(df,output)
