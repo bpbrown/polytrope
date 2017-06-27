@@ -28,7 +28,7 @@ def join_temporal(base_path,data_types=None, cleanup=False):
     for data_type in data_types:
         logger.info("merging {}".format(data_type))
         try:
-            path = base_path+data_type
+            path = os.path.join(base_path,data_type)
             files = glob.glob(os.path.join(path,"*.h5"))
             joined_filename = os.path.join(path,"{}_joined.h5".format(data_type))
             post.merge_sets(joined_filename, files, cleanup=cleanup)
