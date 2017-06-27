@@ -17,7 +17,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-import brewer2mpl
 import matplotlib.colors as mcolors
 
 from tools import analysis
@@ -29,19 +28,21 @@ class Colortable():
     def __init__(self, field,
                  reverse_scale=True, float_scale=False, logscale=False,
                  color_map=None, stretch=[]):
-          
-        if color_map is None:
-            if field=='enstrophy':
-                self.color_map = ('BuPu', 'sequential', 9)
-            else:
-                self.color_map = ('RdYlBu', 'diverging', 11)
-        else:
-            self.color_map = color_map
-            
+
         self.reverse_scale = reverse_scale
         self.float_scale = float_scale
         self.logscale = logscale
-
+                  
+        if color_map is None:
+            if field=='enstrophy':
+                self.color_map = 'BuPu'
+            else:
+                self.color_map = 'RdYlBu'
+            if self.reverse_scale:
+                self.color_map += '_r'
+        else:
+            self.color_map = color_map
+            
         if field in stretch:
             # build our own colormap, combining an existing one with two hsv ramps
             colors2 = np.flipud(plt.cm.RdYlBu(np.linspace(0, 1, 256)))
@@ -77,7 +78,7 @@ class Colortable():
             self.cmap = mcolors.LinearSegmentedColormap.from_list('three_map', colors)
         else:
             self.special_norm=False
-            self.cmap = brewer2mpl.get_map(*self.color_map, reverse=self.reverse_scale).mpl_colormap
+            self.cmap = plt.get_cmap(self.color_map)
 
     class Normalize(mcolors.Normalize):
         def __init__(self, vmin=None, vmax=None, match1=None, match2=None, clip=False):
