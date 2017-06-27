@@ -446,8 +446,8 @@ class FC_equations(Equations):
         analysis_scalar.add_task("vol_avg(Nusselt_norm_G75)", name="Nusselt_norm_G75")
         analysis_scalar.add_task("vol_avg(Nusselt_norm_AB17)", name="Nusselt_norm_AB17")
         analysis_scalar.add_task("log(left(plane_avg(rho_full))/right(plane_avg(rho_full)))", name="n_rho")
-        analysis_scalar.add_task("right(kappa_flux_z) - left(kappa_flux_z)",name="flux_equilibration")
-        analysis_scalar.add_task("(right(kappa_flux_z) - left(kappa_flux_z))/left(kappa_flux_z)",name="flux_equilibration_pct")
+        analysis_scalar.add_task("integ(right(kappa_flux_z) - left(kappa_flux_z),'x')/Lx",name="flux_equilibration")
+        analysis_scalar.add_task("integ((right(kappa_flux_z) - left(kappa_flux_z))/left(kappa_flux_z),'x')/Lx",name="flux_equilibration_pct")
         analysis_tasks['scalar'] = analysis_scalar
 
         return self.analysis_tasks
