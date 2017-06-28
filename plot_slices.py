@@ -82,13 +82,16 @@ class Colortable():
             self.cmap = plt.get_cmap(self.color_map)
 
     class Normalize(mcolors.Normalize):
-        def __init__(self, vmin=None, vmax=None, match1=None, match2=None, clip=False):
+        def __init__(self, vmin=None, vmax=None, midpoint=None, match1=None, match2=None, clip=False):
             self.match1 = match1
             self.match2 = match2
+            if midpoint is None:
+                midpoint = (match1+match2)/2
+            self.midpoint = midpoint
             mcolors.Normalize.__init__(self, vmin, vmax, clip)
 
         def __call__(self, value, clip=None):
-            x, y = [self.vmin, self.match1, self.match2, self.vmax], [0, 0.25, 0.75, 1]
+            x, y = [self.vmin, self.match1, self.midpoint, self.match2, self.vmax], [0, 0.25, 0.5, 0.75, 1]
             return np.ma.masked_array(np.interp(value, x, y))
         
 class ImageStack():
@@ -282,7 +285,7 @@ class Image():
                                   np.linspace(cz_max, ct_max, 100)])
             locs = [ct_min, cz_min, 0, cz_max, ct_max]
             ticks=ticker.FixedLocator(locs)
-            norm = self.colortable.Normalize(match1=cz_min, match2=cz_max)
+            norm = self.colortable.Normalize(vmin=ct_min, vmax=ct_max, midpoint=0, match1=cz_min, match2=cz_max)
 
         else:
             ticks=ticker.MaxNLocator(nbins=5, prune='both')
