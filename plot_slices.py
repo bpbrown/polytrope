@@ -278,11 +278,12 @@ class Image():
 
         if self.colortable.special_norm:
             cz_min, cz_max = cz_scale
-            ct_min, ct_max = self.get_scale(data)
+            ct_min, ct_max = ct_scale
             logger.debug("image min/max {} {}".format(ct_min, ct_max))
-            boundaries=np.hstack([np.linspace(ct_min, cz_min, 100),
+            boundaries=np.hstack([np.linspace(ct_min, cz_min, 50),
                                   np.linspace(cz_min, cz_max, 100),
-                                  np.linspace(cz_max, ct_max, 100)])
+                                  np.linspace(cz_max, ct_max, 50)])
+           
             locs = [ct_min, cz_min, 0, cz_max, ct_max]
             ticks=ticker.FixedLocator(locs)
             norm = self.colortable.Normalize(vmin=ct_min, vmax=ct_max, midpoint=0, match1=cz_min, match2=cz_max)
