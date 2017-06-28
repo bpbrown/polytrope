@@ -164,27 +164,26 @@ class ImageStack():
 
 
             image = Image(field_name,imax,cbax, **kwargs)
-            static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
-            cz_min, cz_max = image.get_scale(field[:,np.int(field.shape[-1]/2):], percent_cut=0.5*percent_cut)
-            if np.abs(cz_min) > np.abs(static_min):
-                static_min, static_max = image.get_scale(field, percent_cut=percent_cut)
-                cz_min, cz_max = image.get_scale(field[:,0:np.int(field.shape[-1]/2)], percent_cut=0.25*percent_cut, even_scale=True)
-                
-            def order_values(a,b):
-                if np.abs(a) > np.abs(b):
-                    temp_storage = a
-                    a = b
-                    b = temp_storage
-                return a,b
+
             
-            cz_min,static_min = order_values(cz_min, static_min)
-            cz_max,static_max = order_values(cz_max, static_max)
+            full_domain_scale = image.get_scale(field, percent_cut=percent_cut)
+
+            mid_index = np.int(field.shape[-1]/2)
+            upper_half_scale = image.get_scale(field[:,mid_index:], percent_cut=0.5*percent_cut)
+            lower_half_scale = image.get_scale(field[:,:mid_index], percent_cut=0.5*percent_cut)
+
+            # try to auto-determine if the convection zone is in the top or bottom half of the image based on amplitudes;
+            # assumes convection has small amplitudes compared to wave region
+            if np.all(np.abs(upper_half_scale) > np.abs(lower_half_scale)):
+                cz_scale = lower_half_scale
+            else:
+                cz_scale = upper_half_scale
             
             image.add_image(fig,x,y,field.T,
-                            cz_scale=(cz_min, cz_max),
-                            ct_scale=(static_min, static_max))
+                            cz_scale=cz_scale,
+                            ct_scale=full_domain_scale)
             
-            image.set_scale(static_min, static_max)
+            image.set_scale(*full_domain_scale)
 
             images.append(image)
             
@@ -194,14 +193,9 @@ class ImageStack():
 
         self.images = images
         
-        # Set up images and labels        
-        #
-        ##     images[j].set_clim(static_min, static_max)
-        ##     print(fname, ": +- ", -static_min, static_max)
-
     def update(self, fields):
         for i, image in enumerate(self.images):
-            image.update_image(fields[i].T)
+            image.im.set_array(np.ravel(fields[i].T))
             
     def write(self, data_dir, name, i_fig):
         figure_file = "{:s}/{:s}_{:06d}.png".format(data_dir,name,i_fig)
@@ -311,16 +305,7 @@ class Image():
     def set_limits(self, x_limits, y_limits):
         plot_extent = [x_limits[0], x_limits[1], y_limits[0], y_limits[1]]                
         self.imax.axis(plot_extent)
-        
-    def update_image(self, data):
-        im = self.im
-        
-        im.set_array(np.ravel(data))
-
-        #if not self.static_scale or self.float_scale:
-        #image_min, image_max = self.get_scale(data, fixed_lim=self.fixed_lim, even_scale=self.even_scale)
-        
-
+                
     def percent_trim(self, data, percent_cut=0.1):
         if isinstance(percent_cut, list):
             if len(percent_cut) > 1:
@@ -342,7 +327,7 @@ class Image():
 
     def set_scale(self, image_min, image_max):
         self.im.set_clim(image_min, image_max)
-        
+    
     def get_scale(self, field, fixed_lim=None, even_scale=None, percent_cut=0.03):
         if even_scale is None:
             even_scale = self.even_scale
@@ -408,7 +393,8 @@ def main(files, fields, output_path='./', output_name='snapshot',
         if not static_scale:
             for i_im, image in enumerate(imagestack.images):
                 image.set_scale(*image.get_scale(current_data[i_im]))
-                                                      
+                logger.debug("rescaling image; {}".format(image.get_scale(current_data[i_im])))
+
         i_fig = data.writes[i]
         # Update time title
         tstr = 't = {:6.3e}'.format(time)
