@@ -173,8 +173,8 @@ class ImageStack():
             full_domain_scale = image.get_scale(field, percent_cut=percent_cut)
 
             mid_index = np.int(field.shape[-1]/2)
-            upper_half_scale = image.get_scale(field[:,mid_index:], percent_cut=0.5*percent_cut)
-            lower_half_scale = image.get_scale(field[:,:mid_index], percent_cut=0.5*percent_cut)
+            upper_half_scale = image.get_scale(field[:,mid_index:], percent_cut=0.25*percent_cut)
+            lower_half_scale = image.get_scale(field[:,:mid_index], percent_cut=0.25*percent_cut)
 
             # try to auto-determine if the convection zone is in the top or bottom half of the image based on amplitudes;
             # assumes convection has small amplitudes compared to wave region
@@ -279,19 +279,19 @@ class Image():
         if self.colortable.special_norm:
             cz_min, cz_max = cz_scale
             ct_min, ct_max = ct_scale
+            midpoint = 0
             logger.debug("image min/max {} {}".format(ct_min, ct_max))
-            boundaries=np.hstack([np.linspace(ct_min, cz_min, 50),
-                                  np.linspace(cz_min, cz_max, 100),
-                                  np.linspace(cz_max, ct_max, 50)])
-           
-            locs = [ct_min, cz_min, 0, cz_max, ct_max]
-            ticks=ticker.FixedLocator(locs)
-            norm = self.colortable.Normalize(vmin=ct_min, vmax=ct_max, midpoint=0, match1=cz_min, match2=cz_max)
-
+            locs = [ct_min, cz_min, midpoint, cz_max, ct_max]
+            ticks = ticker.FixedLocator(locs)
+            boundaries=np.hstack([np.linspace(locs[0], locs[1], 50),
+                                  np.linspace(locs[1], locs[2], 50),
+                                  np.linspace(locs[2], locs[3], 50),
+                                  np.linspace(locs[3], locs[4], 50)])
+            norm = self.colortable.Normalize(vmin=ct_min, vmax=ct_max, midpoint=midpoint, match1=cz_min, match2=cz_max)
         else:
-            ticks=ticker.MaxNLocator(nbins=5, prune='both')
-            boundaries=None
-            norm=None
+            ticks = ticker.MaxNLocator(nbins=5, prune='both')
+            boundaries = None
+            norm = None
 
         im = imax.pcolormesh(xm, ym, data, cmap=cmap, zorder=1, norm=norm)
         plot_extent = [xm.min(), xm.max(), ym.min(), ym.max()]                
@@ -300,10 +300,11 @@ class Image():
         cb = fig.colorbar(im, cax=cbax, orientation='horizontal',
                               ticks=ticks, norm=norm,
                               spacing='proportional', boundaries=boundaries)
-                        
+
         cb.formatter.set_powerlimits((4, 3))
         cb.ax.tick_params(axis='x',direction='in',labeltop='on')
         cb.ax.tick_params(axis='x',direction='in',labelbottom='off')
+
         cb.update_ticks()
         self.im = im
 
