@@ -417,7 +417,8 @@ if __name__ == "__main__":
               "superstep":args['--superstep'],
               "run_time":float(args['--run_time']),
               "run_time_buoyancies":run_time_buoy,
-              "run_time_iter":run_time_iter}
+              "run_time_iter":run_time_iter,
+              "label":args['--label']}
     if args['bootstrap']:
         logger.info("Bootstrapping...")
         if args['--init_file']:
