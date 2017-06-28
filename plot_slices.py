@@ -9,6 +9,7 @@ Options:
     --output=<output>    Output directory; if blank a guess based on likely case name will be made
     --fields=<fields>    Comma separated list of fields to plot [default: s',enstrophy]
     --stretch=<stretch>  Do stretched 2-sided color bar on specified fields; useful when there is high dynamic range, e.g., between convection and g-modes.
+    --static_scale       Use same colorbar for each individual temporal snapshot
     
 """
 import numpy as np
@@ -373,15 +374,13 @@ def main(files, fields, output_path='./', output_name='snapshot',
     scale_late = True
     if static_scale:
         for i, image in enumerate(imagestack.images):
-            static_min, static_max = image.get_scale(data_list[i], percent_cut=0.1)
-            print(static_min, static_max)
+            static_min, static_max = image.get_scale(data_list[i])
             if scale_late:
                 static_min = comm_world.scatter([static_min]*size,root = size-1)
                 static_max = comm_world.scatter([static_max]*size,root = size-1)
             else:
                 static_min = comm_world.scatter([static_min]*size,root = 0)
                 static_max = comm_world.scatter([static_max]*size,root = 0)
-            print("post comm: {}--{}".format(static_min, static_max))
             image.set_scale(static_min, static_max)
               
     for i, time in enumerate(data.times):
@@ -443,6 +442,7 @@ if __name__ == "__main__":
         file_list = []
         post.visit_writes(args['<files>'],  accumulate_files, file_list=file_list)
         if len(file_list) > 0:
-            main(file_list, fields, stretch=stretch, output_path=str(output_path)+'/')
+            main(file_list, fields, stretch=stretch, static_scale=args['--static_scale'],
+                 output_path=str(output_path)+'/')
 
 
