@@ -1,0 +1,100 @@
+\documentclass[letterpaper,12pt]{paper}
+
+
+%% Graphics and math
+\usepackage{graphics,graphicx,subfigure}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[makeroom]{cancel}
+
+\newcommand{\lnrho}{\ensuremath{\ln \rho}}
+\newcommand{\fast}{\ensuremath{\epsilon_{ijk}}}
+\newcommand{\divu}{\ensuremath{\mathbf{\nabla \cdot u}}}
+\newcommand{\del}{\ensuremath{\mathbf{\nabla}}}
+\renewcommand{\vec}[1]{\ensuremath{\mathbf{#1}}}
+
+\def\dbar{{\mathchar'26\mkern-12mu d}}
+
+\begin{document}
+\section{Diffusion coefficients}
+\label{sec:equations}
+
+This is a note on diffusion coefficients for fully compressible equations, where we evolve thermodynamic quantities $T=T_0+T_1$ and $\ln \rho = \ln \rho_0 + \ln \rho_1$.
+Take the evolution equation for passive scalar $c$:
+
+\begin{equation}
+\frac{\partial}{\partial t} (\rho c) + \del \cdot \left( \rho c \vec{u} - \mu \del c \right) = 0
+\label{eq:passive scalar full}
+\end{equation}
+where
+\begin{equation}
+\mu = \rho D
+\label{eq:diffusion coeff}
+\end{equation}
+and $D$ is a diffusion coefficient and has units of length$^2$/time.  Equation~(\ref{eq:passive scalar full}) can be re-written as
+\begin{equation}
+\frac{\partial c}{\partial t} + \vec{u}\cdot\del c - \frac{1}{\rho} \del \cdot \left(\mu\del c\right) = 0
+\label{eq:passive scalar}
+\end{equation}
+How we proceed depends on whether we regard $\mu$ or $D$ as the primary diffusion variable; from Equation~(\ref{eq:diffusion coeff}) they are linked by $\rho$, but it's not clear, to me, which one we should favor on physical grounds.  As we proceed, we assume that $D$ or $\mu$ is temporally constant, but make no assumptions on spatial structure.
+
+\subsection{$D$ is the primary variable}
+First we take $D$ as the primary diffusion variable.  Then we have:
+\begin{equation}
+\frac{1}{\rho} \del \cdot \left(\rho D \del c\right) 
+= \frac{1}{\rho} \del \left(\rho D\right) \cdot \del c + D \nabla^2 c 
+=  \left(\del D + D \del \ln \rho\right)\cdot \del c + D \nabla^2 c
+\label{eq: diffusion equalities}
+\end{equation}
+or, combining with (\ref{eq:passive scalar}) and our thermodynamic decomposition:
+\begin{equation}
+\frac{\partial c}{\partial t} + \vec{u}\cdot\del c = \left(\del D + D \del \ln \rho_0 + D\del \ln \rho_1\right)\cdot \del c + D \nabla^2 c
+\end{equation}
+In Dedalus form, this is:
+\begin{equation}
+\frac{\partial c}{\partial t} - (\del D + D\del \ln \rho_0) \cdot \del c - D \nabla^2 c = -\vec{u}\cdot\del c + D\del \ln \rho_1 \cdot \del c
+\end{equation}
+
+\newpage
+\subsection{$\mu$ is the primary variable}
+Now, take instead that $\mu$ is the primary diffusion variable.  Here we have:
+\begin{equation}
+\frac{1}{\rho} \del \cdot \left(\mu \del c\right) = \frac{1}{\rho}\left(\del \mu \cdot \del c + \mu \nabla^2 c\right) 
+\end{equation}
+or, combining with (\ref{eq:passive scalar}) and our thermodynamic decomposition ($\rho = e^{\ln \rho} = \rho_0 e^{\ln \rho_1})$:
+\begin{equation}
+\frac{\partial c}{\partial t} + \vec{u}\cdot\del c  = \frac{1}{\rho_0}e^{-\ln \rho_1}\left(\del \mu \cdot \del c + \mu \nabla^2 c\right) 
+\end{equation}
+This is practically in Dedalus form already:
+\begin{equation}
+\frac{\partial c}{\partial t} = -\vec{u}\cdot\del c  + \frac{1}{\rho_0}e^{-\ln \rho_1}\left(\del \mu \cdot \del c + \mu \nabla^2 c\right) 
+\label{eq: dedalus form}
+\end{equation}
+and this seems hopeless; all of the diffusion is nonlinear, some of which comes in with a nasty exponential depdency on one of our variables.  What can we do?
+
+We proceed in a fashion motivated by the Taylor expansion for $e^x$:
+\begin{equation}
+e^{x} = 1 + x + \frac{1}{2}x^2 \ldots
+\end{equation}
+or
+\begin{equation}
+e^{-\ln \rho_1} = 1 -\ln \rho_1 + \frac{1}{2}(-\ln \rho_1)^2 \ldots
+\end{equation}
+and
+\begin{equation}
+e^{-\ln \rho_1} - 1 = -\ln \rho_1 + \frac{1}{2}(-\ln \rho_1)^2 \ldots
+\end{equation}
+Now cleverly add and subtract 1 from (\ref{eq: dedalus form}):
+\begin{equation}
+\frac{\partial c}{\partial t} = -\vec{u}\cdot\del c  + \frac{1}{\rho_0}\left(e^{-\ln \rho_1} -1 + 1\right)\left(\del \mu \cdot \del c + \mu \nabla^2 c\right) 
+\end{equation}
+or in final Dedalus form:
+\begin{equation}
+\frac{\partial c}{\partial t} -\frac{1}{\rho_0}\left(\del \mu \cdot \del c + \mu \nabla^2 c\right) = -\vec{u}\cdot\del c  + \frac{1}{\rho_0}\left(e^{-\ln \rho_1} -1\right)\left(\del \mu \cdot \del c + \mu \nabla^2 c\right).
+\end{equation}
+Why do this?  The second term of the RHS now has a leading nonlinearity of order $(\ln \rho_1) c$, while the LHS now is handling linear bit of the diffusion term.  Note, we haven't actually discarded any terms, so there's no approximation here (e.g., no $\rho=\rho_0$).  Just a re-ordering of what (really how) we solve.  This trick will work when $\ln \rho_1$ is small and when the LHS can handle most of the stiffness in the diffusion coefficient.  And when $\ln \rho_1$ is not small, then everything's just hard.
+
+This logic holds up in the treatment of momentum diffusion in Navier-Stokes as well.  Things are a bit uglier in the treatment of $\kappa$ in the thermal equation, but that arises mostly because now $\ln \rho$ and the diffused variable ($T=T_0+T_1$) both have zero as well as fluctuating contributions, and so there's a bit of convoluted logic to make sure that all the quantities that are first order in evolved variables show up correctly  on the LHS. 
+
+
+\end{document}
