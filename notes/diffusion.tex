@@ -79,6 +79,7 @@ e^{x} = 1 + x + \frac{1}{2}x^2 \ldots
 or
 \begin{equation}
 e^{-\ln \rho_1} = 1 -\ln \rho_1 + \frac{1}{2}(-\ln \rho_1)^2 \ldots
+\label{eq: exponential expansion}
 \end{equation}
 and
 \begin{equation}
@@ -95,6 +96,36 @@ or in final Dedalus form:
 Why do this?  The second term of the RHS now has a leading nonlinearity of order $(\ln \rho_1) c$, while the LHS now is handling linear bit of the diffusion term.  Note, we haven't actually discarded any terms, so there's no approximation here (e.g., no $\rho=\rho_0$).  Just a re-ordering of what (really how) we solve.  This trick will work when $\ln \rho_1$ is small and when the LHS can handle most of the stiffness in the diffusion coefficient.  And when $\ln \rho_1$ is not small, then everything's just hard.
 
 This logic holds up in the treatment of momentum diffusion in Navier-Stokes as well.  Things are a bit uglier in the treatment of $\kappa$ in the thermal equation, but that arises mostly because now $\ln \rho$ and the diffused variable ($T=T_0+T_1$) both have zero as well as fluctuating contributions, and so there's a bit of convoluted logic to make sure that all the quantities that are first order in evolved variables show up correctly  on the LHS. 
+
+\subsection{What if $c=c_0 + c_1$?}
+What if the diffused quantity has both a fluctuation and a background
+component ($c(x,z,t) = c_0(z) + c_1(x,z,t)$?   
+When $D$ is the primary variable, the form remains simple:
+\begin{multline}
+\frac{\partial c_1}{\partial t} +\vec{u}\cdot\del c_0- (\del D + D\del \ln \rho_0) \cdot \del c_1 - D \nabla^2 c_1 =\\
+ -\vec{u}\cdot\del c_1 + (\del D + D\del \ln \rho_0) \cdot \del c_0 - D \nabla^2 c_0+ D\del \ln \rho_1 \cdot \del c_1 
+\end{multline}
+
+
+
+When $\mu$ is the primary variable, we need to be a little more careful with our
+expansion-inspired equation manipulation.  Beginnning with equation~(\ref{eq: exponential expansion}),
+we consider the diffusion term:
+\begin{equation}
+e^{-\ln \rho_1} \del \cdot \mu \del c = 
+\left(e^{-\ln \rho_1} - 1 +\ln \rho_1 +1 -\ln \rho_1\right)  \del
+\cdot \mu \del \left(c_0 + c_1\right)
+\end{equation}
+We've expanded one term further since $c_0 \times \ln \rho_1$ is
+linear order in the fluctuations.  Now, on rearrangement, we obtain:
+\begin{eqnarray}
+\frac{\partial c_1}{\partial t} &+\vec{u}\cdot\del c_0&-\frac{1}{\rho_0}\left[\left(\del \mu \cdot \del c_1 + \mu \nabla^2 c_1\right)
+-\ln \rho_1 \left(\del \mu \cdot \del c_0 + \mu \nabla^2 c_0\right)\right] 
+=\nonumber 
+\\ &-\vec{u}\cdot\del c_1  &+ \frac{1}{\rho_0}\left(e^{-\ln \rho_1} + \ln \rho_1\right)\left[\del \mu \cdot \del c_0 + \mu \nabla^2 c_0 \right]
+\\ && +\frac{1}{\rho_0}\left(e^{-\ln \rho_1} -1\right)\left[\del \mu \cdot \del c_1 + \mu \nabla^2 c_1\right].\nonumber
+\end{eqnarray}
+This is the form temperature diffusion takes when there is a background and a fluctuation around that background.
 
 
 \end{document}
