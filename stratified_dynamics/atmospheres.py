@@ -954,10 +954,6 @@ class Multitrope(Atmosphere):
         # Rayleigh_top = g dS L_cz**3/(chi_top**2 * Pr_top)
         # Prandtl_top = nu_top/chi_top
         self.chi_top = np.sqrt((self.g*(self.delta_s/self.Cp)*self.Lz_cz**3)/(Rayleigh_top*Prandtl_top))
-
-        #Set Prandtl number at same place as Ra.
-        self.nu_top = self.chi_top*Prandtl_top
-        
         if not self.stable_bottom:
             # try to rescale chi appropriately so that the
             # Rayleigh number is set at the top of the CZ
@@ -965,6 +961,9 @@ class Multitrope(Atmosphere):
             # scaling from the rz.  This is a guess.
             self.chi_top = np.exp(self.n_rho_rz)*self.chi_top
 
+        #Set Prandtl number at same place as Ra.
+        self.nu_top = self.chi_top*Prandtl_top
+        
         #Reset kappa. Allows reuse of atmosphere.  But this is incorrect if we do type=2 atmospheres
         kappa_ratio = (self.m_rz + 1)/(self.m_cz + 1)
         self._compute_step_profile(kappa_ratio, invert_profile=not(self.stable_bottom))
