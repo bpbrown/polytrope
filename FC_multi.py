@@ -77,6 +77,26 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
                       max_writes=20,out_cadence=0.1, no_coeffs=False, no_join=False,
                       restart=None, data_dir='./', verbose=False, label=None):
 
+    def format_number(number, no_format_min=0.1, no_format_max=10):
+        if number > no_format_max or number < no_format_min:
+            try:
+                mantissa = "{:e}".format(number).split("+")[0].split("e")[0].rstrip("0") or "0"
+                power    = "{:e}".format(number).split("+")[1].lstrip("0") or "0"
+            except:
+                mantissa = "{:e}".format(number).split("-")[0].split("e")[0].rstrip("0") or "0"
+                power    = "{:e}".format(number).split("-")[1].lstrip("0") or "0"
+                power    = "-"+power
+            if mantissa[-1]==".":
+                mantissa = mantissa[:-1]
+            mantissa += "e"
+        else:
+            mantissa = "{:f}".format(number).rstrip("0") or "0"
+            if mantissa[-1]==".":
+                mantissa = mantissa[:-1]
+            power = ""
+        number_string = mantissa+power
+        return number_string
+     
     # save data in directory named after script
     if data_dir[-1] != '/':
         data_dir += '/'
@@ -87,9 +107,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
         data_dir += '_dynamic'
     if oz:
         data_dir += '_oz'
-    data_dir += "_nrhocz{}_Ra{}_S{}".format(n_rho_cz, Rayleigh, --stiffness)
+    data_dir += "_nrhocz{}_Ra{}_S{}".format(format_number(n_rho_cz), format_number(Rayleigh), format_number(stiffness))
     if width:
-        data_dir += "_erf{}".format(width)
+        data_dir += "_erf{}".format(format_number(width))
     if label:
         data_dir += "_{}".format(label)
     data_dir += '/'
