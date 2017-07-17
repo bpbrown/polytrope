@@ -1,5 +1,6 @@
 import numpy as np
 from mpi4py import MPI
+import scipy.special as scp
 
 from collections import OrderedDict
 
@@ -14,6 +15,11 @@ class Equations():
         self.dimensions=dimensions
         self.problem_type = ''
         pass
+
+    def match_Phi(self, z, f=scp.erf, center=None, width=None):
+        if width is None:
+            width = 0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)
+        return 1/2*(1-f((z-center)/width))
 
     def _set_domain(self, nx=256, Lx=4,
                           ny=256, Ly=4,
@@ -325,12 +331,12 @@ class FC_equations(Equations):
 
     def set_chemistry_BC(self):
         logger.info("Chemistry BC: 0 flux out of box")
-        self.problem.add_BC("left(f_z)=0")
-        self.problem.add_BC("right(f_z)=0")
-        self.problem.add_BC("left(C_z)=0")
-        self.problem.add_BC("right(C_z)=0")
-        self.problem.add_BC("left(G_z)=0")
-        self.problem.add_BC("right(G_z)=0")
+        self.problem.add_bc("left(f_z)=0")
+        self.problem.add_bc("right(f_z)=0")
+        self.problem.add_bc("left(C_z)=0")
+        self.problem.add_bc("right(C_z)=0")
+        self.problem.add_bc("left(G_z)=0")
+        self.problem.add_bc("right(G_z)=0")
         self.dirichlet_set.append('f_z')
         self.dirichlet_set.append('C_z')
         self.dirichlet_set.append('G_z')
@@ -344,8 +350,7 @@ class FC_equations(Equations):
         noise.set_scales(self.domain.dealias, keep_data=True)
         self.T_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T0.set_scales(self.domain.dealias, keep_data=True)
-        z_dealias = self.domain.grid(axis=-1, scales=self.domain.dealias)
-        self.T_IC['g'] = self.epsilon*A0*np.sin(np.pi*z_dealias/self.Lz)*noise['g']*self.T0['g']
+        self.T_IC['g'] = self.epsilon*A0*np.sin(np.pi*self.z_dealias/self.Lz)*noise['g']*self.T0['g']
         
         logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
@@ -358,10 +363,10 @@ class FC_equations(Equations):
             self.G_IC.set_scales(self.domain.dealias, keep_data=True)
 
             c0 = 1
-            chem_taper = self.match_Phi(z_dealias, center=self.Lz)
+            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz)
             self.f_IC['g'] = c0 * chem_taper
-            self.C_IC['g'] = f_IC['g']
-            self.G_IC['g'] = c0 * (self.Lz - z_dealias) / self.Lz
+            self.C_IC['g'] = self.f_IC['g']
+            self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
 
     def get_full_T(self, solver):
         T1 = solver.state['T1']
@@ -579,7 +584,7 @@ class FC_equations_2d(FC_equations):
             tau_0 = Qu_0 * H_rho_BOA**2 / nu_BOA / 10 
             T_act = phi_0 * self.z0   # T0_BOA = z0
 
-            kchem = 1 / tau_0 * np.exp(-T_act / (z0-self.z_dealias))
+            kchem = 1 / tau_0 * np.exp(-T_act / (self.z0-self.z_dealias))
             self.t_chem_BOA = tau_0/self.z0**self.poly_m * np.exp(T_act / self.z0) 
 
             for i in range(self.k_chem['g'].shape[0]):
@@ -598,7 +603,7 @@ class FC_equations_2d(FC_equations):
             self.G_eq = self._new_ncc()
             self.necessary_quantities['G_eq'] = self.G_eq
             self.G_eq.set_scales(self.domain.dealias, keep_data=False)
-            self.G_eq['g'] = c0 * (self.Lz - z_dealias) / self.Lz
+            self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
 
             
     def _set_parameters(self,chemistry=False):

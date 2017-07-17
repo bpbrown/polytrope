@@ -15,17 +15,17 @@ except:
     from stratified_dynamics.atmospheres import *
 
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
-    def __init__(self, dimensions=2, *args, **kwargs):
-        super(FC_polytrope_2d, self).__init__(dimensions=dimensions) 
+    def __init__(self, dimensions=2, chemistry=False,*args, **kwargs):
+        super(FC_polytrope_2d, self).__init__(dimensions=dimensions,chemistry=chemistry) 
         Polytrope.__init__(self, dimensions=dimensions, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
-    def set_equations(self, *args, **kwargs):
-        super(FC_polytrope_2d, self).set_equations(*args, **kwargs)
+    def set_equations(self, *args, chemistry=False,**kwargs):
+        super(FC_polytrope_2d, self).set_equations(*args, chemistry=chemistry,**kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
     
-    def initialize_output(self, solver, data_dir, *args, **kwargs):
-        super(FC_polytrope_2d, self).initialize_output(solver, data_dir, *args, **kwargs)
+    def initialize_output(self, solver, data_dir, *args, chemistry=False,**kwargs):
+        super(FC_polytrope_2d, self).initialize_output(solver, data_dir, *args, chemistry=chemistry,**kwargs)
 
         #This creates an output file that contains all of the useful atmospheric info at the beginning of the run
         import h5py
