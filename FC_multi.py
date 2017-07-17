@@ -144,14 +144,13 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
+    constant_Prandtl=True
     mixed_temperature_flux=None
     if oz:
-        constant_Prandtl=False
         stable_top=True
         if not fixed_flux:
             mixed_temperature_flux=True
     else:
-        constant_Prandtl=True
         stable_top=False
         
     # Set domain
