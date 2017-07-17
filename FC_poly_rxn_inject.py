@@ -11,7 +11,7 @@ Options:
     --Prandtl=<Prandtl>                  Prandtl number = nu/kappa [default: 1]
     --n_rho_cz=<n_rho_cz>                Density scale heights across unstable layer [default: 3]
     --epsilon=<epsilon>                  The level of superadiabaticity of our polytrope background [default: 1e-4]
-    --gamma=<gamma>                      Gamma of ideal gas (cp/cv) [default: 5/3]
+    --gamma=<gamma>                      Gamma of ideal gas (cp/cv) [default: 7/5]
     --aspect=<aspect_ratio>              Physical aspect ratio of the atmosphere [default: 4]
 
 
@@ -55,9 +55,9 @@ Options:
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
 
     --chemistry                          Do chemistry in injected run
-    --ChemicalPrandtl                    Ratio of chemical diffusivities to fluid viscosity
-    --Qu_0                               Knob for controlling location of quench point combined with phi_0
-    --phi_0                              Knob for controlling ratio of chemical to density scale heights
+    --ChemicalPrandtl=<ChemicalPrandtl>  Ratio of chemical diffusivities to fluid viscosity
+    --Qu_0=<Qu_0>                        Knob for controlling location of quench point combined with phi_0
+    --phi_0=<phi_0>                      Knob for controlling ratio of chemical to density scale heights
 
     --scalar_file=<scalar_file>          Scalar slice file with initial slice to start from [default: None]
     --dynamics_file=<dynamics_file>      Dynamics coeff file with final slice to start from
@@ -107,7 +107,6 @@ def FC_polytrope(dynamics_file,
     if threeD:
         atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                 epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                chemistry=chemistry,\
                                                 fig_dir=data_dir)
     else:
         if dynamic_diffusivities:
@@ -118,7 +117,7 @@ def FC_polytrope(dynamics_file,
         else:
             atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                     epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                    chemistry=chemistry,
+                                                    chemistry=chemistry,\
                                                     fig_dir=data_dir)
     if epsilon < 1e-4:
         ncc_cutoff = 1e-14

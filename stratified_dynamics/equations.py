@@ -171,7 +171,7 @@ class Equations():
             field.set_scales(orig_scale, keep_data=True)
             
 class FC_equations(Equations):
-    def __init__(self, chemistry=False, **kwargs):
+    def __init__(self, **kwargs):
         super(FC_equations, self).__init__(**kwargs)
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
@@ -335,7 +335,7 @@ class FC_equations(Equations):
         self.dirichlet_set.append('C_z')
         self.dirichlet_set.append('G_z')
         
-    def set_IC(self, solver, A0=1e-6, **kwargs):
+    def set_IC(self, solver, A0=1e-6, chemistry=False, **kwargs):
         # initial conditions
         self.T_IC = solver.state['T1']
         self.ln_rho_IC = solver.state['ln_rho1']
@@ -396,7 +396,7 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
-    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
+    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,chemistry=False,
                           max_writes=20, mode="overwrite", **kwargs):
 
         analysis_tasks = OrderedDict()
@@ -503,7 +503,8 @@ class FC_equations(Equations):
     
 class FC_equations_2d(FC_equations):
     def __init__(self, chemistry=False, **kwargs):
-        super(FC_equations_2d, self).__init__(chemistry=chemistry,**kwargs)
+        super(FC_equations_2d, self).__init__(**kwargs)
+
         if chemistry:
             self.equation_set = 'Fully Compressible (FC) Navier-Stokes with chemical reactions'
             self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1',\
@@ -688,7 +689,7 @@ class FC_equations_2d(FC_equations):
 
             if chemistry:
                 self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
-                self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "
+                self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
                                            " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
                 self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
                 self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
@@ -775,7 +776,7 @@ class FC_equations_2d(FC_equations):
                 
         if chemistry:
             logger.debug("Setting passive and reactive tracer equations")
-            self.problem.add_equation(("(scale)*(dt(f) - L_diff_f) = (scale)*(-UdotGrad(f,f_z) + NL_diff_f)"))
+            self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + NL_diff_f)"))
             self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + NL_diff_C + k_chem*rho0*C_eq)"))
             self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + NL_diff_G + k_chem*rho0*G_eq)"))
 
@@ -785,7 +786,7 @@ class FC_equations_2d(FC_equations):
                           max_writes=20, mode="overwrite", **kwargs):
 
         analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir, full_output=full_output,
-                                                                        max_writes=max_writes, mode=mode, **kwargs)
+                                                                        max_writes=max_writes, mode=mode, chemistry=chemistry, **kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
                                                             mode=mode, **kwargs)
