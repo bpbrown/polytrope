@@ -1091,7 +1091,7 @@ class FC_equations_3d(FC_equations):
     def __init__(self, **kwargs):
         super(FC_equations_3d, self).__init__(**kwargs)
 
-        if chemistry:
+        if 'chemistry' in kwargs.keys() and kwargs['chemistry']:
             self.equation_set = "Fully Compressible (FC) Navier-Stokes in 3-D with chemical reactions"
             self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1',
                               'C','C_z','G','G_z','f','f_z']
@@ -1250,8 +1250,8 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters['Omega'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
             logger.info("Rotating f-plane with Omega = {} and Theta = {} (Ta = {})".format(omega, theta, Taylor))
             self.problem.substitutions['Omega_x'] = '0'
-            self.problem.substitutions['Omega_y'] = 'Omega*sin(θ)'
-            self.problem.substitutions['Omega_z'] = 'Omega*cos(θ)'
+            self.problem.substitutions['Omega_y'] = 'Omega*sin(Theta)'
+            self.problem.substitutions['Omega_z'] = 'Omega*cos(Theta)'
             self.problem.substitutions['Coriolis_x'] = '(2*Omega_y*w - 2*Omega_z*v)'
             self.problem.substitutions['Coriolis_y'] = '(2*Omega_z*u - 2*Omega_x*w)'
             self.problem.substitutions['Coriolis_z'] = '(2*Omega_x*v - 2*Omega_y*u)'

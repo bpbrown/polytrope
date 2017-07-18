@@ -598,12 +598,22 @@ class Polytrope(Atmosphere):
         self.viscous_time = self.Lz**2/(self.nu.interpolate(z=self.Lz/2)['g'][0])
         self.top_viscous_time = 1/nu_top
 
-        if self.dimensions > 1:
+        if self.dimensions == 2:
             self.thermal_time = self.thermal_time[0]
             self.viscous_time = self.viscous_time[0]
         if self.dimensions > 2:
-            self.thermal_time = self.thermal_time[0]
-            self.viscous_time = self.viscous_time[0]
+            #Need to communicate across processes if mesh is weird in 3D
+            therm = np.zeros(1, dtype=np.float64)
+            visc  = np.zeros(1, dtype=np.float64)
+            therm_rcv, visc_rcv = np.zeros_like(therm), np.zeros_like(visc)
+            therm[0] = np.mean(self.thermal_time)
+            visc[0]  = np.mean(self.viscous_time)
+            if np.isnan(therm): therm[0] = 0
+            if np.isnan(visc):  visc[0]  = 0
+            self.domain.dist.comm_cart.Allreduce(therm, therm_rcv, op=MPI.MAX)
+            self.thermal_time = therm_rcv[0]
+            self.domain.dist.comm_cart.Allreduce(visc, visc_rcv, op=MPI.MAX)
+            self.viscous_time = visc_rcv[0]
 
         logger.info("thermal_time = {}, top_thermal_time = {}".format(self.thermal_time,
                                                                       self.top_thermal_time))
