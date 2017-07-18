@@ -49,6 +49,7 @@ Options:
     --out_cadence=<out_cad>              The fraction of a buoyancy time to output data at [default: 0.1]
     --writes=<writes>                    Writes per file [default: 20]
     --no_coeffs                          If flagged, coeffs will not be output
+    --no_volumes                         If flagged, volumes will not be output (3D)
     --no_join                            If flagged, skip join operation at end of run.
 
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
@@ -68,7 +69,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                  restart=None, start_new_files=False,
                  rk222=False, safety_factor=0.2,
                  max_writes=20,
-                 data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
+                 data_dir='./', out_cadence=0.1, no_coeffs=False, no_volumes=False, no_join=False,
                  verbose=False):
 
     import dedalus.public as de
@@ -179,7 +180,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
     
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, volumes_output=not(no_volumes))
 
     #Set up timestep defaults
     max_dt = output_time_cadence/2
@@ -480,6 +481,7 @@ if __name__ == "__main__":
                  max_writes=int(float(args['--writes'])),
                  data_dir=data_dir,
                  no_coeffs=args['--no_coeffs'],
+                 no_volumes=args['--no_volumes'],
                  no_join=args['--no_join'],
                  split_diffusivities=args['--split_diffusivities'],
                  verbose=args['--verbose'])

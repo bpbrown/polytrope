@@ -1246,16 +1246,16 @@ class FC_equations_3d(FC_equations):
     
         if Taylor:
             self.rotating = True
-            self.problem.parameters['θ'] = theta
-            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
-            logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
-            self.problem.substitutions['Ωx'] = '0'
-            self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
-            self.problem.substitutions['Ωz'] = 'Ω*cos(θ)'
-            self.problem.substitutions['Coriolis_x'] = '(2*Ωy*w - 2*Ωz*v)'
-            self.problem.substitutions['Coriolis_y'] = '(2*Ωz*u - 2*Ωx*w)'
-            self.problem.substitutions['Coriolis_z'] = '(2*Ωx*v - 2*Ωy*u)'
-            self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Ω))'
+            self.problem.parameters['Theta'] = theta
+            self.problem.parameters['Omega'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
+            logger.info("Rotating f-plane with Omega = {} and Theta = {} (Ta = {})".format(omega, theta, Taylor))
+            self.problem.substitutions['Omega_x'] = '0'
+            self.problem.substitutions['Omega_y'] = 'Omega*sin(θ)'
+            self.problem.substitutions['Omega_z'] = 'Omega*cos(θ)'
+            self.problem.substitutions['Coriolis_x'] = '(2*Omega_y*w - 2*Omega_z*v)'
+            self.problem.substitutions['Coriolis_y'] = '(2*Omega_z*u - 2*Omega_x*w)'
+            self.problem.substitutions['Coriolis_z'] = '(2*Omega_x*v - 2*Omega_y*u)'
+            self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Omega))'
         else:
             self.rotating = False
             self.problem.substitutions['Coriolis_x'] = '0'
@@ -1402,7 +1402,7 @@ class FC_equations_3d(FC_equations):
 
         
     def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False, chemistry=False,
-                          max_writes=20, mode="overwrite", **kwargs):
+                          max_writes=20, mode="overwrite", volumes_output=True, **kwargs):
 
         analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir,
                                                                         full_output=full_output, coeffs_output=coeffs_output,
@@ -1433,11 +1433,12 @@ class FC_equations_3d(FC_equations):
         analysis_slice.add_task("interp(ω_z,                        z={})".format(0.5*self.Lz),  name="vorticity_z midplane")
         analysis_tasks['slice'] = analysis_slice
 
-        analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=max_writes, parallel=False, 
-                                                            mode=mode, **kwargs)
-        analysis_volume.add_task("enstrophy", name="enstrophy")
-        analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
-        analysis_tasks['volume'] = analysis_volume
+        if volumes_output:
+            analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=max_writes, parallel=False, 
+                                                                mode=mode, **kwargs)
+            analysis_volume.add_task("enstrophy", name="enstrophy")
+            analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
+            analysis_tasks['volume'] = analysis_volume
 
         if self.rotating:
             analysis_scalar = self.analysis_tasks['scalar']
