@@ -179,8 +179,11 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
-    
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, volumes_output=not(no_volumes))
+   
+    kwargs = dict()
+    if threeD:
+        kwargs['volumes_output'] = not(no_volumes)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, **kwargs)
 
     #Set up timestep defaults
     max_dt = output_time_cadence/2
