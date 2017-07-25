@@ -31,6 +31,7 @@ Options:
     --gamma_default=<gamma>             Default gamma [default: 5/3]
     --constant_chi                      If true, use const chi
     --constant_nu                       If true, use const nu
+    --Taylor_default=<Ta>               If not None, solve for rotating convection
 
     --out_dir=<out_dir>                 Base output dir [default: ./]
 """
@@ -87,8 +88,11 @@ defaults = {'n_rho_cz': n_rho_default,
 
 ##############################################
 #Setup default arguments for equation building
+taylor = args['--Taylor_default']
+if taylor != None:
+    taylor = float(taylor)
 eqn_defaults_args = [1] #prandtl number
-eqn_defaults_kwargs = {}
+eqn_defaults_kwargs = {'Taylor': taylor}
 
 ############################################
 #Set up BCs
@@ -156,8 +160,8 @@ if args['--epsilon_start'] != None\
 #############################################
 #Crit find!
 out_dir = args['--out_dir']
-solver.find_crits(out_dir=out_dir, out_file='{:s}.h5'.format(file_name))
+solver.find_crits(out_dir=out_dir, out_file='{:s}'.format(file_name))
 
 ############################################
 #plot and save
-solver.plot_onset_curves(out_dir=out_dir, fig_name='{:s}.png'.format(file_name))
+#solver.plot_onset_curves(out_dir=out_dir, fig_name='{:s}.png'.format(file_name))

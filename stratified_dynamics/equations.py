@@ -1113,8 +1113,13 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + v*dy(f) + w*(f_z))"
                     
         # analysis operators
-        self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
-        self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Ly/Lz'
+        if self.dimensions != 1:
+            self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Ly/Lz'
+        else:
+            self.problem.substitutions['plane_avg(A)'] = 'A'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lz'
+
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
         self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
@@ -1219,13 +1224,20 @@ class FC_equations_3d(FC_equations):
                         
     def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
                       chemistry=False, ChemicalPrandtl=1, Qu_0=5e-8, phi_0=10,
-                      kx = 0, EVP_2 = False, 
+                      kx = 0, ky=0, EVP_2 = False, 
                       split_diffusivities=False):
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
                                 chemistry=chemistry, ChemicalPrandtl=ChemicalPrandtl,
                                 Qu_0=Qu_0, phi_0=phi_0,
                                 split_diffusivities=split_diffusivities)
         self._set_parameters(chemistry=chemistry)
+
+        if self.dimensions == 1:
+            self.problem.parameters['j'] = 1j
+            self.problem.substitutions['dx(f)'] = "j*kx*(f)"
+            self.problem.parameters['kx'] = kx
+            self.problem.substitutions['dy(f)'] = "j*ky*(f)"
+            self.problem.parameters['ky'] = ky
         if EVP_2:
             self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
             self.problem.parameters['Prandtl'] = Prandtl
@@ -1446,7 +1458,7 @@ class FC_equations_3d(FC_equations):
 
             analysis_profile = self.analysis_tasks['profile']
             analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
-        
+
         return self.analysis_tasks
         
 

@@ -228,25 +228,37 @@ class OnsetSolver:
 
         self._initialize_output(out_dir, out_file, pts_per_curve=pts_per_curve)
         self._data = dict()
+        if out_file == None:
+            out_file = '{:s}/hydro_onset'.format(out_dir)
         if not hasattr(self, '_tasks'):
             self.cf = CriticalFinder(self.solve_problem, CW)
             # If no tasks specified, set the atmospheric defaults,
             # find the crits, and store the curves
             self.atmo_kwargs = self._atmo_kwargs
-            ra_crit, kx_crit = self.cf.iterative_crit_finder(
-                            self._ra_steps[0], self._ra_steps[1],
-                            self._kx_steps[0], self._kx_steps[1],
-                            self._ra_steps[2], self._kx_steps[2],
-                            log_x = self._ra_steps[3], 
-                            log_y = self._kx_steps[3], tol=tol)
-            ra_curve, kx_curve = self._grid_to_onset_curve(n_pts=pts_per_curve)
-            self._save_set(ra_curve, kx_curve, 
-                           ra_crit, kx_crit, 2*np.pi/self.atmosphere.Lz)
-            self._data['ra_curve'] = ra_curve
-            self._data['kx_curve'] = kx_curve
-            self._data['ra_crit']  = ra_crit
-            self._data['kx_crit']  = kx_crit
-            self._data['kx_conv']  = 2*np.pi/self.atmosphere.Lz
+            mins = np.array((self._ra_steps[0], self._kx_steps[0]))
+            maxs = np.array((self._ra_steps[1], self._kx_steps[1]))
+            ns   = np.array((self._ra_steps[2], self._kx_steps[2]))
+            logs = np.array((self._ra_steps[3], self._kx_steps[3]))
+            self.cf.grid_generator(mins, maxs, ns, logs=logs)
+            ra_crit, kx_crit = self.cf.crit_finder()
+            print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
+            if self.cf.comm.rank == 0:
+                self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
+                self.cf.plot_crit(title=out_file, xlabel='kx', ylabel='Ra', transpose=True)
+#            ra_crit, kx_crit = self.cf.iterative_crit_finder(
+#                            self._ra_steps[0], self._ra_steps[1],
+#                            self._kx_steps[0], self._kx_steps[1],
+#                            self._ra_steps[2], self._kx_steps[2],
+#                            log_x = self._ra_steps[3], 
+#                            log_y = self._kx_steps[3], tol=tol)
+#            ra_curve, kx_curve = self._grid_to_onset_curve(n_pts=pts_per_curve)
+#            self._save_set(ra_curve, kx_curve, 
+#                           ra_crit, kx_crit, 2*np.pi/self.atmosphere.Lz)
+#            self._data['ra_curve'] = ra_curve
+#            self._data['kx_curve'] = kx_curve
+#            self._data['ra_crit']  = ra_crit
+#            self._data['kx_crit']  = kx_crit
+#            self._data['kx_conv']  = 2*np.pi/self.atmosphere.Lz
         else:
             #Loop through each task
             for key in self._tasks.keys():
@@ -373,7 +385,7 @@ class OnsetSolver:
         plt.savefig(fig_path, dpi=dpi, bbox_inches='tight')
         plt.close()
        
-    def solve_problem(self, kx, ra):
+    def solve_problem(self, ra, kx, ky=0):
         """
         Given a horizontal wavenumber and Rayleigh number, create the specified
         atmosphere, solve an eigenvalue problem, and return information about 
@@ -388,29 +400,31 @@ class OnsetSolver:
         #Initialize atmosphere
         if self._eqn_set == 0:
             if self._atmosphere == 0:
-                self.atmosphere = polytropes.FC_polytrope_2d(
+                self.atmosphere = polytropes.FC_polytrope_3d(
                                    dimensions=1, comm=MPI.COMM_SELF, 
                                    grid_dtype=np.complex128, **self.atmo_kwargs)
+                self._eqn_kwargs['ky'] = ky*2*np.pi/self.atmosphere.Lz
             elif self._atmosphere == 1:
                 self.atmosphere = multitropes.FC_multitrope(
                                    dimensions=1, comm=MPI.COMM_SELF, 
                                    grid_dtype=np.complex128, **self.atmo_kwargs)
-        k = kx*2*np.pi/self.atmosphere.Lz
+        kx_real = kx*2*np.pi/self.atmosphere.Lz
 
         #Set the eigenvalue problem using the atmosphere
         self.atmosphere.set_eigenvalue_problem(ra, 
-                *self._eqn_args, kx=k, **self._eqn_kwargs)
+                *self._eqn_args, kx=kx_real, **self._eqn_kwargs)
         self.atmosphere.set_BC(**self._bc_kwargs)
         problem = self.atmosphere.get_problem()
 
         #Solve using eigentools Eigenproblem
         self.eigprob = Eigenproblem(problem)
-        max_val = self.eigprob.growth_rate({})
+        print('ep init')
+        max_val, gr_ind, freq = self.eigprob.growth_rate({})
 
-        if max_val[-1] != None:
+        if not np.isnan(max_val):
             return max_val
         else:
-            return [np.nan, ]
+            return np.nan
 
 if __name__ == '__main__':
     help(OnsetSolver)

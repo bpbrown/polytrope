@@ -209,6 +209,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     start_sim_time = solver.sim_time
 
     try:
+        atmosphere.domain.dist.comm_cart.Barrier()
         start_time = time.time()
         start_iter = solver.iteration
         logger.info('starting main loop')
@@ -267,7 +268,6 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                 start_time = time.time()
     except:
         logger.error('Exception raised, triggering end of main loop.')
-        raise
     finally:
         end_time = time.time()
 
@@ -374,18 +374,27 @@ if __name__ == "__main__":
         data_dir +='_2D'
 
     #Base atmosphere
-    data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
     if args['--rotating']:
-        if args['--Co']:
+        if args['--Co'] and args['--Taylor']:
             Co = float(args['--Co'])
+            Taylor = float(args['--Taylor'])
+            args['--Rayleigh'] = Taylor*float(args['--Prandtl'])*Co**2
+            data_dir += "_nrhocz{}_Pr{}".format(args['--n_rho_cz'], args['--Prandtl'])
+            data_dir += "_Co{}_Ta{}".format(args['--Co'], args['--Taylor'])
+        elif args['--Co']:
+            Co = float(args['--Co'])
+            Ta = float(args['--Taylor'])
             Taylor = float(args['--Rayleigh'])/float(args['--Prandtl'])/Co**2
+            data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
             data_dir += "_Co{}".format(args['--Co'])
         else:
             Taylor = float(args['--Taylor'])
             Co = np.sqrt(float(args['--Rayleigh'])/float(args['--Prandtl'])/Taylor)
+            data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
             data_dir += "_Ta{}".format(args['--Taylor'])
     else:
         Taylor = None
+        data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
     data_dir += "_eps{}_a{}".format(args['--epsilon'], args['--aspect'])
     
     if args['--label'] == None:
