@@ -107,6 +107,7 @@ def FC_polytrope(dynamics_file,
     if threeD:
         atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                 epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                                chemistry=chemistry,\
                                                 fig_dir=data_dir)
     else:
         if dynamic_diffusivities:
