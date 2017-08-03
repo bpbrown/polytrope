@@ -363,7 +363,7 @@ class FC_equations(Equations):
             self.G_IC.set_scales(self.domain.dealias, keep_data=True)
 
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz)
+            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
             self.f_IC['g'] = c0 * chem_taper
             self.C_IC['g'] = self.f_IC['g']
             self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
