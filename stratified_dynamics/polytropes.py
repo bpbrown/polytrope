@@ -82,12 +82,24 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
                     f[key] = global_chunk                        
             elif self.domain.dist.comm_cart.rank == 0:
                 f[key] = self.problem.parameters[key]
-                
+     
+        z_value = self.domain.grid(axis=-1, scales=1)
+        this_chunk      = np.zeros(self.nz)
+        global_chunk    = np.zeros(self.nz)
+        n_per_cpu       = int(self.nz/self.domain.dist.comm_cart.size)
+        i_chunk_0 = self.domain.dist.comm_cart.rank*(n_per_cpu)
+        i_chunk_1 = (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)
+        this_chunk[i_chunk_0:i_chunk_1] = z_value
+        self.domain.dist.comm_cart.Allreduce(this_chunk, global_chunk, op=MPI.SUM)
+        if self.domain.dist.comm_cart.rank == 0:
+            f['z'] = global_chunk                        
+
+
+           
         if self.domain.dist.comm_cart.rank == 0:
             f['dimensions']     = 2
             f['nx']             = self.nx
             f['nz']             = self.nz
-            f['z']              = self.domain.grid(axis=-1, scales=1)
             f['m_ad']           = self.m_ad
             f['m']              = self.m_ad - self.epsilon
             f['epsilon']        = self.epsilon
@@ -96,6 +108,8 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
             f['prandtl']        = self.Prandtl
             f['aspect_ratio']   = self.aspect_ratio
             f['atmosphere_name']= self.atmosphere_name
+            f['t_buoy']         = self.buoyancy_time
+            f['t_therm']        = self.thermal_time
             f.close()
             
         return self.analysis_tasks
@@ -147,7 +161,22 @@ class FC_polytrope_2d_kappa(FC_equations_2d_kappa, Polytrope):
                     f[key] = global_chunk                        
             elif self.domain.dist.comm_cart.rank == 0:
                 f[key] = self.problem.parameters[key]
-                
+            
+ 
+        z_value = self.domain.grid(axis=-1, scales=1)
+        this_chunk      = np.zeros(self.nz)
+        global_chunk    = np.zeros(self.nz)
+        n_per_cpu       = int(self.nz/self.domain.dist.comm_cart.size)
+        i_chunk_0 = self.domain.dist.comm_cart.rank*(n_per_cpu)
+        i_chunk_1 = (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)
+        this_chunk[i_chunk_0:i_chunk_1] = z_value
+        self.domain.dist.comm_cart.Allreduce(this_chunk, global_chunk, op=MPI.SUM)
+        if self.domain.dist.comm_cart.rank == 0:
+            f['z'] = global_chunk                        
+
+
+
+
         if self.domain.dist.comm_cart.rank == 0:
             f['dimensions']     = 2
             f['nx']             = self.nx
@@ -161,6 +190,8 @@ class FC_polytrope_2d_kappa(FC_equations_2d_kappa, Polytrope):
             f['prandtl']        = self.Prandtl
             f['aspect_ratio']   = self.aspect_ratio
             f['atmosphere_name']= self.atmosphere_name
+            f['t_buoy']         = self.buoyancy_time
+            f['t_therm']        = self.thermal_time
             f.close()
             
         return self.analysis_tasks
@@ -262,6 +293,8 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
             f['prandtl']        = self.Prandtl
             f['aspect_ratio']   = self.aspect_ratio
             f['atmosphere_name']= self.atmosphere_name
+            f['t_buoy']         = self.buoyancy_time
+            f['t_therm']        = self.thermal_time
             f.close()
             
         return self.analysis_tasks
