@@ -508,14 +508,14 @@ class Polytrope(Atmosphere):
         # min of global quantity
         atmosphere.min_BV_time = self.domain.dist.comm_cart.allreduce(np.min(np.sqrt(np.abs(self.g*self.del_s0['g']/self.Cp))), op=MPI.MIN)
         atmosphere.freefall_time = np.sqrt(self.Lz/self.g)
-        atmosphere.buoyancy_time = np.sqrt(self.Lz/self.g/np.abs(self.epsilon))
+        atmosphere.buoyancy_time = np.sqrt(self.Lz*self.Cp / (self.g * self.delta_s))
         
         logger.info("atmospheric timescales:")
         logger.info("   min_BV_time = {:g}, freefall_time = {:g}, buoyancy_time = {:g}".format(atmosphere.min_BV_time,
                                                                                                atmosphere.freefall_time,
                                                                                                atmosphere.buoyancy_time))
     def _set_diffusivities(self, Rayleigh=1e6, Prandtl=1, split_diffusivities=False):
-        
+       
         logger.info("problem parameters:")
         logger.info("   Ra = {:g}, Pr = {:g}".format(Rayleigh, Prandtl))
         self.Rayleigh, self.Prandtl = Rayleigh, Prandtl
