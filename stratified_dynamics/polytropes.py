@@ -252,8 +252,8 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
         if self.domain.dist.comm_cart.rank == 0:
             f['dimensions']     = 3
             f['nx']             = self.nx
+            f['ny']             = self.ny
             f['nz']             = self.nz
-            f['nz']             = self.ny
             f['m_ad']           = self.m_ad
             f['m']              = self.m_ad - self.epsilon
             f['epsilon']        = self.epsilon
