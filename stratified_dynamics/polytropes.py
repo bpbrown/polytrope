@@ -225,7 +225,7 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
                         
                 this_chunk      = np.zeros(self.nz)
                 global_chunk    = np.zeros(self.nz)
-                n_per_cpu       = int(self.nz/self.domain.dist.comm_cart.size)
+                n_per_cpu       = int(self.nz/self.mesh[0])
                 i_chunk_0 = self.domain.dist.comm_cart.rank*(n_per_cpu)
                 i_chunk_1 = (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)
                 if self.domain.dist.comm_cart.rank < self.mesh[0]:
@@ -236,11 +236,24 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
             elif self.domain.dist.comm_cart.rank == 0:
                 f[key] = self.problem.parameters[key]
                 
+        z_value = self.domain.grid(axis=-1, scales=1)
+        this_chunk      = np.zeros(self.nz)
+        global_chunk    = np.zeros(self.nz)
+        n_per_cpu       = int(self.nz/self.mesh[0])
+        i_chunk_0 = self.domain.dist.comm_cart.rank*(n_per_cpu)
+        i_chunk_1 = (self.domain.dist.comm_cart.rank+1)*(n_per_cpu)
+        if self.domain.dist.comm_cart.rank < self.mesh[0]:
+            this_chunk[i_chunk_0:i_chunk_1] = z_value
+        self.domain.dist.comm_cart.Allreduce(this_chunk, global_chunk, op=MPI.SUM)
         if self.domain.dist.comm_cart.rank == 0:
-            f['dimensions']     = 2
+            f['z'] = global_chunk                        
+
+
+        if self.domain.dist.comm_cart.rank == 0:
+            f['dimensions']     = 3
             f['nx']             = self.nx
             f['nz']             = self.nz
-            f['z']              = self.domain.grid(axis=-1, scales=1)
+            f['nz']             = self.ny
             f['m_ad']           = self.m_ad
             f['m']              = self.m_ad - self.epsilon
             f['epsilon']        = self.epsilon
