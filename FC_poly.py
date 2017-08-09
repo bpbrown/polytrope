@@ -287,16 +287,16 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                 final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
                 final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
                 solver.step(dt) #clean this up in the future...works for now.
-                post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=True)
+                post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=False)
             except:
                 print('cannot save final checkpoint')
                 
             logger.info(data_dir+'/checkpoint/')
-            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+            post.merge_process_files(data_dir+'/checkpoint/', cleanup=False)
             
             for task in analysis_tasks.keys():
                 logger.info(analysis_tasks[task].base_path)
-                post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)
+                post.merge_process_files(analysis_tasks[task].base_path, cleanup=False)
 
         if (atmosphere.domain.distributor.rank==0):
 

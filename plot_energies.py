@@ -120,11 +120,11 @@ def plot_energies(data, times, output_path='./'):
     try:
         fig_Ro = plt.figure(figsize=one_size)
         ax1 = fig_Ro.add_subplot(1,1,1)
-        ax1.plot(t, data['Ro_rms'], label=r'Ro$_\mathrm{rms}$')
+        ax1.plot(t, data['Rossby'], label=r'Ro$_\mathrm{rms}$')
         #ax1.legend()
         ax1.set_ylabel(r'Ro$_\mathrm{rms}$')
         ax1.set_xlabel("time")
-        figs["Ro_rms"] = fig_Ro
+        figs["Rossby"] = fig_Ro
     except:
         print("This isn't a rotating run, skipping RMS Rossby number")
 

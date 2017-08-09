@@ -34,7 +34,7 @@ class OnsetSolver:
     """
 
     def __init__(self, eqn_set=0, atmosphere=0, ra_steps=(1, 1e3, 40, True),
-                 kx_steps=(0.01, 1, 40, True), atmo_kwargs={}, eqn_args=[],
+                 kx_steps=(0.01, 1, 40, True), ky_steps=None, atmo_kwargs={}, eqn_args=[],
                  eqn_kwargs={}, bc_kwargs={}):
         """
         Initializes the onset solver by specifying the equation set to be used
@@ -73,117 +73,14 @@ class OnsetSolver:
         self._atmosphere = atmosphere
         self._ra_steps   = ra_steps
         self._kx_steps   = kx_steps
+        self._ky_steps   = ky_steps
+        self._tasks      = dict()
 
         self._atmo_kwargs = atmo_kwargs
         self._eqn_args    = eqn_args
         self._eqn_kwargs  = eqn_kwargs
         self._bc_kwargs   = bc_kwargs
         self.cf = CriticalFinder(self.solve_problem, CW)
-
-    def _grid_to_onset_curve(self, n_pts=1000):
-        """
-        Look in the CriticalFinder instance inside of this instance, pull out
-        zero-values of growth as a function of kx, ra.  Interpolate that curve
-        of kx, ra to find an onset curve & return that curve.
-
-        Keyword Arguments:
-            n_pts   - The number of data points to put in the interpolated
-                      onset curve.  More = smoother, to a point.
-        """
-        self.cf.root_finder()
-        mask = np.isfinite(self.cf.roots)
-        kxs_roots = self.cf.yy[mask, 0]
-        ras_roots = self.cf.roots[mask]
-        kxs = np.logspace(np.log10(np.ma.min(kxs_roots)), 
-                          np.log10(np.ma.max(kxs_roots)), 
-                          n_pts)
-        ras = np.interp(kxs, kxs_roots, ras_roots)
-
-        return ras, kxs
-
-    def _initialize_output(self, out_dir, out_file_name, pts_per_curve=1000):
-        """
-        creates a .h5 file in which all output can be properly stored.
-
-        Arguments:
-            out_dir         - The directory for outputting the file.
-            out_file_name   - The name of the file to save info into.  If
-                              None, make a filename based on the date.
-        """
-        if self.cf.comm.rank != 0:
-            return
-        if out_file_name == None:
-            import time
-            now = time.strftime('%Y_%m_%d_%H-%M-%S')
-            out_file_name = 'onset_curves_{:s}.h5'.format(now)
-        
-        self.save_file = '{:s}/{:s}'.format(out_dir, out_file_name)
-        if not os.path.exists(out_dir):
-            os.mkdir(out_dir)
-
-        f = h5py.File(self.save_file, 'w')
-        
-
-        if not hasattr(self, '_tasks'):
-            f.create_dataset('ra_curve', (pts_per_curve,), dtype=np.float64)
-            f.create_dataset('kx_curve', (pts_per_curve,), dtype=np.float64)
-            f.create_dataset('ra_crit', (1,), dtype=np.float64)
-            f.create_dataset('kx_crit', (1,), dtype=np.float64)
-            f.create_dataset('kx_conv', (1,), dtype=np.float64)
-        else:
-            for key in self._tasks.keys():
-                task = self._tasks[key]
-
-                f.create_dataset('{:s}_vals'.format(key), 
-                                 (task[2],), dtype=np.float64)
-                f.create_dataset('{:s}_ra_curves'.format(key),
-                                 (task[2],pts_per_curve), dtype=np.float64)
-                f.create_dataset('{:s}_kx_curves'.format(key),
-                                 (task[2],pts_per_curve), dtype=np.float64)
-                f.create_dataset('{:s}_ra_crits'.format(key),
-                                 (task[2],), dtype=np.float64)
-                f.create_dataset('{:s}_kx_crits'.format(key),
-                                 (task[2],), dtype=np.float64)
-                f.create_dataset('{:s}_kx_convs'.format(key),
-                                 (task[2],), dtype=np.float64)
-
-        f.close()
-
-    def _save_set(self, ra_curve, kx_curve, ra_crit, kx_crit, kx_conv,\
-                    key=None, val=None, num_write=0):
-        """
-        Saves an onset curve.  Called automatically by the find_crits() function
-        after each critical value is found.  This ensures that, even if not ALL
-        cases finish, not all information is lost.
-        """
-        if self.cf.comm.rank != 0:
-            return
-
-        f = h5py.File(self.save_file, 'r+')
-       
-        #If there aren't any tasks, just save this curve
-        if key == None:
-            data_keys = ('ra_curve', 'kx_curve', 'ra_crit', 'kx_crit', 'kx_conv')
-            data = (ra_curve, kx_curve, ra_crit, kx_crit, kx_conv)
-            for i,d_key in enumerate(data_keys):
-                dataset = f[d_key]
-                dataset[:] = data[i]
-        else:
-            #Save this according to its task
-            scalar_keys = ('{:s}_vals'.format(key), '{:s}_ra_crits'.format(key),\
-                           '{:s}_kx_crits'.format(key), '{:s}_kx_convs'.format(key))
-            scalar_data = (val, ra_crit, kx_crit, kx_conv)
-            for i, d_key in enumerate(scalar_keys):
-                dataset = f[d_key]
-                dataset[num_write] = scalar_data[i]
-
-            array_keys = ('{:s}_ra_curves'.format(key), '{:s}_kx_curves'.format(key))
-            array_data = (ra_curve, kx_curve)
-            for i, d_key in enumerate(array_keys):
-                dataset = f[d_key]
-                dataset[num_write, :] = array_data[i]
-        f.close()
-        
 
     def add_task(self, name, min_val, max_val, n_steps=10, log=False):
         """
@@ -204,9 +101,6 @@ class OnsetSolver:
             log         - If True, step through log_10(parameter) space,
                           otherwise step through parameter space linearly.
         """
-        if not hasattr(self, '_tasks'):
-            self._tasks = dict()
-
         self._tasks[name] = (min_val, max_val, n_steps, log)
  
     def find_crits(self, tol=1e-3, pts_per_curve=1000, 
@@ -226,39 +120,41 @@ class OnsetSolver:
             out_file        - Name of information file.  If None, auto generate.
         """
 
-        self._initialize_output(out_dir, out_file, pts_per_curve=pts_per_curve)
         self._data = dict()
         if out_file == None:
             out_file = '{:s}/hydro_onset'.format(out_dir)
-        if not hasattr(self, '_tasks'):
+        if len(self._tasks.keys()) == 0:
             self.cf = CriticalFinder(self.solve_problem, CW)
             # If no tasks specified, set the atmospheric defaults,
             # find the crits, and store the curves
             self.atmo_kwargs = self._atmo_kwargs
-            mins = np.array((self._ra_steps[0], self._kx_steps[0]))
-            maxs = np.array((self._ra_steps[1], self._kx_steps[1]))
-            ns   = np.array((self._ra_steps[2], self._kx_steps[2]))
-            logs = np.array((self._ra_steps[3], self._kx_steps[3]))
-            self.cf.grid_generator(mins, maxs, ns, logs=logs)
-            ra_crit, kx_crit = self.cf.crit_finder()
-            print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
+            mins, maxs, ns, logs = [],[],[],[]
+            for l in (self._ra_steps, self._kx_steps, self._ky_steps):
+                if type(l) == type(None):
+                    continue
+                mins.append(l[0])
+                maxs.append(l[1])
+                ns.append(l[2])
+                logs.append(l[3])
+            mins, maxs = np.array(mins), np.array(maxs)
+            ns, logs   = np.array(ns, dtype=np.int64), np.array(logs)
+            try:
+                self.cf.load_grid('{:s}/{:s}.h5'.format(out_dir, out_file), logs=logs)
+            except:
+                self.cf.grid_generator(mins, maxs, ns, logs=logs)
+                if self.cf.comm.rank == 0:
+                    self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
+            crits = self.cf.crit_finder()
+            if len(crits) == 2:
+                ra_crit, kx_crit = crits
+                print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
+            elif len(crits) == 3:
+                ra_crit, kx_crit, ky_crit = crits
+                k_tot = np.sqrt(kx_crit**2 + ky_crit**2)
+                print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
             if self.cf.comm.rank == 0:
                 self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
                 self.cf.plot_crit(title=out_file, xlabel='kx', ylabel='Ra', transpose=True)
-#            ra_crit, kx_crit = self.cf.iterative_crit_finder(
-#                            self._ra_steps[0], self._ra_steps[1],
-#                            self._kx_steps[0], self._kx_steps[1],
-#                            self._ra_steps[2], self._kx_steps[2],
-#                            log_x = self._ra_steps[3], 
-#                            log_y = self._kx_steps[3], tol=tol)
-#            ra_curve, kx_curve = self._grid_to_onset_curve(n_pts=pts_per_curve)
-#            self._save_set(ra_curve, kx_curve, 
-#                           ra_crit, kx_crit, 2*np.pi/self.atmosphere.Lz)
-#            self._data['ra_curve'] = ra_curve
-#            self._data['kx_curve'] = kx_curve
-#            self._data['ra_crit']  = ra_crit
-#            self._data['kx_crit']  = kx_crit
-#            self._data['kx_conv']  = 2*np.pi/self.atmosphere.Lz
         else:
             #Loop through each task
             for key in self._tasks.keys():
@@ -418,7 +314,6 @@ class OnsetSolver:
 
         #Solve using eigentools Eigenproblem
         self.eigprob = Eigenproblem(problem)
-        print('ep init')
         max_val, gr_ind, freq = self.eigprob.growth_rate({})
 
         if not np.isnan(max_val):

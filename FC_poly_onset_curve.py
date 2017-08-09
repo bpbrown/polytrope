@@ -10,9 +10,13 @@ Options:
     --rayleigh_stop=<Rayleigh>          Rayleigh number stop [default: 1e3]
     --rayleigh_steps=<steps>            Integer number of steps between start 
                                          and stop Ra   [default: 20]
-    --kx_start=<kx_start>               kx to start at [default: 0.01]
-    --kx_stop=<kx_stop>                 kx to stop at  [default: 10]
+    --kx_start=<kx_start>               kx to start at [default: 0.1]
+    --kx_stop=<kx_stop>                 kx to stop at  [default: 1]
     --kx_steps=<kx_steps>               Num steps in kx space [default: 20]
+
+    --ky_start=<ky_start>               kx to start at [default: 0.1]
+    --ky_stop=<ky_stop>                 kx to stop at  [default: 1]
+    --ky_steps=<ky_steps>               Num steps in kx space [default: 20]
 
     --nz=<nz>                           z (chebyshev) resolution [default: 48]
 
@@ -33,6 +37,8 @@ Options:
     --constant_nu                       If true, use const nu
     --Taylor_default=<Ta>               If not None, solve for rotating convection
 
+    --threeD                            If flagged, do a ky-run
+
     --out_dir=<out_dir>                 Base output dir [default: ./]
 """
 from docopt import docopt
@@ -51,6 +57,10 @@ ra_steps = float(args['--rayleigh_steps'])
 kx_start = float(args['--kx_start'])
 kx_stop = float(args['--kx_stop'])
 kx_steps = float(args['--kx_steps'])
+
+ky_start = float(args['--ky_start'])
+ky_stop = float(args['--ky_stop'])
+ky_steps = float(args['--ky_steps'])
 
 file_name += '_ra{:s}-{:s}-{:s}_kx{:s}-{:s}-{:s}'.format(
                 args['--rayleigh_start'],
@@ -115,14 +125,26 @@ file_name += '_bc_{:s}'.format(bcs)
 
 #####################################################
 #Initialize onset solver
-solver = OnsetSolver(
-            eqn_set=0, atmosphere=0, 
-            ra_steps=(ra_start, ra_stop, ra_steps, True),
-            kx_steps=(kx_start, kx_stop, kx_steps, True),
-            atmo_kwargs=defaults,
-            eqn_args=eqn_defaults_args,
-            eqn_kwargs=eqn_defaults_kwargs,
-            bc_kwargs=bc_defaults)
+if args['--threeD']:
+    solver = OnsetSolver(
+                eqn_set=0, atmosphere=0, 
+                ra_steps=(ra_start, ra_stop, ra_steps, True),
+                kx_steps=(kx_start, kx_stop, kx_steps, False),
+                ky_steps=(ky_start, ky_stop, ky_steps, False),
+                atmo_kwargs=defaults,
+                eqn_args=eqn_defaults_args,
+                eqn_kwargs=eqn_defaults_kwargs,
+                bc_kwargs=bc_defaults)
+else:
+    solver = OnsetSolver(
+                eqn_set=0, atmosphere=0, 
+                ra_steps=(ra_start, ra_stop, ra_steps, True),
+                kx_steps=(kx_start, kx_stop, kx_steps, False),
+                atmo_kwargs=defaults,
+                eqn_args=eqn_defaults_args,
+                eqn_kwargs=eqn_defaults_kwargs,
+                bc_kwargs=bc_defaults)
+
 
 ###############################################
 #Add tasks (nrho, epsilon) in case we need to solve over
