@@ -152,14 +152,16 @@ class OnsetSolver:
                 self.cf.grid_generator(mins, maxs, ns, logs=logs)
                 if self.cf.comm.rank == 0:
                     self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
-            crits = self.cf.crit_finder()
+            crits = self.cf.exact_crit_finder()
             if len(crits) == 2:
                 ra_crit, kx_crit = crits
-                print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
+                if self.cf.rank == 0:
+                    print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
             elif len(crits) == 3:
                 ra_crit, kx_crit, ky_crit = crits
                 k_tot = np.sqrt(kx_crit**2 + ky_crit**2)
-                print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
+                if self.cf.rank == 0:
+                    print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
             if self.cf.comm.rank == 0:
                 self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
                 self.cf.plot_crit(title= '{:s}/{:s}'.format(out_dir, out_file), xlabel='kx', ylabel='Ra', transpose=True)
@@ -223,7 +225,6 @@ class OnsetSolver:
             ra  - The Rayleigh number to be used in solving the atmosphere.
         """
 
-        #Initialize atmosphere
         if self._eqn_set == 0:
             if self._atmosphere == 0:
                 if self.threeD:
@@ -250,6 +251,12 @@ class OnsetSolver:
         #Solve using eigentools Eigenproblem
         self.eigprob = Eigenproblem(problem)
         max_val, gr_ind, freq = self.eigprob.growth_rate({})
+        #Initialize atmosphere
+        if self.cf.rank == 0:
+            print('solving for onset with ra {:.8g} / kx {:.8g} / ky {:.8g}'.\
+                    format(ra, kx, ky))
+            print('Maximum eigenvalue found: {:.8g}'.format(max_val))
+        
 
         if not np.isnan(max_val):
             return max_val
