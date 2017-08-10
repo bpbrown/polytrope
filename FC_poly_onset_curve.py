@@ -37,38 +37,41 @@ Options:
     --constant_nu                       If true, use const nu
     --Taylor_default=<Ta>               If not None, solve for rotating convection
 
-    --threeD                            If flagged, do a ky-run
+    --3D                                If flagged, use 3D eqns and search kx & ky
+    --2.5D                              If flagged, use 3D eqns with ky = 0
 
+    --load                              If flagged, attempt to load data from output file
     --out_dir=<out_dir>                 Base output dir [default: ./]
 """
 from docopt import docopt
 from onset_solver import OnsetSolver
+import numpy as np
 
 args = docopt(__doc__)
 
 file_name = 'FC_poly_onsets'
 
 ##########################################
-#Set up ra / kx spans
+#Set up ra / kx / ky spans
+ra_log, kx_log, ky_log = False, False, False
+
 ra_start = float(args['--rayleigh_start'])
 ra_stop = float(args['--rayleigh_stop'])
 ra_steps = float(args['--rayleigh_steps'])
+if np.abs(ra_stop/ra_start) > 10:
+    ra_log = True
 
 kx_start = float(args['--kx_start'])
 kx_stop = float(args['--kx_stop'])
 kx_steps = float(args['--kx_steps'])
+if np.abs(kx_stop/kx_start) > 10:
+    kx_log = True
 
 ky_start = float(args['--ky_start'])
 ky_stop = float(args['--ky_stop'])
 ky_steps = float(args['--ky_steps'])
-
-file_name += '_ra{:s}-{:s}-{:s}_kx{:s}-{:s}-{:s}'.format(
-                args['--rayleigh_start'],
-                args['--rayleigh_stop'],
-                args['--rayleigh_steps'],
-                args['--kx_start'],
-                args['--kx_stop'],
-                args['--kx_steps'])
+if np.abs(ky_stop/ky_start) > 10:
+    ky_log = True
 
 ##########################################
 #Set up defaults for the atmosphere
@@ -82,6 +85,8 @@ if args['--constant_nu']:
 nz = int(args['--nz'])
 n_rho_default = float(args['--n_rho_cz_default'])
 epsilon_default = float(args['--epsilon_default'])
+file_name += '_eps{}'.format(args['--epsilon_default'])
+file_name += '_nrho{}'.format(args['--n_rho_cz_default'])
 try:
     gamma_default = float(args['--gamma_default'])
 except:
@@ -100,6 +105,7 @@ defaults = {'n_rho_cz': n_rho_default,
 #Setup default arguments for equation building
 taylor = args['--Taylor_default']
 if taylor != None:
+    file_name += '_Ta{}'.format(taylor)
     taylor = float(taylor)
 eqn_defaults_args = [1] #prandtl number
 eqn_defaults_kwargs = {'Taylor': taylor}
@@ -112,10 +118,13 @@ fixed_T    = False
 mixed_T    = False
 if bcs == 'mixed':
     mixed_T = True
+    file_name += '_mixedBC'
 elif bcs == 'fixed':
     fixed_T = True
+    file_name += '_fixedTBC'
 else:
     fixed_flux = True
+    file_name += '_fluxBC'
 
 bc_defaults = {'fixed_temperature': fixed_T,
                'mixed_flux_temperature': mixed_T,
@@ -125,21 +134,30 @@ file_name += '_bc_{:s}'.format(bcs)
 
 #####################################################
 #Initialize onset solver
-if args['--threeD']:
+if args['--3D']:
     solver = OnsetSolver(
-                eqn_set=0, atmosphere=0, 
-                ra_steps=(ra_start, ra_stop, ra_steps, True),
-                kx_steps=(kx_start, kx_stop, kx_steps, False),
-                ky_steps=(ky_start, ky_stop, ky_steps, False),
+                eqn_set=0, atmosphere=0, threeD=True,
+                ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
+                kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
+                ky_steps=(ky_start, ky_stop, ky_steps, ky_log),
+                atmo_kwargs=defaults,
+                eqn_args=eqn_defaults_args,
+                eqn_kwargs=eqn_defaults_kwargs,
+                bc_kwargs=bc_defaults)
+elif args['--2.5D']:
+    solver = OnsetSolver(
+                eqn_set=0, atmosphere=0, threeD=True,
+                ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
+                kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
                 atmo_kwargs=defaults,
                 eqn_args=eqn_defaults_args,
                 eqn_kwargs=eqn_defaults_kwargs,
                 bc_kwargs=bc_defaults)
 else:
     solver = OnsetSolver(
-                eqn_set=0, atmosphere=0, 
-                ra_steps=(ra_start, ra_stop, ra_steps, True),
-                kx_steps=(kx_start, kx_stop, kx_steps, False),
+                eqn_set=0, atmosphere=0,
+                ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
+                kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
                 atmo_kwargs=defaults,
                 eqn_args=eqn_defaults_args,
                 eqn_kwargs=eqn_defaults_kwargs,
@@ -182,8 +200,5 @@ if args['--epsilon_start'] != None\
 #############################################
 #Crit find!
 out_dir = args['--out_dir']
-solver.find_crits(out_dir=out_dir, out_file='{:s}'.format(file_name))
-
-############################################
-#plot and save
-#solver.plot_onset_curves(out_dir=out_dir, fig_name='{:s}.png'.format(file_name))
+load    = args['--load']
+solver.find_crits(out_dir=out_dir, out_file='{:s}'.format(file_name), load=load)

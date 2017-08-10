@@ -34,7 +34,7 @@ class OnsetSolver:
     """
 
     def __init__(self, eqn_set=0, atmosphere=0, ra_steps=(1, 1e3, 40, True),
-                 kx_steps=(0.01, 1, 40, True), ky_steps=None, atmo_kwargs={}, eqn_args=[],
+                 kx_steps=(0.01, 1, 40, True), ky_steps=None, threeD=False, atmo_kwargs={}, eqn_args=[],
                  eqn_kwargs={}, bc_kwargs={}):
         """
         Initializes the onset solver by specifying the equation set to be used
@@ -74,6 +74,7 @@ class OnsetSolver:
         self._ra_steps   = ra_steps
         self._kx_steps   = kx_steps
         self._ky_steps   = ky_steps
+        self.threeD      = threeD
         self._tasks      = dict()
 
         self._atmo_kwargs = atmo_kwargs
@@ -104,7 +105,7 @@ class OnsetSolver:
         self._tasks[name] = (min_val, max_val, n_steps, log)
  
     def find_crits(self, tol=1e-3, pts_per_curve=1000, 
-                   out_dir='./', out_file=None):
+                   out_dir='./', out_file=None, load=False):
         """
         Steps through all tasks and solves eigenvalue problems for
         the specified parameters.  If no tasks are specified, only
@@ -119,8 +120,10 @@ class OnsetSolver:
             out_dir         - Output directory of information files
             out_file        - Name of information file.  If None, auto generate.
         """
-
         self._data = dict()
+
+        if self.cf.rank == 0 and not os.path.exists('{:s}'.format(out_dir)):
+            os.mkdir('{:s}'.format(out_dir))
         if out_file == None:
             out_file = '{:s}/hydro_onset'.format(out_dir)
         if len(self._tasks.keys()) == 0:
@@ -138,9 +141,14 @@ class OnsetSolver:
                 logs.append(l[3])
             mins, maxs = np.array(mins), np.array(maxs)
             ns, logs   = np.array(ns, dtype=np.int64), np.array(logs)
-            try:
-                self.cf.load_grid('{:s}/{:s}.h5'.format(out_dir, out_file), logs=logs)
-            except:
+            if load:
+                try:
+                    self.cf.load_grid('{:s}/{:s}.h5'.format(out_dir, out_file), logs=logs)
+                except:
+                    self.cf.grid_generator(mins, maxs, ns, logs=logs)
+                    if self.cf.comm.rank == 0:
+                        self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
+            else:
                 self.cf.grid_generator(mins, maxs, ns, logs=logs)
                 if self.cf.comm.rank == 0:
                     self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
@@ -154,7 +162,7 @@ class OnsetSolver:
                 print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
             if self.cf.comm.rank == 0:
                 self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
-                self.cf.plot_crit(title=out_file, xlabel='kx', ylabel='Ra', transpose=True)
+                self.cf.plot_crit(title= '{:s}/{:s}'.format(out_dir, out_file), xlabel='kx', ylabel='Ra', transpose=True)
         else:
             #Loop through each task
             for key in self._tasks.keys():
@@ -203,84 +211,6 @@ class OnsetSolver:
                                                 np.array(onset_kx_vals)
                 self._data['{:s}_kx_conv'.format(key)]   = \
                                                 np.array(kx_conversion)
-
-    def plot_onset_curves(self, out_dir='./', fig_name=None, dpi=400):
-        """
-        Plots all Ra vs. kx curves for all defined tasks.
-        Also plots Ra vs. task space for each task.
-        """
-        if self.cf.comm.rank != 0:
-            return
-        if fig_name == None:
-            import time
-            now = time.strftime('%Y_%m_%d_%H-%M-%S')
-            fig_name = 'plotted_onsets_{:s}.png'.format(now)
-        
-        fig_path = '{:s}/{:s}'.format(out_dir, fig_name)
-
-        if not os.path.exists(out_dir):
-            os.mkdir(out_dir)
-
-
-        if not hasattr(self, '_tasks'):
-            fig = plt.figure(figsize=(8,5))
-            ax  = fig.add_subplot(1,1,1)
-            bx  = ax.twiny()
-            ax.plot(self._data['kx_curve']*self._data['kx_conv'], 
-                    self._data['ra_curve'], 
-                    label='min: {:4f}'.format(self._data['ra_crit']))
-            bx.plot(self._data['kx_curve'], self._data['ra_curve'])
-            ax.set_xlim(np.min(self._data['kx_curve']*self._data['kx_conv']), 
-                        np.max(self._data['kx_curve']*self._data['kx_conv']))
-            bx.set_xlim(np.min(self._data['kx_curve']), 
-                        np.max(self._data['kx_curve']))
-            ax.set_xlabel(r'$\mathrm{wavenumber}$ ($k_x$)')
-            bx.set_xlabel(r'1/ $\mathrm{Aspect Ratio}$')
-
-            for axis in [ax, bx]:
-                axis.set_ylabel(r'$\mathrm{Ra}_{\mathrm{crit}}$')
-                axis.set_xscale('log')
-                axis.set_yscale('log')
-            ax.legend()
-        else:
-            n_tasks = len(self._tasks.keys())
-            fig = plt.figure(figsize=(8, 5*n_tasks))
-            for i, key in enumerate(self._tasks.keys()):
-                task = self._tasks[key]
-                ax = fig.add_subplot(n_tasks, 2, 2*i+1)
-                bx = fig.add_subplot(n_tasks, 2, 2*(i+1))
-                n_pts = self._data['{:s}_vals'.format(key)].shape[0]
-                vals = self._data['{:s}_vals'.format(key)]
-                kxs = self._data['{:s}_kx_curves'.format(key)]
-                ras = self._data['{:s}_ra_curves'.format(key)]
-                kx_crits = self._data['{:s}_kx_crits'.format(key)]
-                ra_crits = self._data['{:s}_ra_crits'.format(key)]
-                kx_convs = self._data['{:s}_kx_conv'.format(key)]
-
-                for j in range(n_pts):
-                    ax.plot(kxs[j,:], ras[j,:],
-                            label='val {:1.2g} min: {:1.2g}'.format(vals[j], ra_crits[j]))
-                ax.set_xlim(np.min(kxs), 
-                            np.max(kxs))
-
-                ax.set_xlabel(r'1/ $\mathrm{Aspect Ratio}$')
-                ax.set_ylabel(r'$\mathrm{Ra}_{\mathrm{crit}}$')
-                ax.set_xscale('log')
-                ax.set_yscale('log')
-                ax.legend()
-                 
-                bx.plot(vals, ra_crits)
-                bx.plot(vals, ra_crits, 'o')
-                bx.set_xlabel('{:s}'.format(key))
-                bx.set_ylabel(r'$\mathrm{Ra}_{\mathrm{crit}}$')
-                bx.set_yscale('log')
-                if task[-1]:
-                    bx.set_xscale('log')
-
-        print('saving: {:s}'.format(fig_path))
-        plt.savefig(fig_path, dpi=dpi, bbox_inches='tight')
-        plt.close()
-       
     def solve_problem(self, ra, kx, ky=0):
         """
         Given a horizontal wavenumber and Rayleigh number, create the specified
@@ -296,10 +226,15 @@ class OnsetSolver:
         #Initialize atmosphere
         if self._eqn_set == 0:
             if self._atmosphere == 0:
-                self.atmosphere = polytropes.FC_polytrope_3d(
-                                   dimensions=1, comm=MPI.COMM_SELF, 
-                                   grid_dtype=np.complex128, **self.atmo_kwargs)
-                self._eqn_kwargs['ky'] = ky*2*np.pi/self.atmosphere.Lz
+                if self.threeD:
+                    self.atmosphere = polytropes.FC_polytrope_3d(
+                                       dimensions=1, comm=MPI.COMM_SELF, 
+                                       grid_dtype=np.complex128, **self.atmo_kwargs)
+                    self._eqn_kwargs['ky'] = ky*2*np.pi/self.atmosphere.Lz
+                else:
+                    self.atmosphere = polytropes.FC_polytrope_2d(
+                                       dimensions=1, comm=MPI.COMM_SELF, 
+                                       grid_dtype=np.complex128, **self.atmo_kwargs)
             elif self._atmosphere == 1:
                 self.atmosphere = multitropes.FC_multitrope(
                                    dimensions=1, comm=MPI.COMM_SELF, 
