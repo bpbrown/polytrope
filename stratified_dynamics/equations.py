@@ -363,7 +363,8 @@ class FC_equations(Equations):
             self.G_IC.set_scales(self.domain.dealias, keep_data=True)
 
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2)
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*Lz,center=self.Lz/2)
             self.f_IC['g'] = c0 * chem_taper
             self.C_IC['g'] = self.f_IC['g']
             self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
@@ -593,7 +594,9 @@ class FC_equations_2d(FC_equations):
                 
             # Setting up equilibrium profiles
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*Lz,center=self.Lz/2)
+
             
             self.C_eq = self._new_ncc()
             self.necessary_quantities['C_eq'] = self.C_eq
@@ -618,8 +621,9 @@ class FC_equations_2d(FC_equations):
             
             # Adding in equilibrium value to correct source term
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
-
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*Lz,center=self.Lz/2)
+            
             self.C_eq = self._new_ncc()
             self.necessary_quantities['C_eq'] = self.C_eq
             self.C_eq.set_scales(self.domain.dealias, keep_data=False)
