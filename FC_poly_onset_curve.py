@@ -20,19 +20,12 @@ Options:
 
     --nz=<nz>                           z (chebyshev) resolution [default: 48]
 
-    --n_rho_cz_start=<n_rho_cz_start>   Density scale heights (smallest run)
-    --n_rho_cz_stop=<n_rho_cz_stop>     Density scale heights (largest run) 
-    --n_rho_cz_steps=<n_rho_cz_steps>   Num steps in n_rho space
-    --epsilon_start=<n_rho_cz_start>    Epsilon (smallest run) 
-    --epsilon_stop=<n_rho_cz_stop>      Epsilon (largest run)  
-    --epsilon_steps=<n_rho_cz_steps>    Number of epsilon steps to take 
-    --epsilons=<epsilon>                A comma-delimited list of epsilons
-
     --bcs=<bcs>                         Boundary conditions ('fixed', 'mixed', 
                                             or 'flux') [default: fixed]
-    --n_rho_cz_default=<n_rho>          Default nrho [default: 3]
-    --epsilon_default=<epsilon>         Default eps  [default: 0.5]
-    --gamma_default=<gamma>             Default gamma [default: 5/3]
+    --Prandtl=<Pr>                      Prandtl number [default: 1]
+    --n_rho_cz=<n_rho>                  nrho of polytrope [default: 3]
+    --epsilon=<epsilon>                 epsilon of polytrope  [default: 0.5]
+    --gamma=<gamma>                     Gamma of polytrope [default: 5/3]
     --constant_chi                      If true, use const chi
     --constant_nu                       If true, use const nu
     --Taylor_default=<Ta>               If not None, solve for rotating convection
@@ -41,6 +34,9 @@ Options:
     --2.5D                              If flagged, use 3D eqns with ky = 0
 
     --load                              If flagged, attempt to load data from output file
+    --exact                             If flagged, after doing the course search + interpolation,
+                                            iteratively solve for the exact critical using
+                                            optimization routines
     --out_dir=<out_dir>                 Base output dir [default: ./]
 """
 from docopt import docopt
@@ -83,23 +79,23 @@ if args['--constant_nu']:
     const_mu = False
 
 nz = int(args['--nz'])
-n_rho_default = float(args['--n_rho_cz_default'])
-epsilon_default = float(args['--epsilon_default'])
-file_name += '_eps{}'.format(args['--epsilon_default'])
-file_name += '_nrho{}'.format(args['--n_rho_cz_default'])
+n_rho = float(args['--n_rho_cz'])
+epsilon = float(args['--epsilon'])
+file_name += '_eps{}'.format(args['--epsilon'])
+file_name += '_nrho{}'.format(args['--n_rho_cz'])
 try:
-    gamma_default = float(args['--gamma_default'])
+    gamma = float(args['--gamma'])
 except:
     from fractions import Fraction
-    gamma_default = float(Fraction(args['--gamma_default']))
+    gamma = float(Fraction(args['--gamma']))
 
 
-defaults = {'n_rho_cz': n_rho_default,
-            'epsilon':  epsilon_default,
-            'constant_kappa': const_kap,
-            'constant_mu':    const_mu,
-            'nz':             nz,
-            'gamma':          gamma_default}
+atmo_kwargs = {'n_rho_cz': n_rho,
+               'epsilon':  epsilon,
+               'constant_kappa': const_kap,
+               'constant_mu':    const_mu,
+               'nz':             nz,
+               'gamma':          gamma}
 
 ##############################################
 #Setup default arguments for equation building
@@ -107,8 +103,8 @@ taylor = args['--Taylor_default']
 if taylor != None:
     file_name += '_Ta{}'.format(taylor)
     taylor = float(taylor)
-eqn_defaults_args = [1] #prandtl number
-eqn_defaults_kwargs = {'Taylor': taylor}
+eqn_args = [1] #prandtl number
+eqn_kwargs = {'Taylor': taylor}
 
 ############################################
 #Set up BCs
@@ -126,7 +122,7 @@ else:
     fixed_flux = True
     file_name += '_fluxBC'
 
-bc_defaults = {'fixed_temperature': fixed_T,
+bc_kwargs = {'fixed_temperature': fixed_T,
                'mixed_flux_temperature': mixed_T,
                'fixed_flux': fixed_flux,
                'stress_free': True}
@@ -140,65 +136,33 @@ if args['--3D']:
                 ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
                 kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
                 ky_steps=(ky_start, ky_stop, ky_steps, ky_log),
-                atmo_kwargs=defaults,
-                eqn_args=eqn_defaults_args,
-                eqn_kwargs=eqn_defaults_kwargs,
-                bc_kwargs=bc_defaults)
+                atmo_kwargs=atmo_kwargs,
+                eqn_args=eqn_args,
+                eqn_kwargs=eqn_kwargs,
+                bc_kwargs=bc_kwargs)
 elif args['--2.5D']:
     solver = OnsetSolver(
                 eqn_set=0, atmosphere=0, threeD=True,
                 ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
                 kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
-                atmo_kwargs=defaults,
-                eqn_args=eqn_defaults_args,
-                eqn_kwargs=eqn_defaults_kwargs,
-                bc_kwargs=bc_defaults)
+                atmo_kwargs=atmo_kwargs,
+                eqn_args=eqn_args,
+                eqn_kwargs=eqn_kwargs,
+                bc_kwargs=bc_kwargs)
 else:
     solver = OnsetSolver(
                 eqn_set=0, atmosphere=0,
                 ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
                 kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
-                atmo_kwargs=defaults,
-                eqn_args=eqn_defaults_args,
-                eqn_kwargs=eqn_defaults_kwargs,
-                bc_kwargs=bc_defaults)
+                atmo_kwargs=atmo_kwargs,
+                eqn_args=eqn_args,
+                eqn_kwargs=eqn_kwargs,
+                bc_kwargs=bc_kwargs)
 
-
-###############################################
-#Add tasks (nrho, epsilon) in case we need to solve over
-#those parameter spaces, too
-if args['--n_rho_cz_start'] != None\
-        and args['--n_rho_cz_stop'] != None \
-        and args['--n_rho_cz_steps'] != None:
-    start = float(args['--n_rho_cz_start'])
-    stop  = float(args['--n_rho_cz_stop'])
-    steps = int(args['--n_rho_cz_steps'])
-    log = False
-    if stop/start > 10:
-        log = True
-    solver.add_task('n_rho_cz', start, stop, n_steps=steps, log=log)
-    file_name += '_nrhocz{:s}-{:s}-{:s}'.format(
-                    args['--n_rho_cz_start'],
-                    args['--n_rho_cz_stop'],
-                    args['--n_rho_cz_steps'])
-
-if args['--epsilon_start'] != None\
-        and args['--epsilon_stop'] != None \
-        and args['--epsilon_steps'] != None:
-    start = float(args['--epsilon_start'])
-    stop  = float(args['--epsilon_stop'])
-    steps = int(args['--epsilon_steps'])
-    log = False
-    if stop/start > 10:
-        log = True
-    solver.add_task('epsilon', start, stop, n_steps=steps, log=log)
-    file_name += '_eps{:s}-{:s}-{:s}'.format(
-                    args['--epsilon_start'],
-                    args['--epsilon_stop'],
-                    args['--epsilon_steps'])
 
 #############################################
 #Crit find!
 out_dir = args['--out_dir']
 load    = args['--load']
-solver.find_crits(out_dir=out_dir, out_file='{:s}'.format(file_name), load=load)
+exact   = args['--exact']
+solver.find_crits(out_dir=out_dir, out_file='{:s}'.format(file_name), load=load, exact=exact)

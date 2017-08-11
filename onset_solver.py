@@ -75,7 +75,6 @@ class OnsetSolver:
         self._kx_steps   = kx_steps
         self._ky_steps   = ky_steps
         self.threeD      = threeD
-        self._tasks      = dict()
 
         self._atmo_kwargs = atmo_kwargs
         self._eqn_args    = eqn_args
@@ -83,29 +82,8 @@ class OnsetSolver:
         self._bc_kwargs   = bc_kwargs
         self.cf = CriticalFinder(self.solve_problem, CW)
 
-    def add_task(self, name, min_val, max_val, n_steps=10, log=False):
-        """
-        Adds a dimension to the eigenvalue solve.  Allows examination of
-        onset for different values of atmospheric parameters than those
-        specified in set_defaults.
-
-        Arguments:
-            name        - A string containing the name of the atmospheric
-                          parameter that is being varied.  For example,
-                          'n_rho_cz' or 'epsilon'
-            min_val     - The minimum value of this parameter to examine
-            max_val     - The maximum value of this parameter to examine
-        
-        Keyword Arguments:
-            n_steps     - The number of steps in parameter space to take
-                          between min_val and max_val
-            log         - If True, step through log_10(parameter) space,
-                          otherwise step through parameter space linearly.
-        """
-        self._tasks[name] = (min_val, max_val, n_steps, log)
- 
     def find_crits(self, tol=1e-3, pts_per_curve=1000, 
-                   out_dir='./', out_file=None, load=False):
+                   out_dir='./', out_file=None, load=False, exact=False):
         """
         Steps through all tasks and solves eigenvalue problems for
         the specified parameters.  If no tasks are specified, only
@@ -126,93 +104,50 @@ class OnsetSolver:
             os.mkdir('{:s}'.format(out_dir))
         if out_file == None:
             out_file = '{:s}/hydro_onset'.format(out_dir)
-        if len(self._tasks.keys()) == 0:
-            self.cf = CriticalFinder(self.solve_problem, CW)
-            # If no tasks specified, set the atmospheric defaults,
-            # find the crits, and store the curves
-            self.atmo_kwargs = self._atmo_kwargs
-            mins, maxs, ns, logs = [],[],[],[]
-            for l in (self._ra_steps, self._kx_steps, self._ky_steps):
-                if type(l) == type(None):
-                    continue
-                mins.append(l[0])
-                maxs.append(l[1])
-                ns.append(l[2])
-                logs.append(l[3])
-            mins, maxs = np.array(mins), np.array(maxs)
-            ns, logs   = np.array(ns, dtype=np.int64), np.array(logs)
-            if load:
-                try:
-                    self.cf.load_grid('{:s}/{:s}.h5'.format(out_dir, out_file), logs=logs)
-                except:
-                    self.cf.grid_generator(mins, maxs, ns, logs=logs)
-                    if self.cf.comm.rank == 0:
-                        self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
-            else:
+
+        self.cf = CriticalFinder(self.solve_problem, CW)
+        # If no tasks specified, set the atmospheric defaults,
+        # find the crits, and store the curves
+        self.atmo_kwargs = self._atmo_kwargs
+        mins, maxs, ns, logs = [],[],[],[]
+        for l in (self._ra_steps, self._kx_steps, self._ky_steps):
+            if type(l) == type(None):
+                continue
+            mins.append(l[0])
+            maxs.append(l[1])
+            ns.append(l[2])
+            logs.append(l[3])
+        mins, maxs = np.array(mins), np.array(maxs)
+        ns, logs   = np.array(ns, dtype=np.int64), np.array(logs)
+        if load:
+            try:
+                self.cf.load_grid('{:s}/{:s}.h5'.format(out_dir, out_file), logs=logs)
+            except:
                 self.cf.grid_generator(mins, maxs, ns, logs=logs)
                 if self.cf.comm.rank == 0:
                     self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
-            crits = self.cf.exact_crit_finder()
-            if len(crits) == 2:
-                ra_crit, kx_crit = crits
-                if self.cf.rank == 0:
-                    print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
-            elif len(crits) == 3:
-                ra_crit, kx_crit, ky_crit = crits
-                k_tot = np.sqrt(kx_crit**2 + ky_crit**2)
-                if self.cf.rank == 0:
-                    print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
+        else:
+            self.cf.grid_generator(mins, maxs, ns, logs=logs)
             if self.cf.comm.rank == 0:
                 self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
-                self.cf.plot_crit(title= '{:s}/{:s}'.format(out_dir, out_file), xlabel='kx', ylabel='Ra', transpose=True)
+        if exact:
+            crits = self.cf.exact_crit_finder()
         else:
-            #Loop through each task
-            for key in self._tasks.keys():
-                task = self._tasks[key]
-                #Start with the defaults
-                self.atmo_kwargs = self._atmo_kwargs
-                onset_kx_curves = []
-                onset_ra_curves = []
-                onset_kx_vals   = []
-                onset_ra_vals   = []
-                kx_conversion   = []
-                if task[-1]:
-                    values = np.logspace(
-                                np.log10(task[0]), np.log10(task[1]), task[2])
-                else:
-                    values = np.linspace(task[0], task[1], task[2])
-                for i,value in enumerate(values):
-                    self.cf = CriticalFinder(self.solve_problem, CW)
-                    # For each value in parameter space, overwrite that info
-                    # compared to the defaults. Solve.  Store onset curve.
-                    self.atmo_kwargs[key] = value
-                    ra_crit, kx_crit = self.cf.iterative_crit_finder(
-                                    self._ra_steps[0], self._ra_steps[1],
-                                    self._kx_steps[0], self._kx_steps[1],
-                                    self._ra_steps[2], self._kx_steps[2],
-                                    log_x = self._ra_steps[3], 
-                                    log_y = self._kx_steps[3], tol=tol)
-                    ra_curve, kx_curve = self._grid_to_onset_curve(
-                                                    n_pts=pts_per_curve)
-                    self._save_set(ra_curve, kx_curve, 
-                                   ra_crit, kx_crit, 2*np.pi/self.atmosphere.Lz,
-                                   key=key, val=value, num_write=i)
-                    onset_ra_curves.append(ra_curve)
-                    onset_kx_curves.append(kx_curve)
-                    onset_ra_vals.append(ra_crit)
-                    onset_kx_vals.append(kx_crit)
-                    kx_conversion.append(2*np.pi/self.atmosphere.Lz)
-                self._data['{:s}_vals'.format(key)] = values
-                self._data['{:s}_ra_curves'.format(key)] = \
-                                                np.array(onset_ra_curves)
-                self._data['{:s}_kx_curves'.format(key)] = \
-                                                np.array(onset_kx_curves)
-                self._data['{:s}_ra_crits'.format(key)]  = \
-                                                np.array(onset_ra_vals)
-                self._data['{:s}_kx_crits'.format(key)]  = \
-                                                np.array(onset_kx_vals)
-                self._data['{:s}_kx_conv'.format(key)]   = \
-                                                np.array(kx_conversion)
+            crits = self.cf.crit_finder()
+
+        if len(crits) == 2:
+            ra_crit, kx_crit = crits
+            if self.cf.rank == 0:
+                print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
+        elif len(crits) == 3:
+            ra_crit, kx_crit, ky_crit = crits
+            k_tot = np.sqrt(kx_crit**2 + ky_crit**2)
+            if self.cf.rank == 0:
+                print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
+        if self.cf.comm.rank == 0:
+            self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
+            self.cf.plot_crit(title= '{:s}/{:s}'.format(out_dir, out_file), xlabel='kx', ylabel='Ra', transpose=True)
+       
     def solve_problem(self, ra, kx, ky=0):
         """
         Given a horizontal wavenumber and Rayleigh number, create the specified
