@@ -107,19 +107,22 @@ def FC_polytrope(dynamics_file,
     if threeD:
         atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                 epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                chemistry=chemistry,\
                                                 fig_dir=data_dir)
     else:
         if dynamic_diffusivities:
             atmosphere = polytropes.FC_polytrope_2d_kappa(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                           epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                          chemistry=chemistry,\
                                                           fig_dir=data_dir)
         else:
-            atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+            if chemistry:
+                atmosphere = polytropes.FC_polytrope_2d_rxn(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                     epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                    chemistry=chemistry,\
                                                     fig_dir=data_dir)
+            else:
+                atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+                                                    epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                                    fig_dir=data_dir)
+
     if epsilon < 1e-4:
         ncc_cutoff = 1e-14
     elif epsilon > 1e-1:
@@ -130,19 +133,19 @@ def FC_polytrope(dynamics_file,
     if threeD:
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=ncc_cutoff,
                                    split_diffusivities=split_diffusivities,
-                                   chemistry=chemistry,ChemicalPrandtl=ChemicalPrandtl,Qu_0=Qu_0,phi_0=phi_0)
+                                   ChemicalPrandtl=ChemicalPrandtl,Qu_0=Qu_0,phi_0=phi_0)
     else:
         atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=ncc_cutoff,
                                    split_diffusivities=split_diffusivities,
-                                   chemistry=chemistry,ChemicalPrandtl=ChemicalPrandtl,Qu_0=Qu_0,phi_0=phi_0)
+                                   ChemicalPrandtl=ChemicalPrandtl,Qu_0=Qu_0,phi_0=phi_0)
 
     
     if fixed_flux:
-        atmosphere.set_BC(fixed_flux=True, stress_free=True, chemistry=chemistry)
+        atmosphere.set_BC(fixed_flux=True, stress_free=True)
     elif mixed_flux_T:
-        atmosphere.set_BC(mixed_flux_temperature=True, stress_free=True, chemistry=chemistry)
+        atmosphere.set_BC(mixed_flux_temperature=True, stress_free=True)
     else:
-        atmosphere.set_BC(fixed_temperature=True, stress_free=True, chemistry=chemistry)
+        atmosphere.set_BC(fixed_temperature=True, stress_free=True)
 
     problem = atmosphere.get_problem()
 
@@ -177,7 +180,7 @@ def FC_polytrope(dynamics_file,
     checkpoint = Checkpoint(data_dir)
 
     if restart is None:
-        atmosphere.set_IC(solver, chemistry=chemistry)
+        atmosphere.set_IC(solver)
         dt = None
     else:
         logger.info("restarting from {}".format(restart))
@@ -199,7 +202,7 @@ def FC_polytrope(dynamics_file,
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
     
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, chemistry=chemistry)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
 
     # Reinjecting dynamics and tracers if desired
     logger.info("Re-injecting scalars")
