@@ -242,19 +242,20 @@ class FC_equations(Equations):
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
         self.problem.substitutions['ln_rho_full'] = '(ln_rho0 + ln_rho1)'
         self.problem.substitutions['T_full']      = '(T0 + T1)'
+        self.problem.substitutions['s_fluc'] = '((1/Cv_inv)*log(1+T1/T0) - ln_rho1)'
+        self.problem.substitutions['s_mean'] = '((1/Cv_inv)*log(T0) - ln_rho0)'
+        self.problem.substitutions['m_ad']    = '((gamma-1)**-1)'
 
         
     def _set_subs(self):
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
-        self.problem.substitutions['s_fluc'] = '((1/Cv_inv)*log(1+T1/T0) - ln_rho1)'
-        self.problem.substitutions['s_mean'] = '((1/Cv_inv)*log(T0) - ln_rho0)'
-        self.problem.substitutions['epsilon'] = 'plane_avg(log(T0**(1/(gamma-1))/rho0)/log(T0))'
-        self.problem.substitutions['m_ad']    = '((gamma-1)**-1)'
-
         # output parameters
         self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
+
+        self.problem.substitutions['epsilon_0'] = 'log(T0**(1/(gamma-1))/rho0)/log(T0)'
+        self.problem.substitutions['epsilon'] = 'log(T_full**(1/(gamma-1))/rho_full)/log(T_full)'
         
         self.problem.substitutions['vel_rms'] = 'sqrt(u**2 + v**2 + w**2)'
         self.problem.substitutions['KE'] = 'rho_full*(vel_rms**2)/2'
