@@ -108,59 +108,6 @@ class Atmosphere:
         self.necessary_quantities['scale_energy'] = self.scale_energy
         self.necessary_quantities['scale_momentum'] = self.scale_momentum
 
-
-    def _set_parameters(self):
-        '''
-        Basic parameters needed for any stratified atmosphere.
-        '''
-        self.problem.parameters['Lz'] = self.Lz
-        if self.dimensions > 1:
-            self.problem.parameters['Lx'] = self.Lx
-        if self.dimensions > 2:
-            self.problem.parameters['Ly'] = self.Ly
-
-        self.problem.parameters['gamma'] = self.gamma
-        self.problem.parameters['Cv'] = 1/(self.gamma-1)
-        self.problem.parameters['Cv_inv'] = self.gamma-1
-        self.problem.parameters['Cp'] = self.gamma/(self.gamma-1)
-        self.problem.parameters['Cp_inv'] = (self.gamma-1)/self.gamma
-
-        # the following quantities must be calculated and are missing
-        # from the atmosphere stub.
-
-        # thermodynamic quantities
-        self.problem.parameters['T0'] = self.T0
-        self.problem.parameters['T0_z'] = self.T0_z
-        self.problem.parameters['T0_zz'] = self.T0_zz
-        
-        self.problem.parameters['rho0'] = self.rho0
-        self.problem.parameters['del_ln_rho0'] = self.del_ln_rho0
-                    
-        self.problem.parameters['del_s0'] = self.del_s0
-
-        # gravity
-        self.problem.parameters['g']  = self.g
-        self.problem.parameters['phi']  = self.phi
-
-        # scaling factor to reduce NCC bandwidth of all equations
-        self.problem.parameters['scale'] = self.scale
-        self.problem.parameters['scale_continuity'] = self.scale_continuity
-        self.problem.parameters['scale_momentum'] = self.scale_momentum
-        self.problem.parameters['scale_energy'] = self.scale_energy
-
-        # diffusivities
-        self.problem.parameters['nu_l'] = self.nu_l
-        self.problem.parameters['chi_l'] = self.chi_l
-        self.problem.parameters['del_chi_l'] = self.del_chi_l
-        self.problem.parameters['del_nu_l'] = self.del_nu_l
-        self.problem.parameters['nu_r'] = self.nu_r
-        self.problem.parameters['chi_r'] = self.chi_r
-        self.problem.parameters['del_chi_r'] = self.del_chi_r
-        self.problem.parameters['del_nu_r'] = self.del_nu_r
-
-        # Cooling
-        self.problem.parameters['Qcool_z'] = 0
-
     def copy_atmosphere(self, atmosphere):
         '''
         Copies values from a target atmosphere into the current atmosphere.

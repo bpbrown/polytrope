@@ -186,22 +186,73 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
 
-    def _set_subs(self):
-        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
+    def _set_parameters(self):
+        '''
+        Basic parameters needed for fully compressible equations in stratified atmosphere.
+        '''
+        self.problem.parameters['Lz'] = self.Lz
+        if self.dimensions > 1:
+            self.problem.parameters['Lx'] = self.Lx
+        if self.dimensions > 2:
+            self.problem.parameters['Ly'] = self.Ly
 
-        # output parameters
+        self.problem.parameters['gamma'] = self.gamma
+        self.problem.parameters['Cv'] = 1/(self.gamma-1)
+        self.problem.parameters['Cv_inv'] = self.gamma-1
+        self.problem.parameters['Cp'] = self.gamma/(self.gamma-1)
+        self.problem.parameters['Cp_inv'] = (self.gamma-1)/self.gamma
+        
+        # thermodynamic quantities
+        self.problem.parameters['T0'] = self.T0
+        self.problem.parameters['T0_z'] = self.T0_z
+        self.problem.parameters['T0_zz'] = self.T0_zz
+        
+        self.problem.parameters['rho0'] = self.rho0
+        self.problem.parameters['del_ln_rho0'] = self.del_ln_rho0
+                    
+        self.problem.parameters['del_s0'] = self.del_s0
+
+        # gravity
+        self.problem.parameters['g']  = self.g
+        self.problem.parameters['phi']  = self.phi
+
+        # scaling factor to reduce NCC bandwidth of all equations
+        self.problem.parameters['scale'] = self.scale
+        self.problem.parameters['scale_continuity'] = self.scale_continuity
+        self.problem.parameters['scale_momentum'] = self.scale_momentum
+        self.problem.parameters['scale_energy'] = self.scale_energy
+
+        # diffusivities
+        self.problem.parameters['nu_l'] = self.nu_l
+        self.problem.parameters['chi_l'] = self.chi_l
+        self.problem.parameters['del_chi_l'] = self.del_chi_l
+        self.problem.parameters['del_nu_l'] = self.del_nu_l
+        self.problem.parameters['nu_r'] = self.nu_r
+        self.problem.parameters['chi_r'] = self.chi_r
+        self.problem.parameters['del_chi_r'] = self.del_chi_r
+        self.problem.parameters['del_nu_r'] = self.del_nu_r
+
+        # Cooling
+        self.problem.parameters['Qcool_z'] = 0
+
+        self.problem.parameters['delta_s_atm'] = self.delta_s
+
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
-        self.problem.substitutions['T_full']            = '(T0 + T1)'
-        self.problem.substitutions['ln_rho_full']       = '(ln_rho0 + ln_rho1)'
+        self.problem.substitutions['ln_rho_full'] = '(ln_rho0 + ln_rho1)'
+        self.problem.substitutions['T_full']      = '(T0 + T1)'
 
-        self.problem.parameters['delta_s_atm'] = self.delta_s
+        
+    def _set_subs(self):
+        self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
+
         self.problem.substitutions['s_fluc'] = '((1/Cv_inv)*log(1+T1/T0) - ln_rho1)'
         self.problem.substitutions['s_mean'] = '((1/Cv_inv)*log(T0) - ln_rho0)'
         self.problem.substitutions['epsilon'] = 'plane_avg(log(T0**(1/(gamma-1))/rho0)/log(T0))'
         self.problem.substitutions['m_ad']    = '((gamma-1)**-1)'
 
+        # output parameters
         self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
         self.problem.substitutions['Rayleigh_local']  = 'g*Lz**4*dz(s_mean+s_fluc)*Cp_inv/(nu*chi)'
         
@@ -756,8 +807,9 @@ class FC_equations_2d(FC_equations):
                                 ChemicalPrandtl=ChemicalPrandtl,
                                 Qu_0=Qu_0, phi_0=phi_0,
                                 split_diffusivities=split_diffusivities)
-        self._set_subs()
+        
         self._set_parameters()
+        self._set_subs()
         if EVP_2:
             self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
             self.problem.parameters['Prandtl'] = Prandtl
@@ -1291,8 +1343,6 @@ class FC_MHD_equations(FC_equations):
         self.nonlinear_viscous_v =  " 0 " # work through this properly --> was: " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
         self.problem.substitutions['R_visc_v'] = self.nonlinear_viscous_v
         
-        super(FC_MHD_equations, self)._set_subs()
-
         self.problem.parameters['pi'] = np.pi
         self.problem.substitutions['Bz'] = '(dx(Ay) )'
         self.problem.substitutions['Jx'] = '( -dz(By))'
