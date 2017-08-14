@@ -175,6 +175,24 @@ class FC_polytrope_3d(FC_equations_3d, Polytrope):
         super(FC_polytrope_3d, self).set_equations(*args, **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
+
+class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
+    def __init__(self, *args, **kwargs):
+        super(FC_MHD_polytrope, self).__init__() 
+        Polytrope.__init__(self, *args, **kwargs)
+        logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
+
+    def set_equations(self, *args, **kwargs):
+        super(FC_MHD_polytrope, self).set_equations(*args, **kwargs)
+        self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
+
+    def set_BC(self, *args, **kwargs):
+        super(FC_MHD_polytrope, self).set_BC(*args, **kwargs)
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+
+
+            
 class AN_polytrope(AN_equations, Polytrope):
     def __init__(self, *args, **kwargs):
         super(AN_polytrope, self).__init__() 
