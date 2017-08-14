@@ -245,6 +245,10 @@ class FC_equations(Equations):
         self.problem.substitutions['all_flux_minus_adiabatic_AB17'] = '(convective_flux_z+kappa_flux_z-kappa_adiabatic_flux_z_AB17)'
         self.problem.substitutions['Nusselt_G75'] = '((all_flux_minus_adiabatic_G75)/(Nusselt_norm_G75))'
         self.problem.substitutions['Nusselt_AB17'] = '((all_flux_minus_adiabatic_AB17)/(Nusselt_norm_AB17))'
+
+
+
+
         
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
@@ -544,14 +548,113 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
 
+        # define nu and chi for output
+        if self.split_diffusivities:
+            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
+            if self.chemistry:
+                self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
+                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
+            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
+        else:
+            self.problem.substitutions['nu']  = '(nu_l)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l)'
+            if self.chemistry:
+                self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
+                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
+            self.problem.substitutions['chi'] = '(chi_l)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l)'
+        
+        self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_u_r = " nu_r*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
+        self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
+
+        if self.chemistry:
+            self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
+            self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
+            self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
+            self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
+            self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
+            self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
+            
+        if not self.constant_mu:
+            self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
+            self.viscous_term_u_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σxz"
+            self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
+            self.viscous_term_w_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σzz"
+
+            if self.chemistry:
+                self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
+                self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
+                                           " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
+                self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
+                self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
+                                           " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) "
+                self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
+                self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
+                                           " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) "
+                
+        self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
+        self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
+        if self.chemistry:
+            self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
+            self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
+            self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
+        
+        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
+        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
+        if self.chemistry:
+            self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
+            self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
+            self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "  
+        if self.split_diffusivities:
+            self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
+            self.nonlinear_viscous_w += " + {}".format(self.viscous_term_w_r)
+            if self.chemistry:
+                self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
+                self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
+                self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
+            
+        self.problem.substitutions['R_visc_w'] = self.nonlinear_viscous_w
+        self.problem.substitutions['R_visc_u'] = self.nonlinear_viscous_u
+        if self.chemistry:
+            self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
+            self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
+            self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
+            
+
+        # double check implementation of variabile chi and background coupling term.
+        self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
+        self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
+        self.source                   = " Cv_inv*(chi*(T0_zz))" 
+        if not self.constant_kappa:
+            self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
+            self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
+            self.source                += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
+        
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        if self.split_diffusivities:
+            self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
+                
+        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff_l
+        self.problem.substitutions['R_thermal']   = self.nonlinear_thermal_diff
+        self.problem.substitutions['source_terms'] = self.source
+
+        # double check this      
+        self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + w_z*σzz + σxz**2)"
+
+        self.problem.substitutions['R_visc_heat'] = self.viscous_heating
+        
         super(FC_equations_2d, self)._set_subs()
 
         
-    def _set_diffusivities(self, Rayleigh, Prandtl, chemistry=False, ChemicalPrandtl=1, \
+    def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl=1, \
                            Qu_0=5e-8, phi_0=10, **kwargs):
         super(FC_equations_2d, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
         
-        if chemistry:
+        if self.chemistry:
             self.nu_chem_l = self._new_ncc()
             self.nu_chem_r = self._new_ncc()
             self.del_nu_chem_l = self._new_ncc()
@@ -609,15 +712,14 @@ class FC_equations_2d(FC_equations):
             self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
 
             
-    def _set_parameters(self,chemistry=False):
+    def _set_parameters(self):
         super(FC_equations_2d, self)._set_parameters()
 
-        if chemistry:    
+        if self.chemistry:    
             self.problem.parameters['nu_chem_l'] = self.nu_chem_l
             self.problem.parameters['nu_chem_r'] = self.nu_chem_r
             self.problem.parameters['del_nu_chem_l'] = self.del_nu_chem_l
             self.problem.parameters['del_nu_chem_r'] = self.del_nu_chem_r
-
             
             # Adding in equilibrium value to correct source term
             c0 = 1
@@ -645,136 +747,40 @@ class FC_equations_2d(FC_equations):
                       kx = 0, EVP_2 = False, 
                       split_diffusivities=False):
 
+        self.split_diffusivities = split_diffusivities
+        self.chemistry = chemistry
+
         if self.dimensions == 1:
             self.problem.parameters['j'] = 1j
             self.problem.substitutions['dx(f)'] = "j*kx*(f)"
             self.problem.parameters['kx'] = kx
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
-                                chemistry=chemistry, ChemicalPrandtl=ChemicalPrandtl,
+                                ChemicalPrandtl=ChemicalPrandtl,
                                 Qu_0=Qu_0, phi_0=phi_0,
                                 split_diffusivities=split_diffusivities)
-        self._set_parameters(chemistry=chemistry)
+        self._set_subs()
+        self._set_parameters()
         if EVP_2:
             self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
             self.problem.parameters['Prandtl'] = Prandtl
             self.problem.parameters.pop('nu_l')
             self.problem.parameters.pop('chi_l')
-
-        # define nu and chi for output
-        if split_diffusivities:
-            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
-            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
-            if chemistry:
-                self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
-                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_chem_nu_r)'
-            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
-        else:
-            self.problem.substitutions['nu']  = '(nu_l)'
-            self.problem.substitutions['del_nu']  = '(del_nu_l)'
-            if chemistry:
-                self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
-                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
-            self.problem.substitutions['chi'] = '(chi_l)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l)'
-        self._set_subs()
-        
-        self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_u_r = " nu_r*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
-        self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
-
-        if chemistry:
-            self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
-            self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
-            self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
-            self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
-            self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
-            self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
-            
-        if not self.constant_mu:
-            self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
-            self.viscous_term_u_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σxz"
-            self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
-            self.viscous_term_w_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σzz"
-
-            if chemistry:
-                self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
-                self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
-                self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
-                self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) "
-                self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
-                self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) "
-                
-        self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
-        self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
-        if chemistry:
-            self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
-            self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
-            self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
-        
-        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dz(ln_rho1)*σxz)"
-        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dz(ln_rho1)*σzz)"
-        if chemistry:
-            self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
-            self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
-            self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "  
-        if split_diffusivities:
-            self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
-            self.nonlinear_viscous_w += " + {}".format(self.viscous_term_w_r)
-            if chemistry:
-                self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
-                self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
-                self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
-            
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-        if chemistry:
-            self.problem.substitutions['NL_diff_f'] = self.NL_diff_term_f
-            self.problem.substitutions['NL_diff_C'] = self.NL_diff_term_C
-            self.problem.substitutions['NL_diff_G'] = self.NL_diff_term_G
-            
-
-        # double check implementation of variabile chi and background coupling term.
-        self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.source                   = " Cv_inv*(chi*(T0_zz))" 
-        if not self.constant_kappa:
-            self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
-            self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
-            self.source                += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
-        
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        if split_diffusivities:
-            self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
-                
-        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff_l
-        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
-        self.problem.substitutions['source_terms'] = self.source
-
-        # double check this      
-        self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + w_z*σzz + σxz**2)"
-
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
        
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
         self.problem.add_equation("dz(T1) - T1_z = 0")
-        if chemistry:
+        if self.chemistry:
             self.problem.add_equation("dz(f) - f_z = 0")
             self.problem.add_equation("dz(C) - C_z = 0")
             self.problem.add_equation("dz(G) - G_z = 0")
             
         logger.debug("Setting z-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
+                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u)"))
 
 
         logger.debug("Setting continuity equation")
@@ -783,13 +789,13 @@ class FC_equations_2d(FC_equations):
 
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
                 
-        if chemistry:
+        if self.chemistry:
             logger.debug("Setting passive and reactive tracer equations")
-            self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + NL_diff_f)"))
-            self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + NL_diff_C + k_chem*rho0*C_eq)"))
-            self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + NL_diff_G + k_chem*rho0*G_eq)"))
+            self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + R_diff_f)"))
+            self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + R_diff_C + k_chem*rho0*C_eq)"))
+            self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + R_diff_G + k_chem*rho0*G_eq)"))
 
 
     def initialize_output(self, solver, data_dir, chemistry=False,
@@ -807,7 +813,7 @@ class FC_equations_2d(FC_equations):
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
         analysis_slice.add_task("ω_y", name="vorticity")
-        if chemistry:
+        if self.chemistry:
             analysis_slice.add_task("f", name="f")
             analysis_slice.add_task("C", name="C")
             analysis_slice.add_task("G", name="G")
@@ -824,7 +830,7 @@ class FC_equations_2d(FC_equations):
             analysis_coeff.add_task("w", name="w", layout='c')
             analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
             analysis_coeff.add_task("ω_y", name="vorticity", layout='c')
-            if chemistry:
+            if self.chemistry:
                 analysis_coeff.add_task("f", name="f", layout='c')
                 analysis_coeff.add_task("C", name="C", layout='c')
                 analysis_coeff.add_task("G", name="G", layout='c')
@@ -848,16 +854,16 @@ class FC_equations_2d_kappa(FC_equations_2d):
         self.problem.substitutions['L_visc_w'] = " μ/rho0*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)) + del_ln_μ*σzz)"                
         self.problem.substitutions['L_visc_u'] = " μ/rho0*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)) + del_ln_μ*σxz)"
         
-        self.problem.substitutions['NL_visc_w'] = "L_visc_w*(exp(-ln_rho1)-1)"
-        self.problem.substitutions['NL_visc_u'] = "L_visc_u*(exp(-ln_rho1)-1)"
+        self.problem.substitutions['R_visc_w'] = "L_visc_w*(exp(-ln_rho1)-1)"
+        self.problem.substitutions['R_visc_u'] = "L_visc_u*(exp(-ln_rho1)-1)"
 
         self.problem.substitutions['κT0'] = "(del_ln_κ*T0_z + T0_zz)"
         self.problem.substitutions['κT1'] = "(del_ln_κ*T1_z + Lap(T1, T1_z))"
         
         self.problem.substitutions['L_thermal']  =   " κ/rho0*Cv_inv*(κT0*-1*ln_rho1 + κT1)"
-        self.problem.substitutions['NL_thermal'] =   " κ/rho0*Cv_inv*(κT0*(exp(-ln_rho1)+ln_rho1) + κT1*(exp(-ln_rho1)-1))"
+        self.problem.substitutions['R_thermal'] =   " κ/rho0*Cv_inv*(κT0*(exp(-ln_rho1)+ln_rho1) + κT1*(exp(-ln_rho1)-1))"
         self.problem.substitutions['source_terms'] = " κ/rho_full*Cv_inv*(T0_zz + del_ln_κ*T0_z)"        
-        self.problem.substitutions['NL_visc_heat'] = " μ/rho_full*Cv_inv*(dx(u)*σxx + w_z*σzz + σxz**2)"
+        self.problem.substitutions['R_visc_heat'] = " μ/rho_full*Cv_inv*(dx(u)*σxx + w_z*σzz + σxz**2)"
 
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
@@ -865,11 +871,11 @@ class FC_equations_2d_kappa(FC_equations_2d):
 
         logger.debug("Setting z-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z     + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + NL_visc_w)"))
+                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + R_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1)   + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + NL_visc_u)"))
+                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + R_visc_u)"))
 
         logger.debug("Setting continuity equation")
         self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
@@ -877,7 +883,7 @@ class FC_equations_2d_kappa(FC_equations_2d):
 
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
 
     def _set_diffusivities(self, *args, **kwargs):
         super(FC_equations_2d_kappa, self)._set_diffusivities(*args, **kwargs)
@@ -996,8 +1002,8 @@ class FC_equations_rxn(FC_equations_2d):
 
         self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
         self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
+        self.problem.substitutions['R_visc_w'] = self.nonlinear_viscous_w
+        self.problem.substitutions['R_visc_u'] = self.nonlinear_viscous_u
 
         # double check implementation of variabile chi and background coupling term.
         self.problem.substitutions['Q_z'] = "(-T1_z)"
@@ -1009,11 +1015,11 @@ class FC_equations_rxn(FC_equations_2d):
             self.source              += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
                 
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
-        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
+        self.problem.substitutions['R_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
       
         self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
+        self.problem.substitutions['R_visc_heat'] = self.viscous_heating
        
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
@@ -1024,11 +1030,11 @@ class FC_equations_rxn(FC_equations_2d):
 
         logger.debug("Setting z-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
+                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u)"))
 
 
         logger.debug("Setting continuity equation")
@@ -1037,7 +1043,7 @@ class FC_equations_rxn(FC_equations_2d):
 
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
 
         # no NCCs here to rescale.  Easy to modify.
         logger.debug("Setting passive tracer scalar equation")
@@ -1120,23 +1126,8 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions["σxy"] = "(dx(v) + dy(u))"
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
         self.problem.substitutions["σyz"] = "(dy(w) +  v_z )"
-           
-        super(FC_equations_3d, self)._set_subs(**kwargs)
 
-                        
-    def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
-                      kx = 0, EVP_2 = False, 
-                      split_diffusivities=False):
-        
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, split_diffusivities=split_diffusivities)
-        self._set_parameters()
-        if EVP_2:
-            self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
-            self.problem.parameters['Prandtl'] = Prandtl
-            self.problem.parameters.pop('nu_l')
-            self.problem.parameters.pop('chi_l')
-                # define nu and chi for output
-        if split_diffusivities:
+        if self.split_diffusivities:
             self.problem.substitutions['nu']  = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
             self.problem.substitutions['chi'] = '(chi_l + chi_r)'
@@ -1146,25 +1137,6 @@ class FC_equations_3d(FC_equations):
             self.problem.substitutions['del_nu']  = '(del_nu_l)'
             self.problem.substitutions['chi'] = '(chi_l)'
             self.problem.substitutions['del_chi'] = '(del_chi_l)'
-        self._set_subs()
-    
-        if Taylor:
-            self.rotating = True
-            self.problem.parameters['θ'] = theta
-            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
-            logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
-            self.problem.substitutions['Ωx'] = '0'
-            self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
-            self.problem.substitutions['Ωz'] = 'Ω*cos(θ)'
-            self.problem.substitutions['Coriolis_x'] = '(2*Ωy*w - 2*Ωz*v)'
-            self.problem.substitutions['Coriolis_y'] = '(2*Ωz*u - 2*Ωx*w)'
-            self.problem.substitutions['Coriolis_z'] = '(2*Ωx*v - 2*Ωy*u)'
-            self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Ω))'
-        else:
-            self.rotating = False
-            self.problem.substitutions['Coriolis_x'] = '0'
-            self.problem.substitutions['Coriolis_y'] = '0'
-            self.problem.substitutions['Coriolis_z'] = '0'
 
         self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(v), dx(w_z)))"
         self.viscous_term_v_l = " nu_l*(Lap(v, v_z) + 1/3*Div(dy(u), dy(v), dy(w_z)))"
@@ -1189,14 +1161,14 @@ class FC_equations_3d(FC_equations):
         self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
         self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
         self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
-        if split_diffusivities:
+        if self.split_diffusivities:
             self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
             self.nonlinear_viscous_v += " + {}".format(self.viscous_term_v_r)
             self.nonlinear_viscous_w += " + {}".format(self.viscous_term_w_r)
  
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-        self.problem.substitutions['NL_visc_v'] = self.nonlinear_viscous_v
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
+        self.problem.substitutions['R_visc_u'] = self.nonlinear_viscous_u
+        self.problem.substitutions['R_visc_v'] = self.nonlinear_viscous_v
+        self.problem.substitutions['R_visc_w'] = self.nonlinear_viscous_w
 
         # double check implementation of variabile chi and background coupling term.
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
@@ -1208,15 +1180,52 @@ class FC_equations_3d(FC_equations):
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
             self.source                += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
 
-        if split_diffusivities:
+        if self.split_diffusivities:
             self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff_l
-        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
+        self.problem.substitutions['R_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
 
         self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + dy(v)*σyy + w_z*σzz + σxy**2 + σxz**2 + σyz**2)"
 
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
+        self.problem.substitutions['R_visc_heat'] = self.viscous_heating
+        
+        super(FC_equations_3d, self)._set_subs(**kwargs)
+
+                        
+    def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
+                      kx = 0, EVP_2 = False, 
+                      split_diffusivities=False):
+
+        self.split_diffusivities = split_diffusivities
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
+        self._set_parameters()
+        if EVP_2:
+            self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
+            self.problem.parameters['Prandtl'] = Prandtl
+            self.problem.parameters.pop('nu_l')
+            self.problem.parameters.pop('chi_l')
+                # define nu and chi for output
+
+        self._set_subs()
+    
+        if Taylor:
+            self.rotating = True
+            self.problem.parameters['θ'] = theta
+            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
+            logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
+            self.problem.substitutions['Ωx'] = '0'
+            self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
+            self.problem.substitutions['Ωz'] = 'Ω*cos(θ)'
+            self.problem.substitutions['Coriolis_x'] = '(2*Ωy*w - 2*Ωz*v)'
+            self.problem.substitutions['Coriolis_y'] = '(2*Ωz*u - 2*Ωx*w)'
+            self.problem.substitutions['Coriolis_z'] = '(2*Ωx*v - 2*Ωy*u)'
+            self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Ω))'
+        else:
+            self.rotating = False
+            self.problem.substitutions['Coriolis_x'] = '0'
+            self.problem.substitutions['Coriolis_y'] = '0'
+            self.problem.substitutions['Coriolis_z'] = '0'
        
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(v) - v_z = 0")
@@ -1229,19 +1238,19 @@ class FC_equations_3d(FC_equations):
 
         logger.debug("Setting z-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(w) + Coriolis_z + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w)"))
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(u) + Coriolis_x + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u)"))
+                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u)"))
 
         logger.debug("Setting y-momentum equation")
         self.problem.add_equation(("(scale_momentum)*( dt(v) + Coriolis_y + dy(T1) + T0*dy(ln_rho1)                  - L_visc_v) = "
-                                   "(scale_momentum)*(-T1*dy(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v)"))
+                                   "(scale_momentum)*(-T1*dy(ln_rho1) - UdotGrad(v, v_z) + R_visc_v)"))
 
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)"))
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)"))
         
 
     def set_BC(self, **kwargs):        
@@ -1297,6 +1306,19 @@ class FC_MHD_equations(FC_equations):
         self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1','Ax','Ay','Az','Bx','By','Phi']
         
     def _set_subs(self):
+        self.problem.substitutions['eta_r'] = '0'
+        if self.split_diffusivities:
+            self.problem.substitutions['eta']  = '(eta_l + eta_r)'
+        else:
+            self.problem.substitutions['eta']  = '(eta_l)'
+            
+        super(FC_MHD_equations, self)._set_subs()
+        
+        self.viscous_term_v_l = " nu_l*(Lap(v, v_z) )" # work through this properly
+        self.problem.substitutions['L_visc_v'] = self.viscous_term_v
+        self.nonlinear_viscous_v =  " 0 " # work through this properly --> was: " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
+        self.problem.substitutions['R_visc_v'] = self.nonlinear_viscous_v
+        
         super(FC_MHD_equations, self)._set_subs()
 
         self.problem.parameters['pi'] = np.pi
@@ -1310,7 +1332,7 @@ class FC_MHD_equations(FC_equations):
 
         self.problem.substitutions['J_squared'] = "(Jx**2 + Jy**2 + Jz**2)"
 
-    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs):
+    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, **kwargs):
         super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
         self.eta = self._new_ncc()
         self.necessary_quantities['eta'] = self.eta
@@ -1320,77 +1342,16 @@ class FC_MHD_equations(FC_equations):
 
     def _set_parameters(self):
         super(FC_MHD_equations, self)._set_parameters()
-        self.problem.parameters['eta'] = self.eta
-        
-    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, **kwargs):
-        # DOES NOT YET INCLUDE Ohmic heating.
-        
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs)
-        self._set_parameters()
-        # define nu and chi for output
-        if split_diffusivities:
-            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
-            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
-            self.problem.substitutions['eta']  = '(eta_l + eta_r)'
-            self.problem.substitutions['del_eta']  = '(del_eta_l + del_eta_r)'
-            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
-        else:
-            self.problem.substitutions['nu']  = '(nu_l)'
-            self.problem.substitutions['del_nu']  = '(del_nu_l)'
-            self.problem.substitutions['eta']  = '(eta_l)'
-            self.problem.substitutions['del_eta']  = '(del_eta_l)'
-            self.problem.substitutions['chi'] = '(chi_l)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l)'
-        self._set_subs()
-        
-        self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_u_r = " nu_r*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
-        self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"        
-        self.viscous_term_v_l = " nu_l*(Lap(v, v_z) )" # work through this properly
-
-        if not self.constant_mu:
-            self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
-            self.viscous_term_u_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σxz"
-            self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
-            self.viscous_term_w_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σzz"
-        
-        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
-        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
-        self.problem.substitutions['L_visc_v'] = self.viscous_term_v
-
-        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
-        self.nonlinear_viscous_v =  " 0 " # work through this properly --> was: " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
-        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
-        if split_diffusivities:
-            self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
-            self.nonlinear_viscous_v += " + {}".format(self.viscous_term_v_r)
-            self.nonlinear_viscous_w += " + {}".format(self.viscous_term_w_r)
-            
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-        self.problem.substitutions['NL_visc_v'] = self.nonlinear_viscous_v
-
-        # double check implementation of variabile chi and background coupling term.
-        self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
-        self.source                   = " Cv_inv*(chi*(T0_zz))" 
-        if not self.constant_kappa:
-            self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
-            self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
-            self.source                += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
-        
-        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        if split_diffusivities:
-            self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
+        self.problem.parameters['eta_l'] = self.eta
                 
-        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
-        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
-        self.problem.substitutions['source_terms'] = self.source
+    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, split_diffusivities=False, **kwargs):
+        # DOES NOT YET INCLUDE Ohmic heating.
 
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + w_z*σzz + σxz**2)"
-    
+        self.split_diffusivities = split_diffusivities
+        self._set_diffusivities(Rayleigh, Prandtl, MagneticPrandtl, **kwargs)
+        self._set_parameters()
+        self._set_subs()
+            
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(v) - v_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
@@ -1399,19 +1360,19 @@ class FC_MHD_equations(FC_equations):
         self.problem.add_equation("By - dz(Ax) + dx(Az) = 0")
 
         self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  + 1/(4*pi*rho_full)*(Jx*By - Jy*Bx))"))
+                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w  + 1/(4*pi*rho_full)*(Jx*By - Jy*Bx))"))
 
         self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  + 1/(4*pi*rho_full)*(Jy*Bz - Jz*By))"))
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u  + 1/(4*pi*rho_full)*(Jy*Bz - Jz*By))"))
 
         self.problem.add_equation(("(scale)*( dt(v) +                                          - L_visc_v) = "
-                                   "(scale)*(- UdotGrad(v, v_z) + NL_visc_v  + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz))"))
+                                   "(scale)*(- UdotGrad(v, v_z) + R_visc_v  + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz))"))
 
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
 
         # Does not yet rescale NCC eta, or utilize split diffusivities to save bandwidth correctly.
         self.problem.add_equation("dt(Ax) + eta*Jx + dx(Phi)            =  v*Bz - w*By")
@@ -1496,14 +1457,8 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.substitutions['J_squared_1'] = "(Jx**2 + Jy**2 + Jz**2)"
         self.problem.substitutions['J_squared_0'] = "(Jx_0**2 + Jy_0**2 + Jz_0**2)"
 
-    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude, **kwargs):
-        # DOES NOT YET INCLUDE Ohmic heating
-        # Curently assumes guide field is Bz only and constant;
-        # as such it is characterized by a single value (guidefield amplitude)
-        
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs)
-        self._set_parameters()
-        
+    def _set_parameters(self, guidefield_amplitude):
+        super(FC_MHD_equations_guidefield, self)._set_parameters()
         self.problem.parameters['Bz_0'] = guidefield_amplitude
         self.problem.parameters['Bx_0'] = 0
         self.problem.parameters['By_0'] = 0
@@ -1511,42 +1466,17 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.parameters['Jx_0'] = 0
         self.problem.parameters['Jy_0'] = 0
         self.problem.parameters['Jz_0'] = 0
-
         logger.info("Constant Bz guidefield, amplitude {}".format(guidefield_amplitude))
 
+
+    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude, **kwargs):
+        # DOES NOT YET INCLUDE Ohmic heating
+        # Curently assumes guide field is Bz only and constant;
+        # as such it is characterized by a single value (guidefield amplitude)
+        self._set_diffusivities(Rayleigh, Prandtl, MagneticPrandtl, **kwargs)
+        self._set_parameters(guidefield_amplitude)
         self._set_subs()
-                
-        # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
-        self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_v = " nu*(Lap(v, v_z) )" # work through this properly
-
-        self.problem.substitutions['L_visc_w'] = self.viscous_term_w
-        self.problem.substitutions['L_visc_u'] = self.viscous_term_u
-        self.problem.substitutions['L_visc_v'] = self.viscous_term_v
-                
-        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_v = " 0 " # work through this properly
-
-        self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
-        self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
-        self.problem.substitutions['NL_visc_v'] = self.nonlinear_viscous_v
-
-        # double check implementation of variabile chi and background coupling term.
-        self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z)     + T1_z*del_ln_rho0 "
-                                       "              + T0_z*dz(ln_rho1)) + del_chi*dz(T1)) ")
-        self.nonlinear_thermal_diff =  " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                  " Cv_inv*(chi*(T0_zz             + T0_z*del_ln_rho0) + del_chi*T0_z)"
-                
-        self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
-        self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
-        self.problem.substitutions['source_terms'] = self.source
         
-        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
-    
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(v) - v_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
@@ -1559,19 +1489,19 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         # momentum equation
         self.problem.add_equation(("(scale)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w "
                                    "         - 1/(4*pi*rho0)*(Jx_0*By - Jy_0*Bx + Jx*By_0 - Jy*Bx_0)) = "
-                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + NL_visc_w  "
+                                   "(scale)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w  "
                                    "         + 1/(4*pi*rho_full)*(Jx*By - Jy*Bx + Jx_0*By_0 - Jy_0*Bx_0 "
                                    "         - rho_fluc/rho0*(Jx_0*By - Jy_0*Bx + Jx*By_0 - Jy*Bx_0)))"))
 
         self.problem.add_equation(("(scale)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u "
                                    "         - 1/(4*pi*rho0)*(Jy_0*Bz - Jz_0*By + Jy*Bz_0 - Jz*By_0)) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + NL_visc_u  "
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u  "
                                    "         + 1/(4*pi*rho_full)*(Jy*Bz - Jz*By + Jy_0*Bz_0 - Jz_0*By_0 "
                                    "         - rho_fluc/rho0*(Jy_0*Bz - Jz_0*By + Jy*Bz_0 - Jz*By_0)))"))
 
         self.problem.add_equation(("(scale)*( dt(v)                                           - L_visc_v "
                                     "        - 1/(4*pi*rho0)*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)) = "
-                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(v, v_z) + NL_visc_v  "
+                                   "(scale)*(-T1*dx(ln_rho1) - UdotGrad(v, v_z) + R_visc_v  "
                                    "         + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz + Jz_0*Bx_0 - Jx_0*Bz_0 "
                                    "         - rho_fluc/rho0*(Jz_0*Bx - Jx_0*Bz + Jz*Bx_0 - Jx*Bz_0)))"))
 
@@ -1581,16 +1511,14 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
 
         # temperature equation; no ohmic heating yet
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
+                                   "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
 
         # Induction equation
         self.problem.add_equation("dt(Ax) + eta*Jx + dx(Phi) - (v*Bz_0 - w*By_0) =  v*Bz - w*By - eta*Jx_0")
         self.problem.add_equation("dt(Ay) + eta*Jy           - (w*Bx_0 - u*Bz_0) =  w*Bx - u*Bz - eta*Jy_0")
         self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi) - (u*By_0 - v*Bx_0) =  u*By - v*Bx - eta*Jz_0")
         self.problem.add_equation("dx(Ax) +          dz(Az) = 0")
-        
-        logger.info("using nonlinear EOS for entropy, via substitution")
-                
+                        
     def initialize_output(self, solver, data_dir, **kwargs):
         super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 

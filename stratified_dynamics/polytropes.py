@@ -7,12 +7,12 @@ logger = logging.getLogger(__name__.split('.')[-1])
 
 try:
     from equations import *
-    from atmospheres import *
+    from atmospheres import Polytrope
 except:
     from sys import path
     path.insert(0, './stratified_dynamics')
     from stratified_dynamics.equations import *
-    from stratified_dynamics.atmospheres import *
+    from stratified_dynamics.atmospheres import Polytrope
 
 class FC_polytrope_2d(FC_equations_2d, Polytrope):
     def __init__(self, dimensions=2, chemistry=False,*args, **kwargs):
