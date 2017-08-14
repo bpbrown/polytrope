@@ -96,17 +96,15 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
-        fancy_filter = False
     else:
         if dynamic_diffusivities:
-            atmosphere = polytropes.FC_polytrope_2d_kappa(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+            atmosphere = polytropes.FC_polytrope_2d_kappa_mu(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
         else:
             atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
-        fancy_filter = True
     if epsilon < 1e-4:
         ncc_cutoff = 1e-14
     elif epsilon > 1e-1:
@@ -159,7 +157,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     checkpoint = Checkpoint(data_dir)
 
     if restart is None:
-        atmosphere.set_IC(solver, fancy_filter=fancy_filter)
+        atmosphere.set_IC(solver)
         dt = None
     else:
         logger.info("restarting from {}".format(restart))

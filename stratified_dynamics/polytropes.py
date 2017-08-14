@@ -100,14 +100,14 @@ class FC_polytrope_2d(FC_equations_2d, Polytrope):
             
         return self.analysis_tasks
 
-class FC_polytrope_2d_kappa(FC_equations_2d_kappa, Polytrope):
+class FC_polytrope_2d_kappa_mu(FC_equations_2d_kappa_mu, Polytrope):
     def __init__(self, dimensions=2, *args, **kwargs):
-        super(FC_polytrope_2d_kappa, self).__init__(dimensions=dimensions) 
+        super(FC_polytrope_2d_kappa_mu, self).__init__(dimensions=dimensions) 
         Polytrope.__init__(self, dimensions=dimensions, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def initialize_output(self, solver, data_dir, *args, **kwargs):
-        super(FC_polytrope_2d_kappa, self).initialize_output(solver, data_dir, *args, **kwargs)
+        super(FC_polytrope_2d_kappa_mu, self).initialize_output(solver, data_dir, *args, **kwargs)
 
         #This creates an output file that contains all of the useful atmospheric info at the beginning of the run
         import h5py

@@ -189,7 +189,7 @@ class FC_equations(Equations):
     def _set_subs(self):
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
-        # output parameters        
+        # output parameters
         self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
@@ -245,10 +245,6 @@ class FC_equations(Equations):
         self.problem.substitutions['all_flux_minus_adiabatic_AB17'] = '(convective_flux_z+kappa_flux_z-kappa_adiabatic_flux_z_AB17)'
         self.problem.substitutions['Nusselt_G75'] = '((all_flux_minus_adiabatic_G75)/(Nusselt_norm_G75))'
         self.problem.substitutions['Nusselt_AB17'] = '((all_flux_minus_adiabatic_AB17)/(Nusselt_norm_AB17))'
-
-
-
-
         
     def set_BC(self,
                fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None,
@@ -548,6 +544,10 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions["σzz"] = "(2*w_z   - 2/3*Div_u)"
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
 
+        self._set_diffusion_subs()
+        super(FC_equations_2d, self)._set_subs()
+
+    def _set_diffusion_subs(self):
         # define nu and chi for output
         if self.split_diffusivities:
             self.problem.substitutions['nu']  = '(nu_l + nu_r)'
@@ -646,8 +646,6 @@ class FC_equations_2d(FC_equations):
         self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + w_z*σzz + σxz**2)"
 
         self.problem.substitutions['R_visc_heat'] = self.viscous_heating
-        
-        super(FC_equations_2d, self)._set_subs()
 
         
     def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl=1, \
@@ -775,22 +773,21 @@ class FC_equations_2d(FC_equations):
             self.problem.add_equation("dz(G) - G_z = 0")
             
         logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w)"))
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z     + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + R_visc_w)"))
         
         logger.debug("Setting x-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u)"))
-
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1)   + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + R_visc_u)"))
 
         logger.debug("Setting continuity equation")
         self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
         logger.debug("Setting energy equation")
-        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
-                
+        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
+                            
         if self.chemistry:
             logger.debug("Setting passive and reactive tracer equations")
             self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + R_diff_f)"))
@@ -839,18 +836,13 @@ class FC_equations_2d(FC_equations):
         return self.analysis_tasks
 
 
-class FC_equations_2d_kappa(FC_equations_2d):
-                
-    def set_equations(self, Rayleigh, Prandtl, split_diffusivities=None):
-        
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
-        self._set_parameters()
+class FC_equations_2d_kappa_mu(FC_equations_2d):
 
+    def _set_diffusion_subs(self):
         # define nu and chi for outputs
         self.problem.substitutions['nu']  = 'μ/rho0*exp(-ln_rho1)'
-        self.problem.substitutions['chi'] = 'κ/rho0*exp(-ln_rho1)'        
-        self._set_subs()
-
+        self.problem.substitutions['chi'] = 'κ/rho0*exp(-ln_rho1)'
+        
         self.problem.substitutions['L_visc_w'] = " μ/rho0*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)) + del_ln_μ*σzz)"                
         self.problem.substitutions['L_visc_u'] = " μ/rho0*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)) + del_ln_μ*σxz)"
         
@@ -860,33 +852,13 @@ class FC_equations_2d_kappa(FC_equations_2d):
         self.problem.substitutions['κT0'] = "(del_ln_κ*T0_z + T0_zz)"
         self.problem.substitutions['κT1'] = "(del_ln_κ*T1_z + Lap(T1, T1_z))"
         
-        self.problem.substitutions['L_thermal']  =   " κ/rho0*Cv_inv*(κT0*-1*ln_rho1 + κT1)"
+        self.problem.substitutions['L_thermal']  =  " κ/rho0*Cv_inv*(κT0*-1*ln_rho1 + κT1)"
         self.problem.substitutions['R_thermal'] =   " κ/rho0*Cv_inv*(κT0*(exp(-ln_rho1)+ln_rho1) + κT1*(exp(-ln_rho1)-1))"
         self.problem.substitutions['source_terms'] = " κ/rho_full*Cv_inv*(T0_zz + del_ln_κ*T0_z)"        
-        self.problem.substitutions['R_visc_heat'] = " μ/rho_full*Cv_inv*(dx(u)*σxx + w_z*σzz + σxz**2)"
-
-        self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(T1) - T1_z = 0")
-
-        logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z     + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + R_visc_w)"))
-        
-        logger.debug("Setting x-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1)   + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + R_visc_u)"))
-
-        logger.debug("Setting continuity equation")
-        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
-
-        logger.debug("Setting energy equation")
-        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
+        self.problem.substitutions['R_visc_heat'] =  " μ/rho_full*Cv_inv*(dx(u)*σxx + w_z*σzz + σxz**2)"
 
     def _set_diffusivities(self, *args, **kwargs):
-        super(FC_equations_2d_kappa, self)._set_diffusivities(*args, **kwargs)
+        super(FC_equations_2d_kappa_mu, self)._set_diffusivities(*args, **kwargs)
         self.kappa = self._new_ncc()
         self.chi.set_scales(1, keep_data=True)
         self.rho0.set_scales(1, keep_data=True)
