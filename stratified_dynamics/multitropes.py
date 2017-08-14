@@ -23,10 +23,6 @@ class FC_multitrope(FC_equations_2d, Multitrope):
     def set_equations(self, *args, **kwargs):
         super(FC_multitrope,self).set_equations(*args, **kwargs)
 
-        #self.problem.meta[:]['z']['dirichlet'] = True
-        logger.info("skipping HS balance check")
-        #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
-
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
         self.T_IC = solver.state['T1']
@@ -59,8 +55,6 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
 
     def set_equations(self, *args, **kwargs):
         super(FC_multitrope_rxn,self).set_equations(*args, **kwargs)
-
-        logger.info("skipping HS balance check")
 
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
@@ -203,9 +197,6 @@ class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
 
     def set_equations(self, *args, **kwargs):
         super(FC_MHD_multitrope, self).set_equations(*args, **kwargs)
-        self.problem.meta[:]['z']['dirichlet'] = True
-        logger.info("skipping HS balance check")
-        #self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
     
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
@@ -251,7 +242,6 @@ class FC_MHD_multitrope_guidefield(FC_MHD_equations_guidefield, Multitrope):
 
     def set_equations(self, *args, **kwargs):
         super(FC_MHD_multitrope_guidefield, self).set_equations(*args, **kwargs)
-        logger.info("skipping HS balance check")
     
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions

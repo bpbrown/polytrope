@@ -186,11 +186,6 @@ class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
         super(FC_MHD_polytrope, self).set_equations(*args, **kwargs)
         self.test_hydrostatic_balance(T=self.T0, rho=self.rho0)
 
-    def set_BC(self, *args, **kwargs):
-        super(FC_MHD_polytrope, self).set_BC(*args, **kwargs)
-        for key in self.dirichlet_set:
-            self.problem.meta[key]['z']['dirichlet'] = True
-
 
             
 class AN_polytrope(AN_equations, Polytrope):

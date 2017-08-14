@@ -1310,70 +1310,13 @@ class FC_MHD_equations(FC_equations):
 
         self.problem.substitutions['J_squared'] = "(Jx**2 + Jy**2 + Jz**2)"
 
-    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, Q=None, B0=None, use_Q=False, **kwargs):
-        logger.info("use_Q {}".format(use_Q))
-        if not use_Q:
-            super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
-        else:
-            logger.info("using Q-based vs Ra-based diffusivities")
-            self._set_diffusivities_Q(Q=Q, B0=B0,Prandtl=Prandtl)
+    def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs):
+        super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
         self.eta = self._new_ncc()
-        self.eta.set_scales(self.domain.dealias, keep_data=False)
         self.necessary_quantities['eta'] = self.eta
+        self.eta.set_scales(self.domain.dealias, keep_data=False)
         self.nu.set_scales(self.domain.dealias, keep_data=True)        
         self.eta['g'] = self.nu['g']/MagneticPrandtl
-
-    def _set_diffusivities_Q(self, Q=1e6, B0=None, Prandtl=1):
-        
-        logger.info("problem parameters:")
-        logger.info("   Q = {:g}, Pr = {:g}".format(Q, Prandtl))
-
-        # set nu and chi at top based on Rayleigh number
-        # wrong Prandtl number here (should be magnetic prandtl)
-        nu_top = np.sqrt(Prandtl*(self.Lz**2*B0**2)/(4*np.pi*Q))
-        chi_top = nu_top/Prandtl
-
-        if self.constant_diffusivities:
-            # take constant nu, chi
-            nu = nu_top
-            chi = chi_top
-
-            logger.info("   using constant nu, chi")
-            logger.info("   nu = {:g}, chi = {:g}".format(nu, chi))
-        else:
-            self.constant_kappa = True
-
-            if self.constant_kappa:
-                # take constant nu, constant kappa (non-constant chi); Prandtl changes.
-                nu  = nu_top
-                logger.info("   using constant nu, kappa")
-            else:
-                # take constant mu, kappa based on setting a top-of-domain Rayleigh number
-                # nu  =  nu_top/(self.rho0['g'])
-                logger.error("   using constant mu, kappa <DISABLED>")
-                raise
-
-            chi = chi_top/(self.rho0['g'])
-        
-            logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top))
-                    
-        #Allows for atmosphere reuse
-        self.chi.set_scales(1, keep_data=True)
-        self.nu['g'] = nu
-        self.chi['g'] = chi
-
-        self.chi.differentiate('z', out=self.del_chi)
-        self.chi.set_scales(1, keep_data=True)
-
-        # determine characteristic timescales; use chi and nu at middle of domain for bulk timescales.
-        self.thermal_time = self.Lz**2/self.chi.interpolate(z=self.Lz/2)['g'][0][0]
-        self.top_thermal_time = 1/chi_top
-
-        self.viscous_time = self.Lz**2/self.nu.interpolate(z=self.Lz/2)['g'][0][0]
-        self.top_viscous_time = 1/nu_top
-
-        logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(self.thermal_time,
-                                                                          self.top_thermal_time))
 
     def _set_parameters(self):
         super(FC_MHD_equations, self)._set_parameters()
@@ -1384,38 +1327,69 @@ class FC_MHD_equations(FC_equations):
         
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, MagneticPrandtl=MagneticPrandtl, **kwargs)
         self._set_parameters()
+        # define nu and chi for output
+        if split_diffusivities:
+            self.problem.substitutions['nu']  = '(nu_l + nu_r)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
+            self.problem.substitutions['eta']  = '(eta_l + eta_r)'
+            self.problem.substitutions['del_eta']  = '(del_eta_l + del_eta_r)'
+            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
+        else:
+            self.problem.substitutions['nu']  = '(nu_l)'
+            self.problem.substitutions['del_nu']  = '(del_nu_l)'
+            self.problem.substitutions['eta']  = '(eta_l)'
+            self.problem.substitutions['del_eta']  = '(del_eta_l)'
+            self.problem.substitutions['chi'] = '(chi_l)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l)'
         self._set_subs()
-                
-        # here, nu and chi are constants        
-        self.viscous_term_w = " nu*(Lap(w, w_z) + 2*del_ln_rho0*w_z + 1/3*(dx(u_z) + dz(w_z)) - 2/3*del_ln_rho0*Div_u)"
-        self.viscous_term_u = " nu*(Lap(u, u_z) + del_ln_rho0*(u_z+dx(w)) + 1/3*Div(dx(u), dx(w_z)))"
-        self.viscous_term_v = " nu*(Lap(v, v_z) )" # work through this properly
+        
+        self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_u_r = " nu_r*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
+        self.viscous_term_w_l = " nu_l*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"
+        self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, dz(w_z)))"        
+        self.viscous_term_v_l = " nu_l*(Lap(v, v_z) )" # work through this properly
 
+        if not self.constant_mu:
+            self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
+            self.viscous_term_u_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σxz"
+            self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
+            self.viscous_term_w_r += " + (nu_r*del_ln_rho0 + del_nu_r) * σzz"
+        
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u
         self.problem.substitutions['L_visc_v'] = self.viscous_term_v
-                
-        self.nonlinear_viscous_w = " nu*(    u_z*dx(ln_rho1) + 2*w_z*dz(ln_rho1) + dx(ln_rho1)*dx(w) - 2/3*dz(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_u = " nu*(2*dx(u)*dx(ln_rho1) + dx(w)*dz(ln_rho1) + dz(ln_rho1)*u_z   - 2/3*dx(ln_rho1)*Div_u)"
-        self.nonlinear_viscous_v = " 0 " # work through this properly
 
+        self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
+        self.nonlinear_viscous_v =  " 0 " # work through this properly --> was: " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
+        self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
+        if split_diffusivities:
+            self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
+            self.nonlinear_viscous_v += " + {}".format(self.viscous_term_v_r)
+            self.nonlinear_viscous_w += " + {}".format(self.viscous_term_w_r)
+            
         self.problem.substitutions['NL_visc_w'] = self.nonlinear_viscous_w
         self.problem.substitutions['NL_visc_u'] = self.nonlinear_viscous_u
         self.problem.substitutions['NL_visc_v'] = self.nonlinear_viscous_v
 
         # double check implementation of variabile chi and background coupling term.
-        self.problem.substitutions['Q_z'] = "(-T1_z)"
-        self.linear_thermal_diff    = (" Cv_inv*(chi*(Lap(T1, T1_z)     + T1_z*del_ln_rho0 "
-                                       "              + T0_z*dz(ln_rho1)) + del_chi*dz(T1)) ")
-        self.nonlinear_thermal_diff =  " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                  " Cv_inv*(chi*(T0_zz             + T0_z*del_ln_rho0) + del_chi*T0_z)"
+        self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
+        self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
+        self.source                   = " Cv_inv*(chi*(T0_zz))" 
+        if not self.constant_kappa:
+            self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
+            self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
+            self.source                += '+ Cv_inv*(chi*del_ln_rho0 + del_chi)*T0_z'
+        
+        self.nonlinear_thermal_diff = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + T1_z*dz(ln_rho1))"
+        if split_diffusivities:
+            self.nonlinear_thermal_diff += " + {}".format(self.linear_thermal_diff_r)
                 
         self.problem.substitutions['L_thermal']    = self.linear_thermal_diff 
         self.problem.substitutions['NL_thermal']   = self.nonlinear_thermal_diff
         self.problem.substitutions['source_terms'] = self.source
-        
-        self.viscous_heating = " Cv_inv*nu*(2*(dx(u))**2 + (dx(w))**2 + u_z**2 + 2*w_z**2 + 2*u_z*dx(w) - 2/3*Div_u**2)"
-        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating
+
+        self.problem.substitutions['NL_visc_heat'] = self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + w_z*σzz + σxz**2)"
     
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(v) - v_z = 0")
@@ -1433,27 +1407,19 @@ class FC_MHD_equations(FC_equations):
         self.problem.add_equation(("(scale)*( dt(v) +                                          - L_visc_v) = "
                                    "(scale)*(- UdotGrad(v, v_z) + NL_visc_v  + 1/(4*pi*rho_full)*(Jz*Bx - Jx*Bz))"))
 
-        
         self.problem.add_equation(("(scale)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
 
         self.problem.add_equation(("(scale)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)")) 
 
-        # assumes constant eta; no NCCs here to rescale.  Easy to modify.
+        # Does not yet rescale NCC eta, or utilize split diffusivities to save bandwidth correctly.
         self.problem.add_equation("dt(Ax) + eta*Jx + dx(Phi)            =  v*Bz - w*By")
         self.problem.add_equation("dt(Ay) + eta*Jy                      =  w*Bx - u*Bz")
         self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi)            =  u*By - v*Bx")
         self.problem.add_equation("dx(Ax) + dz(Az) = 0")
         
         logger.info("using nonlinear EOS for entropy, via substitution")
-
-        # workaround for issue #29
-        self.problem.namespace['Bz'].store_last = True
-        self.problem.namespace['Jx'].store_last = True
-        self.problem.namespace['Jy'].store_last = True
-        self.problem.namespace['Jz'].store_last = True
-
     
     def set_BC(self, **kwargs):
         
@@ -1624,12 +1590,6 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.add_equation("dx(Ax) +          dz(Az) = 0")
         
         logger.info("using nonlinear EOS for entropy, via substitution")
-
-        # workaround for issue #29
-        self.problem.namespace['Bz'].store_last = True
-        self.problem.namespace['Jx'].store_last = True
-        self.problem.namespace['Jy'].store_last = True
-        self.problem.namespace['Jz'].store_last = True    
                 
     def initialize_output(self, solver, data_dir, **kwargs):
         super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
@@ -1821,9 +1781,6 @@ class AN_equations(Equations):
         analysis_scalar.add_task("vol_avg(enstrophy)", name="enstrophy")
 
         analysis_tasks['scalar'] = analysis_scalar
-
-        # workaround for issue #29
-        self.problem.namespace['enstrophy'].store_last = True
 
         return self.analysis_tasks
 
