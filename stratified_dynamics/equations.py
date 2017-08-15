@@ -515,7 +515,7 @@ class FC_equations_2d(FC_equations):
         super(FC_equations_2d, self).__init__(**kwargs)
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes'
         self.variables = ['u','u_z','w','w_z','T1', 'T1_z', 'ln_rho1']
-            
+        
     def _set_subs(self):
         # 2-D specific subs
         self.problem.substitutions['ω_y']         = '( u_z  - dx(w))'        
@@ -752,259 +752,6 @@ class FC_equations_2d_kappa_mu(FC_equations_2d):
         else:
             logger.error("Incorrect thermal boundary conditions specified")
             raise
-            
-class FC_equations_rxn(FC_equations_2d):
-    def __init__(self, **kwargs):
-        super(FC_equations_rxn, self).__init__(**kwargs)
-        self.equation_set += 'with chemical reactions'
-        self.variables.extend(['C','C_z','G','G_z','f','f_z'])
-
-    def _set_parameters(self):
-        super(FC_equations_2d, self)._set_parameters()
-
-        self.problem.parameters['nu_chem_l'] = self.nu_chem_l
-        self.problem.parameters['nu_chem_r'] = self.nu_chem_r
-        self.problem.parameters['del_nu_chem_l'] = self.del_nu_chem_l
-        self.problem.parameters['del_nu_chem_r'] = self.del_nu_chem_r
-
-        # Adding in equilibrium value to correct source term
-        c0 = 1
-        chem_taper = self.match_Phi(self.z_dealias, \
-                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
-
-        self.C_eq = self._new_ncc()
-        self.necessary_quantities['C_eq'] = self.C_eq
-        self.C_eq.set_scales(self.domain.dealias, keep_data=False)
-        self.C_eq['g'] = c0 * chem_taper
-
-        self.G_eq = self._new_ncc()
-        self.necessary_quantities['G_eq'] = self.G_eq
-        self.G_eq.set_scales(self.domain.dealias, keep_data=False)
-        self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
-
-        # Is this the right place to set these?
-        self.problem.parameters['k_chem'] = self.k_chem
-        self.problem.parameters['C_eq'] = self.C_eq
-        self.problem.parameters['G_eq'] = self.G_eq
-
-    def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl=1, \
-                           Qu_0=5e-8, phi_0=10, **kwargs):
-        super(FC_equations_rxn, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
-        
-        self.nu_chem_l = self._new_ncc()
-        self.nu_chem_r = self._new_ncc()
-        self.del_nu_chem_l = self._new_ncc()
-        self.del_nu_chem_r = self._new_ncc()
-        self.necessary_quantities['nu_chem_l'] = self.nu_chem_l
-        self.necessary_quantities['nu_chem_r'] = self.nu_chem_r
-        self.necessary_quantities['del_nu_chem_l'] = self.del_nu_chem_l
-        self.necessary_quantities['del_nu_chem_r'] = self.del_nu_chem_r
-        self.nu_chem_l.set_scales(self.domain.dealias, keep_data=True)
-        self.nu_chem_r.set_scales(self.domain.dealias, keep_data=True)
-        self.del_nu_chem_l.set_scales(self.domain.dealias, keep_data=True)
-        self.del_nu_chem_r.set_scales(self.domain.dealias, keep_data=True)
-        self.nu_l.set_scales(self.domain.dealias, keep_data=True)
-        self.nu_r.set_scales(self.domain.dealias, keep_data=True)
-        self.nu_chem_l['g'] = self.nu_l['g']/ChemicalPrandtl
-        self.nu_chem_r['g'] = self.nu_r['g']/ChemicalPrandtl
-        self.del_nu_chem_l['g'] = self.del_nu_l['g']/ChemicalPrandtl
-        self.del_nu_chem_r['g'] = self.del_nu_r['g']/ChemicalPrandtl
-
-
-        # Setting chemical rate coefficient
-        self.k_chem = self._new_ncc()
-        self.necessary_quantities['k_chem'] = self.k_chem
-        self.k_chem.set_scales(self.domain.dealias, keep_data=False)
-
-        # -- Recalculating to avoid parallelization issues --
-        # -- Fixing Ra=1e4, Re=10 just as numbers to fix QP in atmosphere --
-        nu_BOA = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/1e4) \
-                 / self.z0**self.poly_m 
-        H_rho_BOA = (self.poly_m + 1) * self.z0  / self.poly_m / self.g
-        tau_0 = Qu_0 * H_rho_BOA**2 / nu_BOA / 10 
-        T_act = phi_0 * self.z0   # T0_BOA = z0
-
-        kchem = 1 / tau_0 * np.exp(-T_act / (self.z0-self.z_dealias))
-        self.t_chem_BOA = tau_0/self.z0**self.poly_m * np.exp(T_act / self.z0) 
-
-        for i in range(self.k_chem['g'].shape[0]):
-            self.k_chem['g'][i] = kchem
-
-
-        # Setting up equilibrium profiles
-        c0 = 1
-        chem_taper = self.match_Phi(self.z_dealias, \
-                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
-
-
-        self.C_eq = self._new_ncc()
-        self.necessary_quantities['C_eq'] = self.C_eq
-        self.C_eq.set_scales(self.domain.dealias, keep_data=False)
-        self.C_eq['g'] = c0 * chem_taper
-
-        self.G_eq = self._new_ncc()
-        self.necessary_quantities['G_eq'] = self.G_eq
-        self.G_eq.set_scales(self.domain.dealias, keep_data=False)
-        self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
-        
-    def _set_diffusion_subs(self):
-        super(FC_equations_rxn, self)._set_diffusion_subs()
-        # define nu and chi for output
-        if self.split_diffusivities:
-            self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
-            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
-        else:
-            self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
-            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
-            
-        self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
-        self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
-        self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
-        self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
-        self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
-        self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
-            
-        if not self.constant_mu:
-            self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
-            self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
-                                       " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
-            self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
-            self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
-                                       " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) "
-            self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
-            self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
-                                       " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) "
-                
-        self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
-        self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
-        self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
-        
-        self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
-        self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
-        self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "  
-        if self.split_diffusivities:
-            self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
-            self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
-            self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
-            
-        self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
-        self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
-        self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
-
-    def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl=1,
-                      Qu_0=5e-8, phi_0=10,
-                      kx = 0, EVP_2 = False, 
-                      split_diffusivities=False):
-
-        self.split_diffusivities = split_diffusivities
-
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
-                                ChemicalPrandtl=ChemicalPrandtl,
-                                Qu_0=Qu_0, phi_0=phi_0,
-                                split_diffusivities=split_diffusivities)
-        
-        self._set_parameters()
-        self._set_subs()
-               
-        self.problem.add_equation("dz(u) - u_z = 0")
-        self.problem.add_equation("dz(w) - w_z = 0")
-        self.problem.add_equation("dz(T1) - T1_z = 0")
-        self.problem.add_equation("dz(f) - f_z = 0")
-        self.problem.add_equation("dz(C) - C_z = 0")
-        self.problem.add_equation("dz(G) - G_z = 0")
-            
-        logger.debug("Setting z-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z     + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
-                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + R_visc_w)"))
-        
-        logger.debug("Setting x-momentum equation")
-        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1)   + T0*dx(ln_rho1)                  - L_visc_u) = "
-                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + R_visc_u)"))
-
-        logger.debug("Setting continuity equation")
-        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
-                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
-
-        logger.debug("Setting energy equation")
-        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
-                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
-        
-
-        logger.debug("Setting passive and reactive tracer equations")
-        self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + R_diff_f)"))
-        self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + R_diff_C + k_chem*rho0*C_eq)"))
-        self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + R_diff_G + k_chem*rho0*G_eq)"))
-
-    def set_chemistry_BC(self):
-        logger.info("Chemistry BC: 0 flux out of box")
-        self.problem.add_bc("left(f_z)=0")
-        self.problem.add_bc("right(f_z)=0")
-        self.problem.add_bc("left(C_z)=0")
-        self.problem.add_bc("right(C_z)=0")
-        self.problem.add_bc("left(G_z)=0")
-        self.problem.add_bc("right(G_z)=0")
-        self.dirichlet_set.append('f_z')
-        self.dirichlet_set.append('C_z')
-        self.dirichlet_set.append('G_z')
-    
-    def set_BC(self, **kwargs):
-        super(FC_equations_rxn, self).set_BC(**kwargs)
-        self.set_chemistry_BC()
-        for key in self.dirichlet_set:
-            self.problem.meta[key]['z']['dirichlet'] = True
-            
-    def set_IC(self, solver, A0=1e-6, **kwargs):
-        super(FC_equations_rxn, self).set_IC(solver, A0=A0, **kwargs)
-        
-        self.f_IC = solver.state['f']
-        self.C_IC = solver.state['C']
-        self.G_IC = solver.state['G']
-        self.f_IC.set_scales(self.domain.dealias, keep_data=True)
-        self.C_IC.set_scales(self.domain.dealias, keep_data=True)
-        self.G_IC.set_scales(self.domain.dealias, keep_data=True)
-
-        c0 = 1
-        chem_taper = self.match_Phi(self.z_dealias, \
-                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
-        self.f_IC['g'] = c0 * chem_taper
-        self.C_IC['g'] = self.f_IC['g']
-        self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
-        
-    def initialize_output(self, solver, data_dir, coeffs_output=False, **kwargs):
-        super(FC_equations_rxn, self).initialize_output(solver, data_dir, coeffs_output=coeffs_output, **kwargs)
-
-        # make analysis_tasks a dictionary!
-        analysis_slice = self.analysis_tasks['slice']
-        analysis_slice.add_task("f", name="f")
-        analysis_slice.add_task("C", name="C")
-        analysis_slice.add_task("G", name="G")
-
-        analysis_profile = self.analysis_tasks['profile']
-        analysis_profile.add_task("plane_avg(f)", name="f")
-        analysis_profile.add_task("plane_avg(C)", name="C")
-        analysis_profile.add_task("plane_avg(G)", name="G")
-        analysis_profile.add_task("plane_avg(u*dx(f) + w*f_z)", name="Ugradf")
-        analysis_profile.add_task("plane_avg(u*dx(C) + w*C_z)", name="UgradC")
-        analysis_profile.add_task("plane_avg(u*dx(G) + w*G_z)", name="UgradG")
-        analysis_profile.add_task("plane_avg(w*f_z)", name="Wdzf")
-        analysis_profile.add_task("plane_avg(w*C_z)", name="WdzC")
-        analysis_profile.add_task("plane_avg(w*G_z)", name="WdzG")
-        
-        analysis_scalar = self.analysis_tasks['scalar']
-        analysis_scalar.add_task("vol_avg(f)", name="f")
-        analysis_scalar.add_task("vol_avg(C)", name="C")
-        analysis_scalar.add_task("vol_avg(G)", name="G")
-        analysis_scalar.add_task("vol_avg(-rho_full * f * log(f))", name="S_f")
-        analysis_scalar.add_task("vol_avg(-rho_full * C * log(C))", name="S_C")
-        analysis_scalar.add_task("vol_avg(-rho_full * G * log(G))", name="S_G")
-
-        if coeffs_output:
-            analysis_coeff = self.analysis_tasks['coeff']
-            analysis_coeff.add_task("f", name="f", layout='c')
-            analysis_coeff.add_task("C", name="C", layout='c')
-            analysis_coeff.add_task("G", name="G", layout='c')
-        
-        return self.analysis_tasks
 
 class FC_equations_3d(FC_equations):
     def __init__(self, **kwargs):
@@ -1209,7 +956,265 @@ class FC_equations_3d(FC_equations):
             analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
         
         return self.analysis_tasks
+                    
+class FC_equations_rxn(FC_equations):
+    def __init__(self):
+        self.equation_set += ' with chemical reactions'
+        self.variables.extend(['C','C_z','G','G_z','f','f_z'])
 
+    def _set_parameters(self):
+        super(FC_equations_rxn, self)._set_parameters()
+
+        self.problem.parameters['nu_chem_l'] = self.nu_chem_l
+        self.problem.parameters['nu_chem_r'] = self.nu_chem_r
+        self.problem.parameters['del_nu_chem_l'] = self.del_nu_chem_l
+        self.problem.parameters['del_nu_chem_r'] = self.del_nu_chem_r
+
+        # Adding in equilibrium value to correct source term
+        c0 = 1
+        chem_taper = self.match_Phi(self.z_dealias, \
+                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+
+        self.C_eq = self._new_ncc()
+        self.necessary_quantities['C_eq'] = self.C_eq
+        self.C_eq.set_scales(self.domain.dealias, keep_data=False)
+        self.C_eq['g'] = c0 * chem_taper
+
+        self.G_eq = self._new_ncc()
+        self.necessary_quantities['G_eq'] = self.G_eq
+        self.G_eq.set_scales(self.domain.dealias, keep_data=False)
+        self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
+
+        # Is this the right place to set these?
+        self.problem.parameters['k_chem'] = self.k_chem
+        self.problem.parameters['C_eq'] = self.C_eq
+        self.problem.parameters['G_eq'] = self.G_eq
+
+    def _set_diffusivities(self, Rayleigh, Prandtl, ChemicalPrandtl=1, \
+                           Qu_0=5e-8, phi_0=10, **kwargs):
+        super(FC_equations_rxn, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
+        
+        self.nu_chem_l = self._new_ncc()
+        self.nu_chem_r = self._new_ncc()
+        self.del_nu_chem_l = self._new_ncc()
+        self.del_nu_chem_r = self._new_ncc()
+        self.necessary_quantities['nu_chem_l'] = self.nu_chem_l
+        self.necessary_quantities['nu_chem_r'] = self.nu_chem_r
+        self.necessary_quantities['del_nu_chem_l'] = self.del_nu_chem_l
+        self.necessary_quantities['del_nu_chem_r'] = self.del_nu_chem_r
+        self.nu_chem_l.set_scales(self.domain.dealias, keep_data=True)
+        self.nu_chem_r.set_scales(self.domain.dealias, keep_data=True)
+        self.del_nu_chem_l.set_scales(self.domain.dealias, keep_data=True)
+        self.del_nu_chem_r.set_scales(self.domain.dealias, keep_data=True)
+        self.nu_l.set_scales(self.domain.dealias, keep_data=True)
+        self.nu_r.set_scales(self.domain.dealias, keep_data=True)
+        self.nu_chem_l['g'] = self.nu_l['g']/ChemicalPrandtl
+        self.nu_chem_r['g'] = self.nu_r['g']/ChemicalPrandtl
+        self.del_nu_chem_l['g'] = self.del_nu_l['g']/ChemicalPrandtl
+        self.del_nu_chem_r['g'] = self.del_nu_r['g']/ChemicalPrandtl
+
+
+        # Setting chemical rate coefficient
+        self.k_chem = self._new_ncc()
+        self.necessary_quantities['k_chem'] = self.k_chem
+        self.k_chem.set_scales(self.domain.dealias, keep_data=False)
+
+        # -- Recalculating to avoid parallelization issues --
+        # -- Fixing Ra=1e4, Re=10 just as numbers to fix QP in atmosphere --
+        nu_BOA = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/1e4) \
+                 / self.z0**self.poly_m 
+        H_rho_BOA = (self.poly_m + 1) * self.z0  / self.poly_m / self.g
+        tau_0 = Qu_0 * H_rho_BOA**2 / nu_BOA / 10 
+        T_act = phi_0 * self.z0   # T0_BOA = z0
+
+        kchem = 1 / tau_0 * np.exp(-T_act / (self.z0-self.z_dealias))
+        self.t_chem_BOA = tau_0/self.z0**self.poly_m * np.exp(T_act / self.z0) 
+
+        for i in range(self.k_chem['g'].shape[0]):
+            self.k_chem['g'][i] = kchem
+
+
+        # Setting up equilibrium profiles
+        c0 = 1
+        chem_taper = self.match_Phi(self.z_dealias, \
+                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+
+
+        self.C_eq = self._new_ncc()
+        self.necessary_quantities['C_eq'] = self.C_eq
+        self.C_eq.set_scales(self.domain.dealias, keep_data=False)
+        self.C_eq['g'] = c0 * chem_taper
+
+        self.G_eq = self._new_ncc()
+        self.necessary_quantities['G_eq'] = self.G_eq
+        self.G_eq.set_scales(self.domain.dealias, keep_data=False)
+        self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
+
+    def set_chemistry_BC(self):
+        logger.info("Chemistry BC: 0 flux out of box")
+        self.problem.add_bc("left(f_z)=0")
+        self.problem.add_bc("right(f_z)=0")
+        self.problem.add_bc("left(C_z)=0")
+        self.problem.add_bc("right(C_z)=0")
+        self.problem.add_bc("left(G_z)=0")
+        self.problem.add_bc("right(G_z)=0")
+        self.dirichlet_set.append('f_z')
+        self.dirichlet_set.append('C_z')
+        self.dirichlet_set.append('G_z')
+    
+    def set_BC(self, **kwargs):
+        super(FC_equations_rxn, self).set_BC(**kwargs)
+        self.set_chemistry_BC()
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+            
+    def set_IC(self, solver, A0=1e-6, **kwargs):
+        super(FC_equations_rxn, self).set_IC(solver, A0=A0, **kwargs)
+        
+        self.f_IC = solver.state['f']
+        self.C_IC = solver.state['C']
+        self.G_IC = solver.state['G']
+        self.f_IC.set_scales(self.domain.dealias, keep_data=True)
+        self.C_IC.set_scales(self.domain.dealias, keep_data=True)
+        self.G_IC.set_scales(self.domain.dealias, keep_data=True)
+
+        c0 = 1
+        chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+        self.f_IC['g'] = c0 * chem_taper
+        self.C_IC['g'] = self.f_IC['g']
+        self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
+        
+    def initialize_output(self, solver, data_dir, coeffs_output=False, **kwargs):
+        super(FC_equations_rxn, self).initialize_output(solver, data_dir, coeffs_output=coeffs_output, **kwargs)
+
+        # make analysis_tasks a dictionary!
+        analysis_slice = self.analysis_tasks['slice']
+        analysis_slice.add_task("f", name="f")
+        analysis_slice.add_task("C", name="C")
+        analysis_slice.add_task("G", name="G")
+
+        analysis_profile = self.analysis_tasks['profile']
+        analysis_profile.add_task("plane_avg(f)", name="f")
+        analysis_profile.add_task("plane_avg(C)", name="C")
+        analysis_profile.add_task("plane_avg(G)", name="G")
+        analysis_profile.add_task("plane_avg(u*dx(f) + w*f_z)", name="Ugradf")
+        analysis_profile.add_task("plane_avg(u*dx(C) + w*C_z)", name="UgradC")
+        analysis_profile.add_task("plane_avg(u*dx(G) + w*G_z)", name="UgradG")
+        analysis_profile.add_task("plane_avg(w*f_z)", name="Wdzf")
+        analysis_profile.add_task("plane_avg(w*C_z)", name="WdzC")
+        analysis_profile.add_task("plane_avg(w*G_z)", name="WdzG")
+        
+        analysis_scalar = self.analysis_tasks['scalar']
+        analysis_scalar.add_task("vol_avg(f)", name="f")
+        analysis_scalar.add_task("vol_avg(C)", name="C")
+        analysis_scalar.add_task("vol_avg(G)", name="G")
+        analysis_scalar.add_task("vol_avg(-rho_full * f * log(f))", name="S_f")
+        analysis_scalar.add_task("vol_avg(-rho_full * C * log(C))", name="S_C")
+        analysis_scalar.add_task("vol_avg(-rho_full * G * log(G))", name="S_G")
+
+        if coeffs_output:
+            analysis_coeff = self.analysis_tasks['coeff']
+            analysis_coeff.add_task("f", name="f", layout='c')
+            analysis_coeff.add_task("C", name="C", layout='c')
+            analysis_coeff.add_task("G", name="G", layout='c')
+        
+        return self.analysis_tasks
+
+class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
+    def __init__(self, **kwargs):
+        FC_equations_2d.__init__(self,**kwargs)
+        FC_equations_rxn.__init__(self)
+        
+    def _set_diffusion_subs(self):
+        FC_equations_2d._set_diffusion_subs(self)
+        # define nu and chi for output
+        if self.split_diffusivities:
+            self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
+            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
+        else:
+            self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
+            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
+            
+        self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
+        self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
+        self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
+        self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
+        self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
+        self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
+            
+        if not self.constant_mu:
+            self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
+            self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
+                                       " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
+            self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
+            self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
+                                       " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) "
+            self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
+            self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
+                                       " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) "
+                
+        self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
+        self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
+        self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
+        
+        self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
+        self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
+        self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "  
+        if self.split_diffusivities:
+            self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
+            self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
+            self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
+            
+        self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
+        self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
+        self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
+
+    def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl=1,
+                      Qu_0=5e-8, phi_0=10,
+                      kx = 0, EVP_2 = False, 
+                      split_diffusivities=False):
+
+        self.split_diffusivities = split_diffusivities
+
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
+                                ChemicalPrandtl=ChemicalPrandtl,
+                                Qu_0=Qu_0, phi_0=phi_0,
+                                split_diffusivities=split_diffusivities)
+        
+        self._set_parameters()
+        self._set_subs()
+               
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
+        self.problem.add_equation("dz(f) - f_z = 0")
+        self.problem.add_equation("dz(C) - C_z = 0")
+        self.problem.add_equation("dz(G) - G_z = 0")
+            
+        logger.debug("Setting z-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + T1_z     + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-UdotGrad(w, w_z) - T1*dz(ln_rho1) + R_visc_w)"))
+        
+        logger.debug("Setting x-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + dx(T1)   + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale_momentum)*(-UdotGrad(u, u_z) - T1*dx(ln_rho1) + R_visc_u)"))
+
+        logger.debug("Setting continuity equation")
+        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        logger.debug("Setting energy equation")
+        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
+        
+
+        logger.debug("Setting passive and reactive tracer equations")
+        self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + R_diff_f)"))
+        self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + R_diff_C + k_chem*rho0*C_eq)"))
+        self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + R_diff_G + k_chem*rho0*G_eq)"))
+
+        
 class FC_MHD_equations(FC_equations):
     def __init__(self):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD, 2.5D'

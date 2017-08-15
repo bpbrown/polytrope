@@ -115,7 +115,7 @@ def FC_polytrope(dynamics_file,
                                                           fig_dir=data_dir)
         else:
             if chemistry:
-                atmosphere = polytropes.FC_polytrope_2d_rxn(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
+                atmosphere = polytropes.FC_polytrope_rxn_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                     epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                                     fig_dir=data_dir)
             else:
