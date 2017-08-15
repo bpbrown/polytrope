@@ -1,9 +1,9 @@
 """
 Dedalus script for finding the onset of compressible convection in a 
-polytropic atmosphere
+polytropic or multitropic atmosphere
 
 Usage:
-    FC_poly_onset_curve.py [options] 
+    FC_onset_curve.py [options] 
 
 Options:
     --rayleigh_start=<Rayleigh>         Rayleigh number start [default: 1e-2]
@@ -23,12 +23,24 @@ Options:
     --bcs=<bcs>                         Boundary conditions ('fixed', 'mixed', 
                                             or 'flux') [default: fixed]
     --Prandtl=<Pr>                      Prandtl number [default: 1]
-    --n_rho_cz=<n_rho>                  nrho of polytrope [default: 3]
+    --Taylor=<Ta>                       If not None, solve for rotating convection
+
+    #Polytrope options
+    --n_rho=<n_rho>                     nrho of polytrope [default: 3]
     --epsilon=<epsilon>                 epsilon of polytrope  [default: 0.5]
     --gamma=<gamma>                     Gamma of polytrope [default: 5/3]
     --constant_chi                      If true, use const chi
     --constant_nu                       If true, use const nu
-    --Taylor_default=<Ta>               If not None, solve for rotating convection
+
+    #Multitrope options
+    --Multitrope                        If flagged, do onset for multitrope instead
+    --n_rho_cz=<n_rho>                  nrho of convection zone [default: 3]
+    --n_rho_rz=<n_rho>                  nrho of radiative zone [default: 3]
+    --stiffness=<stiff>                 stiffness of multitrope  [default: 1e4]
+    --width=<width>                     Width of tanh
+    --non_constant_Prandtl              If flagged, use non-constant Pr.
+
+
 
     --3D                                If flagged, use 3D eqns and search kx & ky
     --2.5D                              If flagged, use 3D eqns with ky = 0
@@ -45,7 +57,14 @@ import numpy as np
 
 args = docopt(__doc__)
 
-file_name = 'FC_poly_onsets'
+if args['--Multitrope']:
+    polytrope, multitrope = False, True
+    file_name = 'FC_multi_onsets'
+else:
+    polytrope, multitrope = True, False
+    file_name = 'FC_poly_onsets'
+
+
 
 ##########################################
 #Set up ra / kx / ky spans
@@ -71,40 +90,65 @@ if np.abs(ky_stop/ky_start) > 10:
 
 ##########################################
 #Set up defaults for the atmosphere
-const_kap = True
-if args['--constant_chi']:
-    const_kap = False
-const_mu = True
-if args['--constant_nu']:
-    const_mu = False
+if polytrope:
+    const_kap = True
+    if args['--constant_chi']:
+        const_kap = False
+    const_mu = True
+    if args['--constant_nu']:
+        const_mu = False
 
-nz = int(args['--nz'])
-n_rho = float(args['--n_rho_cz'])
-epsilon = float(args['--epsilon'])
-file_name += '_eps{}'.format(args['--epsilon'])
-file_name += '_nrho{}'.format(args['--n_rho_cz'])
-try:
-    gamma = float(args['--gamma'])
-except:
-    from fractions import Fraction
-    gamma = float(Fraction(args['--gamma']))
+    nz = int(args['--nz'])
+    n_rho = float(args['--n_rho_cz'])
+    epsilon = float(args['--epsilon'])
+    file_name += '_eps{}'.format(args['--epsilon'])
+    file_name += '_nrho{}'.format(args['--n_rho_cz'])
+    try:
+        gamma = float(args['--gamma'])
+    except:
+        from fractions import Fraction
+        gamma = float(Fraction(args['--gamma']))
 
 
-atmo_kwargs = {'n_rho_cz': n_rho,
-               'epsilon':  epsilon,
-               'constant_kappa': const_kap,
-               'constant_mu':    const_mu,
-               'nz':             nz,
-               'gamma':          gamma}
+    atmo_kwargs = {'n_rho_cz':       n_rho,
+                   'epsilon':        epsilon,
+                   'constant_kappa': const_kap,
+                   'constant_mu':    const_mu,
+                   'nz':             nz,
+                   'gamma':          gamma}
+if multitrope:
+    const_pr = True
+    if args['--non_constant_Prandtl']:
+        const_pr = False
+
+    nz = args['--nz'].split(',')
+    nz = [int(n) for n in nz]
+    n_rho_cz = float(args['--n_rho_cz'])
+    n_rho_rz = float(args['--n_rho_rz'])
+    file_name += '_nrhos{}-{}'.format(n_rho_cz, n_rho_rz)
+    stiffness = float(args['--stiffness'])
+    file_name += '_stiff{}'.format(stiffness)
+    width = args['--width']
+    if width != None:
+        width = float(width)
+        file_name += '_w{:s}'.format(args['--width'])
+    atmo_kwargs = {  'n_rho_cz':             n_rho_cz,
+                    'n_rho_rz':             n_rho_rz,
+                    'stiffness':            stiffness,
+                    'constant_Prandtl':     const_pr,
+                    'nz':                   nz,
+                    'width':                width}
+
 
 ##############################################
 #Setup default arguments for equation building
-taylor = args['--Taylor_default']
+taylor = args['--Taylor']
+eqn_kwargs = dict()
 if taylor != None:
     file_name += '_Ta{}'.format(taylor)
     taylor = float(taylor)
-eqn_args = [1] #prandtl number
-eqn_kwargs = {'Taylor': taylor}
+    eqn_kwargs['Taylor'] = taylor
+eqn_args = [float(args['--Prandtl'])]
 
 ############################################
 #Set up BCs
@@ -126,39 +170,38 @@ bc_kwargs = {'fixed_temperature': fixed_T,
                'mixed_flux_temperature': mixed_T,
                'fixed_flux': fixed_flux,
                'stress_free': True}
-file_name += '_bc_{:s}'.format(bcs)
 
 #####################################################
 #Initialize onset solver
 if args['--3D']:
-    solver = OnsetSolver(
-                eqn_set=0, atmosphere=0, threeD=True,
-                ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
-                kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
-                ky_steps=(ky_start, ky_stop, ky_steps, ky_log),
-                atmo_kwargs=atmo_kwargs,
-                eqn_args=eqn_args,
-                eqn_kwargs=eqn_kwargs,
-                bc_kwargs=bc_kwargs)
+    file_name += '_3D'
+    ky_steps = (ky_start, ky_stop, ky_steps, ky_log)
+    threeD = True
 elif args['--2.5D']:
-    solver = OnsetSolver(
-                eqn_set=0, atmosphere=0, threeD=True,
-                ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
-                kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
-                atmo_kwargs=atmo_kwargs,
-                eqn_args=eqn_args,
-                eqn_kwargs=eqn_kwargs,
-                bc_kwargs=bc_kwargs)
+    file_name += '_2.5D'
+    ky_steps = None
+    threeD = True
 else:
-    solver = OnsetSolver(
-                eqn_set=0, atmosphere=0,
-                ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
-                kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
-                atmo_kwargs=atmo_kwargs,
-                eqn_args=eqn_args,
-                eqn_kwargs=eqn_kwargs,
-                bc_kwargs=bc_kwargs)
+    file_name += '_2D'
+    ky_steps = None
+    threeD = False
 
+if polytrope:
+    atmo_type = 0
+elif multitrope:
+    atmo_type = 1
+else:
+    print("Atmosphere type unknown, using polytrope")
+    atmo_type=0
+solver = OnsetSolver(
+            eqn_set=0, atmosphere=atmo_type, threeD=threeD,
+            ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
+            kx_steps=(kx_start, kx_stop, kx_steps, kx_log),
+            ky_steps=ky_steps,
+            atmo_kwargs=atmo_kwargs,
+            eqn_args=eqn_args,
+            eqn_kwargs=eqn_kwargs,
+            bc_kwargs=bc_kwargs)
 
 #############################################
 #Crit find!

@@ -130,6 +130,10 @@ class OnsetSolver:
             self.cf.grid_generator(mins, maxs, ns, logs=logs)
             if self.cf.comm.rank == 0:
                 self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
+        self.cf.root_finder()
+        if self.cf.comm.rank == 0:
+            self.cf.plot_crit(title= '{:s}/{:s}'.format(out_dir, out_file), xlabel='kx', ylabel='Ra', transpose=True)
+
         if exact:
             crits = self.cf.exact_crit_finder()
         else:
