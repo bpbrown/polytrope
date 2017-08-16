@@ -1300,13 +1300,13 @@ class FC_equations_3d(FC_equations):
             if chemistry:
                 self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
                 self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
+                                           " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) + nu_chem_r * dy(f) * dy(ln_rho1) "
                 self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
                 self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) "
+                                           " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) + nu_chem_r * dy(C) * dy(ln_rho1) "
                 self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
                 self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) "
+                                           " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) + nu_chem_r * dy(G) * dy(ln_rho1) "
 
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
@@ -1321,9 +1321,9 @@ class FC_equations_3d(FC_equations):
         self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
         self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
         if chemistry:
-            self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
-            self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
-            self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "
+            self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) + nu_chem_l * dy(f) * dy(ln_rho1) "
+            self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) + nu_chem_l * dy(C) * dy(ln_rho1) "
+            self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) + nu_chem_l * dy(G) * dy(ln_rho1) "
 
         if split_diffusivities:
             self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
