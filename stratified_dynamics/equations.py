@@ -424,11 +424,10 @@ class FC_equations(Equations):
         self.problem.substitutions['dt(f)'] = "(0*f)"
         self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
-    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
+    def initialize_output(self, solver, data_dir, coeffs_output=False,
                           max_writes=20, mode="overwrite", **kwargs):
 
-        analysis_tasks = OrderedDict()
-        self.analysis_tasks = analysis_tasks
+        self.analysis_tasks = analysis_tasks = OrderedDict()
 
         analysis_profile = solver.evaluator.add_file_handler(data_dir+"profiles", max_writes=max_writes, parallel=False,
                                                              mode=mode, **kwargs)
@@ -508,7 +507,20 @@ class FC_equations(Equations):
             
         analysis_tasks['scalar'] = analysis_scalar
 
-        return self.analysis_tasks
+        if coeffs_output:
+            analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=max_writes, parallel=False,
+                                                               mode=mode, **kwargs)
+            analysis_coeff.add_task("s_fluc", name="s", layout='c')
+            analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
+            analysis_coeff.add_task("T1", name="T", layout='c')
+            analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
+            analysis_coeff.add_task("u", name="u", layout='c')
+            analysis_coeff.add_task("w", name="w", layout='c')
+            analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
+            analysis_coeff.add_task("ω_y", name="vorticity", layout='c')
+            analysis_tasks['coeff'] = analysis_coeff
+        
+        return analysis_tasks
     
 class FC_equations_2d(FC_equations):
     def __init__(self, **kwargs):
@@ -643,11 +655,10 @@ class FC_equations_2d(FC_equations):
                                    "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
                             
 
-    def initialize_output(self, solver, data_dir,
-                          full_output=False, coeffs_output=True,
+    def initialize_output(self, solver, data_dir, coeffs_output=True,
                           max_writes=20, mode="overwrite", **kwargs):
 
-        analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir, full_output=full_output,
+        analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir,
                                                                         max_writes=max_writes, mode=mode, **kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
@@ -673,7 +684,7 @@ class FC_equations_2d(FC_equations):
             analysis_coeff.add_task("ω_y", name="vorticity", layout='c')
             analysis_tasks['coeff'] = analysis_coeff
         
-        return self.analysis_tasks
+        return analysis_tasks
 
 
 class FC_equations_2d_kappa_mu(FC_equations_2d):
@@ -784,6 +795,10 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
         self.problem.substitutions["σyz"] = "(dy(w) +  v_z )"
 
+        self._set_diffusion_subs()
+        super(FC_equations_3d, self)._set_subs(**kwargs)
+
+    def _set_diffusion_subs(self):
         if self.split_diffusivities:
             self.problem.substitutions['nu']  = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
@@ -846,9 +861,6 @@ class FC_equations_3d(FC_equations):
         self.viscous_heating = " Cv_inv*nu*(dx(u)*σxx + dy(v)*σyy + w_z*σzz + σxy**2 + σxz**2 + σyz**2)"
 
         self.problem.substitutions['R_visc_heat'] = self.viscous_heating
-        
-        super(FC_equations_3d, self)._set_subs(**kwargs)
-
                         
     def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
                       kx = 0, EVP_2 = False, 
@@ -920,10 +932,10 @@ class FC_equations_3d(FC_equations):
             self.problem.meta[key]['z']['dirichlet'] = True
 
         
-    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False,
+    def initialize_output(self, solver, data_dir, coeffs_output=False,
                           max_writes=20, mode="overwrite", **kwargs):
 
-        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output, coeffs_output=coeffs_output,
+        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, coeffs_output=coeffs_output,
                                                                         max_writes=max_writes, mode=mode, **kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
@@ -949,13 +961,13 @@ class FC_equations_3d(FC_equations):
         analysis_tasks['volume'] = analysis_volume
 
         if self.rotating:
-            analysis_scalar = self.analysis_tasks['scalar']
+            analysis_scalar = analysis_tasks['scalar']
             analysis_scalar.add_task("vol_avg(Rossby)", name="Rossby")
 
-            analysis_profile = self.analysis_tasks['profile']
+            analysis_profile = analysis_tasks['profile']
             analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
         
-        return self.analysis_tasks
+        return analysis_tasks
                     
 class FC_equations_rxn(FC_equations):
     def __init__(self):
@@ -1086,15 +1098,14 @@ class FC_equations_rxn(FC_equations):
         self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
         
     def initialize_output(self, solver, data_dir, coeffs_output=False, **kwargs):
-        super(FC_equations_rxn, self).initialize_output(solver, data_dir, coeffs_output=coeffs_output, **kwargs)
+        analysis_tasks = super().initialize_output(solver, data_dir, coeffs_output=coeffs_output, **kwargs)
 
-        # make analysis_tasks a dictionary!
-        analysis_slice = self.analysis_tasks['slice']
+        analysis_slice = analysis_tasks['slice']
         analysis_slice.add_task("f", name="f")
         analysis_slice.add_task("C", name="C")
         analysis_slice.add_task("G", name="G")
 
-        analysis_profile = self.analysis_tasks['profile']
+        analysis_profile = analysis_tasks['profile']
         analysis_profile.add_task("plane_avg(f)", name="f")
         analysis_profile.add_task("plane_avg(C)", name="C")
         analysis_profile.add_task("plane_avg(G)", name="G")
@@ -1105,7 +1116,7 @@ class FC_equations_rxn(FC_equations):
         analysis_profile.add_task("plane_avg(w*C_z)", name="WdzC")
         analysis_profile.add_task("plane_avg(w*G_z)", name="WdzG")
         
-        analysis_scalar = self.analysis_tasks['scalar']
+        analysis_scalar = analysis_tasks['scalar']
         analysis_scalar.add_task("vol_avg(f)", name="f")
         analysis_scalar.add_task("vol_avg(C)", name="C")
         analysis_scalar.add_task("vol_avg(G)", name="G")
@@ -1114,12 +1125,12 @@ class FC_equations_rxn(FC_equations):
         analysis_scalar.add_task("vol_avg(-rho_full * G * log(G))", name="S_G")
 
         if coeffs_output:
-            analysis_coeff = self.analysis_tasks['coeff']
+            analysis_coeff = analysis_tasks['coeff']
             analysis_coeff.add_task("f", name="f", layout='c')
             analysis_coeff.add_task("C", name="C", layout='c')
             analysis_coeff.add_task("G", name="G", layout='c')
         
-        return self.analysis_tasks
+        return analysis_tasks
 
 class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
     def __init__(self, **kwargs):
@@ -1127,7 +1138,7 @@ class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
         FC_equations_rxn.__init__(self)
         
     def _set_diffusion_subs(self):
-        FC_equations_2d._set_diffusion_subs(self)
+        super()._set_diffusion_subs()
         # define nu and chi for output
         if self.split_diffusivities:
             self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
@@ -1214,6 +1225,119 @@ class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
         self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + R_diff_C + k_chem*rho0*C_eq)"))
         self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + R_diff_G + k_chem*rho0*G_eq)"))
 
+
+class FC_equations_rxn_3d(FC_equations_rxn, FC_equations_3d):
+    def __init__(self, **kwargs):
+        FC_equations_3d.__init__(self,**kwargs)
+        FC_equations_rxn.__init__(self)
+        
+    def _set_diffusion_subs(self):
+        super()._set_diffusion_subs()
+        # define nu and chi for output
+        if self.split_diffusivities:
+            self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
+            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
+        else:
+            self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
+            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
+            
+        self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
+        self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
+        self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
+        self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
+        self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
+        self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
+            
+        if not self.constant_mu:
+            self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
+            self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
+                                       " + nu_chem_r *(f_z * dz(ln_rho1) + dx(f) * dx(ln_rho1) + dy(f) * dy(ln_rho1)) "
+            self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
+            self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
+                                       " + nu_chem_r *(C_z * dz(ln_rho1) + dx(C) * dx(ln_rho1) + dy(C) * dy(ln_rho1))"
+            self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
+            self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
+                                       " + nu_chem_r *(G_z * dz(ln_rho1) + dx(G) * dx(ln_rho1) + dy(G) * dy(ln_rho1))"
+                
+        self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
+        self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
+        self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
+        
+        self.NL_diff_term_f = " nu_chem_l * (f_z * dz(ln_rho1) + dx(f) * dx(ln_rho1) + dy(f) * dy(ln_rho1))"
+        self.NL_diff_term_C = " nu_chem_l * (C_z * dz(ln_rho1) + dx(C) * dx(ln_rho1) + dy(C) * dy(ln_rho1))"
+        self.NL_diff_term_G = " nu_chem_l * (G_z * dz(ln_rho1) + dx(G) * dx(ln_rho1) + dy(G) * dy(ln_rho1)) "  
+        if self.split_diffusivities:
+            self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
+            self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
+            self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
+            
+        self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
+        self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
+        self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
+
+    def set_equations(self, Rayleigh, Prandtl,
+                      Taylor=None, theta=0,
+                      ChemicalPrandtl=1, Qu_0=5e-8, phi_0=10,
+                      split_diffusivities=False):
+
+        self.split_diffusivities = split_diffusivities
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
+                                ChemicalPrandtl=ChemicalPrandtl,
+                                Qu_0=Qu_0, phi_0=phi_0,
+                                split_diffusivities=split_diffusivities)
+        self._set_parameters()
+        self._set_subs()
+    
+        if Taylor:
+            self.rotating = True
+            self.problem.parameters['θ'] = theta
+            self.problem.parameters['Ω'] = omega = np.sqrt(Taylor*self.nu_top**2/(4*self.Lz**4))
+            logger.info("Rotating f-plane with Ω = {} and θ = {} (Ta = {})".format(omega, theta, Taylor))
+            self.problem.substitutions['Ωx'] = '0'
+            self.problem.substitutions['Ωy'] = 'Ω*sin(θ)'
+            self.problem.substitutions['Ωz'] = 'Ω*cos(θ)'
+            self.problem.substitutions['Coriolis_x'] = '(2*Ωy*w - 2*Ωz*v)'
+            self.problem.substitutions['Coriolis_y'] = '(2*Ωz*u - 2*Ωx*w)'
+            self.problem.substitutions['Coriolis_z'] = '(2*Ωx*v - 2*Ωy*u)'
+            self.problem.substitutions['Rossby'] = '(sqrt(enstrophy)/(2*Ω))'
+        else:
+            self.rotating = False
+            self.problem.substitutions['Coriolis_x'] = '0'
+            self.problem.substitutions['Coriolis_y'] = '0'
+            self.problem.substitutions['Coriolis_z'] = '0'
+       
+        self.problem.add_equation("dz(u) - u_z = 0")
+        self.problem.add_equation("dz(v) - v_z = 0")
+        self.problem.add_equation("dz(w) - w_z = 0")
+        self.problem.add_equation("dz(T1) - T1_z = 0")
+        self.problem.add_equation("dz(f) - f_z = 0")
+        self.problem.add_equation("dz(C) - C_z = 0")
+        self.problem.add_equation("dz(G) - G_z = 0")
+
+        logger.debug("Setting continuity equation")
+        self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
+                                   "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
+        logger.debug("Setting z-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(w) + Coriolis_z + T1_z   + T0*dz(ln_rho1) + T1*del_ln_rho0 - L_visc_w) = "
+                                   "(scale_momentum)*(-T1*dz(ln_rho1) - UdotGrad(w, w_z) + R_visc_w)"))
+        
+        logger.debug("Setting x-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(u) + Coriolis_x + dx(T1) + T0*dx(ln_rho1)                  - L_visc_u) = "
+                                   "(scale_momentum)*(-T1*dx(ln_rho1) - UdotGrad(u, u_z) + R_visc_u)"))
+
+        logger.debug("Setting y-momentum equation")
+        self.problem.add_equation(("(scale_momentum)*( dt(v) + Coriolis_y + dy(T1) + T0*dy(ln_rho1)                  - L_visc_v) = "
+                                   "(scale_momentum)*(-T1*dy(ln_rho1) - UdotGrad(v, v_z) + R_visc_v)"))
+
+        logger.debug("Setting energy equation")
+        self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
+                                   "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)"))
+
+        logger.debug("Setting passive and reactive tracer equations")
+        self.problem.add_equation("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + R_diff_f)")
+        self.problem.add_equation("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + R_diff_C + k_chem*rho0*C_eq)")
+        self.problem.add_equation("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + R_diff_G + k_chem*rho0*G_eq)")        
         
 class FC_MHD_equations(FC_equations):
     def __init__(self):
@@ -1333,25 +1457,24 @@ class FC_MHD_equations(FC_equations):
         self.Ay_IC['g'] *= -1
         
     def initialize_output(self, solver, data_dir, **kwargs):
-        super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
+        analysis_tasks = super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
-        # make analysis_tasks a dictionary!
-        analysis_slice = self.analysis_tasks['slice']
+        analysis_slice = analysis_tasks['slice']
         analysis_slice.add_task("Jy", name="Jy")
         analysis_slice.add_task("Bx", name="Bx")
         analysis_slice.add_task("Bz", name="Bz")
         analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
         analysis_slice.add_task("J_squared", name="J_squared")
             
-        analysis_profile = self.analysis_tasks['profile']
+        analysis_profile = analysis_tasks['profile']
         analysis_profile.add_task("plane_avg(ME)", name="ME")
         analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
 
-        analysis_scalar = self.analysis_tasks['scalar']
+        analysis_scalar = analysis_tasks['scalar']
         analysis_scalar.add_task("vol_avg(ME)", name="ME")
         analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
 
-        return self.analysis_tasks
+        return analysis_tasks
 
 
 class FC_MHD_equations_guidefield(FC_MHD_equations):
@@ -1433,10 +1556,9 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.add_equation("dx(Ax) +          dz(Az) = 0")
                         
     def initialize_output(self, solver, data_dir, **kwargs):
-        super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
+        analysis_tasks = super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
-        # make analysis_tasks a dictionary!
-        analysis_slice = self.analysis_tasks['slice']
+        analysis_slice = analysis_tasks['slice']
         analysis_slice.add_task("Jy", name="Jy")
         analysis_slice.add_task("Bx", name="Bx")
         analysis_slice.add_task("Bz", name="Bz")
@@ -1445,7 +1567,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
 
         analysis_slice.add_task("J_squared", name="J_squared")
             
-        analysis_profile = self.analysis_tasks['profile']
+        analysis_profile = analysis_tasks['profile']
         analysis_profile.add_task("plane_avg(ME)", name="ME")
         #analysis_profile.add_task("plane_avg(ME_0)", name="ME_0")
         analysis_profile.add_task("plane_avg(ME_1)", name="ME_1")
@@ -1457,7 +1579,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         analysis_profile.add_task("plane_avg(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full))", name="V_alfven_squared")
         analysis_profile.add_task("plane_avg(sqrt(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full)/(T1+T0)))", name="Ma_alfven")
 
-        analysis_scalar = self.analysis_tasks['scalar']
+        analysis_scalar = analysis_tasks['scalar']
         analysis_scalar.add_task("vol_avg(ME)", name="ME")
         #analysis_scalar.add_task("vol_avg(ME_0)", name="ME_0")
         analysis_scalar.add_task("vol_avg(ME_1)", name="ME_1")
@@ -1469,7 +1591,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         analysis_scalar.add_task("vol_avg(abs(dx(Bx) + dz(Bz)))", name="divB")
         analysis_scalar.add_task("vol_avg(abs(dx(Ax) + dz(Az)))", name="divA")
         
-        return self.analysis_tasks
+        return analysis_tasks
 
 # needs to be tested again and double-checked
 class AN_equations(Equations):

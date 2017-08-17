@@ -105,7 +105,7 @@ def FC_polytrope(dynamics_file,
         ny = nx
 
     if threeD:
-        atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
+        atmosphere = polytropes.FC_polytrope_rxn_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                 epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                                 fig_dir=data_dir)
     else:
@@ -201,7 +201,6 @@ def FC_polytrope(dynamics_file,
     
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
-    
     analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
 
     # Reinjecting dynamics and tracers if desired
