@@ -17,6 +17,8 @@ class Equations():
         pass
 
     def match_Phi(self, z, f=scp.erf, center=None, width=None):
+        # breaks if center not set
+        # why is this here?  why not in atmospheres?  Maybe it's here for chemistry.  If so, it should go in rxn.  Should this really be a class function?
         if width is None:
             width = 0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)
         return 1/2*(1-f((z-center)/width))
@@ -25,6 +27,7 @@ class Equations():
                           ny=256, Ly=4,
                           nz=128, Lz=1,
                           grid_dtype=np.float64, comm=MPI.COMM_WORLD, mesh=None):
+        # the naming conventions here force cartesian, generalize to spheres etc. make sense?
         self.mesh=mesh
         
         if not isinstance(nz, list):
@@ -90,6 +93,7 @@ class Equations():
         self.set_equations(*args, **kwargs)
 
     def set_eigenvalue_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
+        # should be set EVP for consistency with set IVP.  Why do we have P_problem.  Why not IVP, EVP.
         self.problem_type = 'EVP'
         self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff, tolerance=1)
         self.problem.substitutions['dt(f)'] = "omega*f"
@@ -99,6 +103,9 @@ class Equations():
         return self.problem
 
     def _new_ncc(self):
+        # is this used at all in equations.py (other than rxn), or just in atmospheres?
+        # the naming conventions here force cartesian, generalize to spheres etc. make sense?
+        # should "necessary quantities" logic occur here?
         field = self.domain.new_field()
         if self.dimensions > 1:
             field.meta['x']['constant'] = True
@@ -129,6 +136,9 @@ class Equations():
         return noise_field
 
     def filter_field(self, field,frac=0.25, fancy_filter=False):
+        # fancy filter seems a distraction if it indeed doesn't work
+        # non-fancy-filter says "please check"  Did anyone check?  if yes, why does it still say that in a logging statement.
+        # things to check: does set_scales method work for multiple chebyshev domains?
         dom = field.domain
         logger.info("filtering field with frac={}".format(frac))
         if fancy_filter:
@@ -181,6 +191,7 @@ class FC_equations(Equations):
         super(FC_equations, self).__init__(**kwargs)
 
     def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
+        # cruft from old attempt at sovling for Ra_crit directly, rather than finding growth rates and inferring Ra_crit from those; unused at present and not well tested.  Remove?
         self.problem_type = 'EVP_2'
         self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='nu')
         self.problem.substitutions['dt(f)'] = "(0*f)"
@@ -196,6 +207,9 @@ class FC_equations(Equations):
         if self.dimensions > 2:
             self.problem.parameters['Ly'] = self.Ly
 
+        # these are all ideal gas; also should be in atmosphere, breaks consistency currently.
+        # momentum equation and thermal equation also probably bake in ideal gas presently.
+        # EOS related on a fumdanental level.
         self.problem.parameters['gamma'] = self.gamma
         self.problem.parameters['Cv'] = 1/(self.gamma-1)
         self.problem.parameters['Cv_inv'] = self.gamma-1
@@ -203,6 +217,9 @@ class FC_equations(Equations):
         self.problem.parameters['Cp_inv'] = (self.gamma-1)/self.gamma
         
         # thermodynamic quantities
+        # these assume stuff is stored in self. and have particular names.  They come from atmosphere things.
+        # go to NCC dictionary?  All keys could be defined on init, and this could all be handled by a 3-line for loop.
+        # need an analysis dictionary and keyset as well, since some things used there and not in eqns.
         self.problem.parameters['T0'] = self.T0
         self.problem.parameters['T0_z'] = self.T0_z
         self.problem.parameters['T0_zz'] = self.T0_zz
@@ -233,11 +250,14 @@ class FC_equations(Equations):
         self.problem.parameters['del_nu_r'] = self.del_nu_r
 
         # Cooling
+        # this is never used anywhere (it lurks in comments).
         self.problem.parameters['Qcool_z'] = 0
 
+        # Thermo subs that are used later, but before set_subs() is called; okay or not okay?
         self.problem.parameters['delta_s_atm'] = self.delta_s
 
-        self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)'
+        # this first one (rho_full) is the one that doesn't fit in set_subs() when we used kappa and mu as primary variables, because the viscous subs need this to get anywhere.
+        self.problem.substitutions['rho_full'] = 'rho0*exp(ln_rho1)' 
         self.problem.substitutions['rho_fluc'] = 'rho0*(exp(ln_rho1)-1)'
         self.problem.substitutions['ln_rho0']  = 'log(rho0)'
         self.problem.substitutions['ln_rho_full'] = '(ln_rho0 + ln_rho1)'
@@ -248,7 +268,9 @@ class FC_equations(Equations):
 
         
     def _set_subs(self):
+        # does both analysis subs and equation subs currently.
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
+        # other anaylsis operations (vol avg, etc.) currently set in 2-D and 3-D extensions.  Good or bad?
 
         # output parameters
         self.problem.substitutions['Rayleigh_global'] = 'g*Lz**3*delta_s_atm*Cp_inv/(nu*chi)'
@@ -313,9 +335,11 @@ class FC_equations(Equations):
             self.problem.meta[key]['z']['dirichlet'] = True
             
     def set_thermal_BC(self, fixed_flux=None, fixed_temperature=None, mixed_flux_temperature=None, mixed_temperature_flux=None):
+        # not(None) logic is going to be deprecated in future python releases.  What is the best way to use None as a function argument and in logic?  "if A is None" vs "if not(A)" and "if A".  Gabo will check.
         if not(fixed_flux) and not(fixed_temperature) and not(mixed_temperature_flux) and not(mixed_flux_temperature):
             mixed_flux_temperature = True
-     
+
+        # is this EVP aware check still needed?  What's going wrong with the EVP homogenization?  Why does it need to be done by hand?  Check if this is still actually broken, determine why.
         if 'EVP' in self.problem_type:
             l_flux_rhs_str = "0"
             r_flux_rhs_str = "0"
