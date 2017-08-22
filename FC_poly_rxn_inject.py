@@ -55,16 +55,16 @@ Options:
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
 
     --chemistry                          Do chemistry in injected run
-    --ChemicalPrandtl=<ChemicalPrandtl>  Ratio of chemical diffusivities to fluid viscosity
-    --Qu_0=<Qu_0>                        Knob for controlling location of quench point combined with phi_0
-    --phi_0=<phi_0>                      Knob for controlling ratio of chemical to density scale heights
+    --ChemicalPrandtl=<ChemicalPrandtl>  Ratio of chemical diffusivities to fluid viscosity [default: 1]
+    --Qu_0=<Qu_0>                        Knob for controlling location of quench point combined with phi_0 [default: 5e-8]
+    --phi_0=<phi_0>                      Knob for controlling ratio of chemical to density scale heights [default: 10]
 
     --scalar_file=<scalar_file>          Scalar slice file with initial slice to start from [default: None]
     --dynamics_file=<dynamics_file>      Dynamics coeff file with final slice to start from
 """
 import logging
-
 import numpy as np
+import h5py
 
 def FC_polytrope(dynamics_file,
                  Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
@@ -107,6 +107,7 @@ def FC_polytrope(dynamics_file,
     if threeD:
         atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                                 epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
+                                                chemistry=chemistry,\
                                                 fig_dir=data_dir)
     else:
         if dynamic_diffusivities:

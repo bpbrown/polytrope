@@ -363,7 +363,8 @@ class FC_equations(Equations):
             self.G_IC.set_scales(self.domain.dealias, keep_data=True)
 
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz)
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
             self.f_IC['g'] = c0 * chem_taper
             self.C_IC['g'] = self.f_IC['g']
             self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
@@ -593,7 +594,9 @@ class FC_equations_2d(FC_equations):
                 
             # Setting up equilibrium profiles
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+
             
             self.C_eq = self._new_ncc()
             self.necessary_quantities['C_eq'] = self.C_eq
@@ -618,8 +621,9 @@ class FC_equations_2d(FC_equations):
             
             # Adding in equilibrium value to correct source term
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
-
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+            
             self.C_eq = self._new_ncc()
             self.necessary_quantities['C_eq'] = self.C_eq
             self.C_eq.set_scales(self.domain.dealias, keep_data=False)
@@ -660,20 +664,19 @@ class FC_equations_2d(FC_equations):
         if split_diffusivities:
             self.problem.substitutions['nu']  = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
-            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
             if chemistry:
                 self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
-                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_chem_nu_r)'
+                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
+            self.problem.substitutions['chi'] = '(chi_l + chi_r)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
         else:
             self.problem.substitutions['nu']  = '(nu_l)'
             self.problem.substitutions['del_nu']  = '(del_nu_l)'
-            self.problem.substitutions['chi'] = '(chi_l)'
-            self.problem.substitutions['del_chi'] = '(del_chi_l)'
             if chemistry:
                 self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
                 self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
-
+            self.problem.substitutions['chi'] = '(chi_l)'
+            self.problem.substitutions['del_chi'] = '(del_chi_l)'
         self._set_subs()
         
         self.viscous_term_u_l = " nu_l*(Lap(u, u_z) + 1/3*Div(dx(u), dx(w_z)))"
@@ -1088,12 +1091,11 @@ class FC_equations_rxn(FC_equations_2d):
         return self.analysis_tasks
 
 class FC_equations_3d(FC_equations):
-    def __init__(self, **kwargs):
+    def __init__(self, chemistry=False, **kwargs):
         super(FC_equations_3d, self).__init__(**kwargs)
-
-        if 'chemistry' in kwargs.keys() and kwargs['chemistry']:
-            self.equation_set = "Fully Compressible (FC) Navier-Stokes in 3-D with chemical reactions"
-            self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1',
+        if chemistry:
+            self.equation_set = 'Fully Compressible (FC) Navier-Stokes with chemical reactions'
+            self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1',\
                               'C','C_z','G','G_z','f','f_z']
         else:
             self.equation_set = 'Fully Compressible (FC) Navier-Stokes in 3-D'
@@ -1155,7 +1157,6 @@ class FC_equations_3d(FC_equations):
             self.del_nu_chem_l['g'] = self.del_nu_l['g']/ChemicalPrandtl
             self.del_nu_chem_r['g'] = self.del_nu_r['g']/ChemicalPrandtl
 
-            
             # Setting chemical rate coefficient
             self.k_chem = self._new_ncc()
             self.necessary_quantities['k_chem'] = self.k_chem
@@ -1172,15 +1173,15 @@ class FC_equations_3d(FC_equations):
             kchem = 1 / tau_0 * np.exp(-T_act / (self.z0-self.z_dealias))
             self.t_chem_BOA = tau_0/self.z0**self.poly_m * np.exp(T_act / self.z0) 
 
-            # There has to be a more efficient way to do this...meshgrids?
             for i in range(self.k_chem['g'].shape[0]):
-                for j in range(self.k_chem['g'].shape[1]):
-                    self.k_chem['g'][i,j] = kchem
+                self.k_chem['g'][i] = kchem
 
                 
             # Setting up equilibrium profiles
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+
             
             self.C_eq = self._new_ncc()
             self.necessary_quantities['C_eq'] = self.C_eq
@@ -1202,11 +1203,11 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters['del_nu_chem_l'] = self.del_nu_chem_l
             self.problem.parameters['del_nu_chem_r'] = self.del_nu_chem_r
 
-            
             # Adding in equilibrium value to correct source term
             c0 = 1
-            chem_taper = self.match_Phi(self.z_dealias, center=self.Lz/2.)
-
+            chem_taper = self.match_Phi(self.z_dealias, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+            
             self.C_eq = self._new_ncc()
             self.necessary_quantities['C_eq'] = self.C_eq
             self.C_eq.set_scales(self.domain.dealias, keep_data=False)
@@ -1223,10 +1224,12 @@ class FC_equations_3d(FC_equations):
             self.problem.parameters['G_eq'] = self.G_eq
                         
     def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
-                      chemistry=False, ChemicalPrandtl=1, Qu_0=5e-8, phi_0=10,
-                      kx = 0, ky=0, EVP_2 = False, 
+                      ChemicalPrandtl=1,
+                      chemistry=False, Qu_0=5e-8, phi_0=10,
+                      kx = 0, ky = 0, EVP_2 = False, 
                       split_diffusivities=False):
-        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
+        
+        self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, 
                                 chemistry=chemistry, ChemicalPrandtl=ChemicalPrandtl,
                                 Qu_0=Qu_0, phi_0=phi_0,
                                 split_diffusivities=split_diffusivities)
@@ -1247,11 +1250,17 @@ class FC_equations_3d(FC_equations):
         if split_diffusivities:
             self.problem.substitutions['nu']  = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
+            if chemistry:
+                self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
+                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
             self.problem.substitutions['chi'] = '(chi_l + chi_r)'
             self.problem.substitutions['del_chi'] = '(del_chi_l + del_chi_r)'
         else:
             self.problem.substitutions['nu']  = '(nu_l)'
             self.problem.substitutions['del_nu']  = '(del_nu_l)'
+            if chemistry:
+                self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
+                self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
             self.problem.substitutions['chi'] = '(chi_l)'
             self.problem.substitutions['del_chi'] = '(del_chi_l)'
         self._set_subs()
@@ -1301,20 +1310,14 @@ class FC_equations_3d(FC_equations):
             if chemistry:
                 self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
                 self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * f_z * dz(ln_rho1) "+\
-                                           " + nu_chem_r * dx(f) * dx(ln_rho1) "+\
-                                           " + nu_chem_r * dy(f) * dy(ln_rho1) "
+                                           " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) + nu_chem_r * dy(f) * dy(ln_rho1) "
                 self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
                 self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * C_z * dz(ln_rho1) "+\
-                                           " + nu_chem_r * dx(C) * dx(ln_rho1) "+\
-                                           " + nu_chem_r * dy(C) * dy(ln_rho1) "
+                                           " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) + nu_chem_r * dy(C) * dy(ln_rho1) "
                 self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
                 self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
-                                           " + nu_chem_r * G_z * dz(ln_rho1) "+\
-                                           " + nu_chem_r * dx(G) * dx(ln_rho1) "+\
-                                           " + nu_chem_r * dy(G) * dy(ln_rho1) "
-            
+                                           " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) + nu_chem_r * dy(G) * dy(ln_rho1) "
+
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
         self.problem.substitutions['L_visc_v'] = self.viscous_term_v_l
@@ -1327,9 +1330,10 @@ class FC_equations_3d(FC_equations):
         self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
         self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
         if chemistry:
-            self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
-            self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
-            self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "  
+            self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) + nu_chem_l * dy(f) * dy(ln_rho1) "
+            self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) + nu_chem_l * dy(C) * dy(ln_rho1) "
+            self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) + nu_chem_l * dy(G) * dy(ln_rho1) "
+
         if split_diffusivities:
             self.nonlinear_viscous_u += " + {}".format(self.viscous_term_u_r)
             self.nonlinear_viscous_v += " + {}".format(self.viscous_term_v_r)
@@ -1375,7 +1379,7 @@ class FC_equations_3d(FC_equations):
             self.problem.add_equation("dz(f) - f_z = 0")
             self.problem.add_equation("dz(C) - C_z = 0")
             self.problem.add_equation("dz(G) - G_z = 0")
-        
+
         logger.debug("Setting continuity equation")
         self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
@@ -1395,16 +1399,15 @@ class FC_equations_3d(FC_equations):
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z + (gamma-1)*T0*Div_u -  L_thermal) = "
                                    "(scale_energy)*(-UdotGrad(T1, T1_z)    - (gamma-1)*T1*Div_u + NL_thermal + NL_visc_heat + source_terms)"))
-
+        
         if chemistry:
             logger.debug("Setting passive and reactive tracer equations")
             self.problem.add_equation(("(scale)*(dt(f) - L_diff_f)                 = (scale)*(-UdotGrad(f,f_z) + NL_diff_f)"))
             self.problem.add_equation(("(scale)*(dt(C) - L_diff_C + k_chem*rho0*C) = (scale)*(-UdotGrad(C,C_z) + NL_diff_C + k_chem*rho0*C_eq)"))
             self.problem.add_equation(("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + NL_diff_G + k_chem*rho0*G_eq)"))
-        
 
-    def set_BC(self, chemistry=False, **kwargs):        
-        super(FC_equations_3d, self).set_BC(chemistry=chemistry, **kwargs)
+    def set_BC(self, **kwargs):        
+        super(FC_equations_3d, self).set_BC(**kwargs)
         # stress free boundary conditions.
         self.problem.add_bc("left(v_z) = 0")
         self.problem.add_bc("right(v_z) = 0")
@@ -1413,13 +1416,12 @@ class FC_equations_3d(FC_equations):
             self.problem.meta[key]['z']['dirichlet'] = True
 
         
-    def initialize_output(self, solver, data_dir, full_output=False, coeffs_output=False, chemistry=False,
-                          max_writes=20, mode="overwrite", volumes_output=True, **kwargs):
+    def initialize_output(self, solver, data_dir, chemistry=False,
+                          full_output=False, coeffs_output=False, volumes_output=True,
+                          max_writes=20, mode="overwrite", **kwargs):
 
-        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir,
-                                                                        full_output=full_output, coeffs_output=coeffs_output,
-                                                                        chemistry=chemistry,
-                                                                        max_writes=max_writes, mode=mode, **kwargs)
+        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, full_output=full_output, coeffs_output=coeffs_output,
+                                                                        max_writes=max_writes, mode=mode, chemistry=chemistry,**kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
                                                            mode=mode, **kwargs)
@@ -1427,22 +1429,18 @@ class FC_equations_3d(FC_equations):
         analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), y={})".format(self.Ly/2), name="s'")
         analysis_slice.add_task("interp(enstrophy,                  y={})".format(self.Ly/2), name="enstrophy")
         analysis_slice.add_task("interp(ω_y,                        y={})".format(self.Ly/2), name="vorticity")
-        if chemistry:
-            analysis_slice.add_task("interp(C,                          y={})".format(self.Ly/2), name="C")
-            analysis_slice.add_task("interp(G,                          y={})".format(self.Ly/2), name="G")
-            analysis_slice.add_task("interp(f,                          y={})".format(self.Ly/2), name="f")
         analysis_slice.add_task("interp(s_fluc,                     z={})".format(0.95*self.Lz), name="s near top")
         analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z={})".format(0.95*self.Lz), name="s' near top")
         analysis_slice.add_task("interp(enstrophy,                  z={})".format(0.95*self.Lz), name="enstrophy near top")
         analysis_slice.add_task("interp(ω_z,                        z={})".format(0.95*self.Lz), name="vorticity_z near top")
-        if chemistry:
-            analysis_slice.add_task("interp(C,                          z={})".format(0.95*self.Lz), name="C near top")
-            analysis_slice.add_task("interp(G,                          z={})".format(0.95*self.Lz), name="G near top")
-            analysis_slice.add_task("interp(f,                          z={})".format(0.95*self.Lz), name="f near top")
         analysis_slice.add_task("interp(s_fluc,                     z={})".format(0.5*self.Lz),  name="s midplane")
         analysis_slice.add_task("interp(s_fluc - plane_avg(s_fluc), z={})".format(0.5*self.Lz),  name="s' midplane")
         analysis_slice.add_task("interp(enstrophy,                  z={})".format(0.5*self.Lz),  name="enstrophy midplane")
         analysis_slice.add_task("interp(ω_z,                        z={})".format(0.5*self.Lz),  name="vorticity_z midplane")
+        if chemistry:
+            analysis_slice.add_task("f", name="f")
+            analysis_slice.add_task("C", name="C")
+            analysis_slice.add_task("G", name="G")
         analysis_tasks['slice'] = analysis_slice
 
         if volumes_output:
