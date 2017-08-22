@@ -193,10 +193,6 @@ class FC_equations(Equations):
         self.problem.parameters['del_chi_r'] = self.del_chi_r
         self.problem.parameters['del_nu_r'] = self.del_nu_r
 
-        # Cooling
-        # this is never used anywhere (it lurks in comments).
-        self.problem.parameters['Qcool_z'] = 0
-
         # Thermo subs that are used later, but before set_subs() is called; okay or not okay?
         self.problem.parameters['delta_s_atm'] = self.delta_s
 
@@ -804,7 +800,7 @@ class FC_equations_3d(FC_equations):
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff   = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + dy(T1)*dy(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                   " Cv_inv*(chi*(T0_zz))" # - Qcool_z/rho_full)"
+        self.source =                   " Cv_inv*(chi*(T0_zz))"
         if not self.constant_kappa:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
@@ -935,8 +931,8 @@ class FC_equations_rxn(FC_equations):
 
         # Adding in equilibrium value to correct source term
         c0 = 1
-        chem_taper = self.chem_match_Phi(self.z_dealias, \
-                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+        chem_taper = self.chem_match_Phi(self.z_dealias, self.Lz/2, \
+                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz)
 
         self.C_eq = self._new_ncc()
         self.necessary_quantities['C_eq'] = self.C_eq
@@ -948,7 +944,6 @@ class FC_equations_rxn(FC_equations):
         self.G_eq.set_scales(self.domain.dealias, keep_data=False)
         self.G_eq['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
 
-        # Is this the right place to set these?
         self.problem.parameters['k_chem'] = self.k_chem
         self.problem.parameters['C_eq'] = self.C_eq
         self.problem.parameters['G_eq'] = self.G_eq
@@ -999,8 +994,8 @@ class FC_equations_rxn(FC_equations):
 
         # Setting up equilibrium profiles
         c0 = 1
-        chem_taper = self.chem_match_Phi(self.z_dealias, \
-                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+        chem_taper = self.chem_match_Phi(self.z_dealias, self.Lz/2, \
+                                    width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz)
 
 
         self.C_eq = self._new_ncc()
@@ -1042,15 +1037,13 @@ class FC_equations_rxn(FC_equations):
         self.G_IC.set_scales(self.domain.dealias, keep_data=True)
 
         c0 = 1
-        chem_taper = self.chem_match_Phi(self.z_dealias, \
-                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
+        chem_taper = self.chem_match_Phi(self.z_dealias, self.Lz/2, \
+                                        width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz)
         self.f_IC['g'] = c0 * chem_taper
         self.C_IC['g'] = self.f_IC['g']
         self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
 
-    def chem_match_Phi(self, z, f=scp.erf, center=None, width=None):
-        # breaks if center not set
-        # why is this here?  why not in atmospheres?  Maybe it's here for chemistry.  If so, it should go in rxn.  Should this really be a class function?
+    def chem_match_Phi(self, z, center, width=None, f=scp.erf):
         if width is None:
             width = 0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)
         return 1/2*(1-f((z-center)/width))
