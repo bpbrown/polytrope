@@ -45,7 +45,7 @@ mpirun -n 200 python3 FC_onset_curve.py --epsilon=1e-4
 
 For a high-stiffness multitropic atmosphere, try
 ```
-mpirun -n 200 python3 FC_onset_curve.py --Multitrope --nz=96,48 --stiffness=1e3
+mpirun -n 200 python3 FC_onset_curve.py --Multitrope --nz=96,48 --stiffness=1e3 --rayleigh_steps=20 --kx_steps=20 --kx_start=0.3 --kx_stop=10
 ```
 Images of Rayleigh number / wavenumber space will be output, with the growth rate
 of the maximum eigenvalue shown.
