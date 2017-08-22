@@ -821,7 +821,7 @@ class Multitrope(Atmosphere):
         logger.info("Calculating scales {}".format((Lz_cz, Lz_rz, Lz)))
         return (Lz_cz, Lz_rz, Lz)
 
-    def match_Phi(self, z, f=scp.erf, center=None, width=None):
+    def match_Phi_multi(self, z, f=scp.erf, center=None, width=None):
         if center is None:
             center = self.match_center
         if width is None:
@@ -831,7 +831,7 @@ class Multitrope(Atmosphere):
     def _compute_step_profile(self, step_ratio, invert_profile=False):
         # a simple, smooth step function with amplitudes 1 and step_ratio
         # on either side of the matching region
-        Phi = self.match_Phi(self.z)
+        Phi = self.match_Phi_multi(self.z)
         inv_Phi = 1-Phi
         
         self.profile = self._new_ncc()
