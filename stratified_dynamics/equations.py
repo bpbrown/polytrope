@@ -16,13 +16,6 @@ class Equations():
         self.problem_type = ''
         pass
 
-    def match_Phi(self, z, f=scp.erf, center=None, width=None):
-        # breaks if center not set
-        # why is this here?  why not in atmospheres?  Maybe it's here for chemistry.  If so, it should go in rxn.  Should this really be a class function?
-        if width is None:
-            width = 0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)
-        return 1/2*(1-f((z-center)/width))
-
     def _set_domain(self, nx=256, Lx=4,
                           ny=256, Ly=4,
                           nz=128, Lz=1,
@@ -51,7 +44,6 @@ class Equations():
             self.compound = False
             z_basis = de.Chebyshev('z', nz[0], interval=[0, Lz[0]], dealias=3/2)
         
-        #z_basis = de.Chebyshev('z', nz, interval=[0., Lz], dealias=3/2)
         if self.dimensions > 1:
             x_basis = de.Fourier(  'x', nx, interval=[0., Lx], dealias=3/2)
         if self.dimensions > 2:
@@ -136,55 +128,14 @@ class Equations():
         return noise_field
 
     def filter_field(self, field,frac=0.25, fancy_filter=False):
-        # fancy filter seems a distraction if it indeed doesn't work
-        # non-fancy-filter says "please check"  Did anyone check?  if yes, why does it still say that in a logging statement.
-        # things to check: does set_scales method work for multiple chebyshev domains?
         dom = field.domain
         logger.info("filtering field with frac={}".format(frac))
-        if fancy_filter:
-            logger.debug("filtering using field_filter approach.  Please check.")
-            local_slice = dom.dist.coeff_layout.slices(scales=dom.dealias)
-            coeff = []                
-            for i in range(dom.dim)[::-1]:
-                logger.info("building filter: i = {}".format(i))
-                if i == np.max(dom.dim)-1 and self.compound:
-                    # special operation on the compound basis
-                    for nz in self.nz_set:
-                        logger.info("nz: {} out of {}".format(nz, self.nz_set))
-                        if first_subbasis:
-                            compound_set = np.linspace(0,1,nz,endpoint=False)
-                            first_subbasis=False
-                        else:
-                            compound_set = np.append(compound_set, np.linspace(0,1,nz,endpoint=False))
-                    logger.debug("compound set shape {}".format(compound_set.shape))
-                    logger.debug("target shape {}".format(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False).shape))
-                    coeff.append(compound_set)
-                else:
-                    coeff.append(np.linspace(0,1,dom.global_coeff_shape[i],endpoint=False))
-                
-            logger.info(coeff)
-            cc = np.meshgrid(*coeff)
-            field_filter = np.zeros(dom.local_coeff_shape,dtype='bool')
-
-            for i in range(len(cc)):
-                logger.info("cc {} shape {}".format(i, cc[i].shape))
-                logger.info("local slice {}".format(local_slice[i]))
-                logger.info("field_filter shape {}".format(field_filter.shape))
-
-        
-            for i in range(dom.dim):
-                logger.info("trying i={}".format(i))
-                field_filter = field_filter | (cc[i][local_slice[i]] > frac)
-        
-            # broken for 3-D right now; works for 2-D.  Nope, broken now in 2-D as well... what did I do?
-            field['c'][field_filter] = 0j
-        else:
-            logger.debug("filtering using set_scales approach.  Please check.")
-            orig_scale = field.meta[:]['scale']
-            field.set_scales(frac, keep_data=True)
-            field['c']
-            field['g']
-            field.set_scales(orig_scale, keep_data=True)
+        logger.debug("filtering using set_scales approach.")
+        orig_scale = field.meta[:]['scale']
+        field.set_scales(frac, keep_data=True)
+        field['c']
+        field['g']
+        field.set_scales(orig_scale, keep_data=True)
             
 class FC_equations(Equations):
     def __init__(self, **kwargs):
@@ -973,7 +924,7 @@ class FC_equations_rxn(FC_equations):
     def __init__(self):
         self.equation_set += ' with chemical reactions'
         self.variables.extend(['C','C_z','G','G_z','f','f_z'])
-
+        
     def _set_parameters(self):
         super(FC_equations_rxn, self)._set_parameters()
 
@@ -984,7 +935,7 @@ class FC_equations_rxn(FC_equations):
 
         # Adding in equilibrium value to correct source term
         c0 = 1
-        chem_taper = self.match_Phi(self.z_dealias, \
+        chem_taper = self.chem_match_Phi(self.z_dealias, \
                                     width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
 
         self.C_eq = self._new_ncc()
@@ -1048,7 +999,7 @@ class FC_equations_rxn(FC_equations):
 
         # Setting up equilibrium profiles
         c0 = 1
-        chem_taper = self.match_Phi(self.z_dealias, \
+        chem_taper = self.chem_match_Phi(self.z_dealias, \
                                     width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
 
 
@@ -1091,12 +1042,19 @@ class FC_equations_rxn(FC_equations):
         self.G_IC.set_scales(self.domain.dealias, keep_data=True)
 
         c0 = 1
-        chem_taper = self.match_Phi(self.z_dealias, \
+        chem_taper = self.chem_match_Phi(self.z_dealias, \
                                         width=0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)*self.Lz,center=self.Lz/2)
         self.f_IC['g'] = c0 * chem_taper
         self.C_IC['g'] = self.f_IC['g']
         self.G_IC['g'] = c0 * (self.Lz - self.z_dealias) / self.Lz
-        
+
+    def chem_match_Phi(self, z, f=scp.erf, center=None, width=None):
+        # breaks if center not set
+        # why is this here?  why not in atmospheres?  Maybe it's here for chemistry.  If so, it should go in rxn.  Should this really be a class function?
+        if width is None:
+            width = 0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)
+        return 1/2*(1-f((z-center)/width))
+
     def initialize_output(self, solver, data_dir, coeffs_output=False, **kwargs):
         analysis_tasks = super().initialize_output(solver, data_dir, coeffs_output=coeffs_output, **kwargs)
 

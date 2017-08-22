@@ -99,7 +99,7 @@ class FC_multitrope_rxn(FC_equations_rxn, Multitrope):
         self.c_IC['g'] = c0*(1-taper)
         self.f_IC['g'] = self.c_IC['g']
 
-class FC_multitrope_2d_kappa(FC_equations_2d_kappa, Multitrope):
+class FC_multitrope_2d_kappa_mu(FC_equations_2d_kappa_mu, Multitrope):
     def __init__(self, *args, **kwargs):
         super(FC_multitrope_2d_kappa, self).__init__() 
         Multitrope.__init__(self, *args, **kwargs)

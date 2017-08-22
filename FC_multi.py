@@ -170,7 +170,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=1e4, m_rz=3, gamma=5/3,
             nz_list = [nz_rz, nz_cz]
 
     if dynamic_diffusivities:
-        atmosphere = multitropes.FC_multitrope_2d_kappa(nx=nx, nz=nz_list, stiffness=stiffness, m_rz=m_rz, gamma=gamma,
+        atmosphere = multitropes.FC_multitrope_2d_kappa_mu(nx=nx, nz=nz_list, stiffness=stiffness, m_rz=m_rz, gamma=gamma,
                                          n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
                                          verbose=verbose, width=width,
                                          constant_Prandtl=constant_Prandtl,
