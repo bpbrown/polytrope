@@ -91,7 +91,7 @@ class Equations():
 
     def set_eigenvalue_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
         self.problem_type = 'EVP'
-        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff, tolerance=1)
+        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff, tolerance=1e-10)
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
