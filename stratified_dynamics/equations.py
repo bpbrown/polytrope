@@ -190,13 +190,6 @@ class FC_equations(Equations):
     def __init__(self, **kwargs):
         super(FC_equations, self).__init__(**kwargs)
 
-    def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
-        # cruft from old attempt at sovling for Ra_crit directly, rather than finding growth rates and inferring Ra_crit from those; unused at present and not well tested.  Remove?
-        self.problem_type = 'EVP_2'
-        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='nu')
-        self.problem.substitutions['dt(f)'] = "(0*f)"
-        self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
-
     def _set_parameters(self):
         '''
         Basic parameters needed for fully compressible equations in stratified atmosphere.
@@ -442,11 +435,6 @@ class FC_equations(Equations):
         rho = self.get_full_rho(solver)
 
         self.check_atmosphere(T=T, rho=rho, **kwargs)
-
-    def set_eigenvalue_problem_type_2(self, Rayleigh, Prandtl, **kwargs):
-        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='nu')
-        self.problem.substitutions['dt(f)'] = "(0*f)"
-        self.set_equations(Rayleigh, Prandtl, EVP_2 = True, **kwargs)
         
     def initialize_output(self, solver, data_dir, coeffs_output=False,
                           max_writes=20, mode="overwrite", **kwargs):
@@ -638,7 +626,7 @@ class FC_equations_2d(FC_equations):
         self.problem.substitutions['R_visc_heat'] = self.viscous_heating
         
     def set_equations(self, Rayleigh, Prandtl,
-                      kx = 0, EVP_2 = False, 
+                      kx = 0,
                       split_diffusivities=False):
 
         self.split_diffusivities = split_diffusivities
@@ -652,11 +640,6 @@ class FC_equations_2d(FC_equations):
         
         self._set_parameters()
         self._set_subs()
-        if EVP_2:
-            self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
-            self.problem.parameters['Prandtl'] = Prandtl
-            self.problem.parameters.pop('nu_l')
-            self.problem.parameters.pop('chi_l')
        
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")
@@ -887,19 +870,12 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['R_visc_heat'] = self.viscous_heating
                         
     def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
-                      kx = 0, EVP_2 = False, 
+                      kx = 0,
                       split_diffusivities=False):
 
         self.split_diffusivities = split_diffusivities
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
         self._set_parameters()
-        if EVP_2:
-            self.problem.substitutions['chi'] = "(Prandtl*nu_l)"
-            self.problem.parameters['Prandtl'] = Prandtl
-            self.problem.parameters.pop('nu_l')
-            self.problem.parameters.pop('chi_l')
-                # define nu and chi for output
-
         self._set_subs()
     
         if Taylor:
@@ -1207,7 +1183,7 @@ class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
 
     def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl=1,
                       Qu_0=5e-8, phi_0=10,
-                      kx = 0, EVP_2 = False, 
+                      kx = 0, 
                       split_diffusivities=False):
 
         self.split_diffusivities = split_diffusivities
