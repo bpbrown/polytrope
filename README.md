@@ -7,6 +7,8 @@ framework.  To run these problems, first install
 [Dedalus](http://dedalus-project.org/) (and on
 [bitbucket](https://bitbucket.org/dedalus-project/dedalus2)). 
 
+## Initial Value Problems
+
 Once [Dedalus](http://dedalus-project.org/) is installed and activated, do the following:
 ```
 #!bash
@@ -32,6 +34,21 @@ We are using docopt in these general driver cases, and
 python3 FC_multi.py --help
 ```
 will describe various command-line options.
+
+## Eigenvalue Problems (for finding onset of convection)
+
+To find the critical Rayleigh number for convective onset in a low-Mach number
+polytropic atmosphere, try
+```
+mpirun -n 200 python3 FC_onset_curve.py --epsilon=1e-4
+```
+
+For a high-stiffness multitropic atmosphere, try
+```
+mpirun -n 200 python3 FC_onset_curve.py --Multitrope --nz=64,32 --stiffness=1e3
+```
+Images of Rayleigh number / wavenumber space will be output, with the growth rate
+of the maximum eigenvalue shown.
 
 Contact the exoweather team for more details.
 

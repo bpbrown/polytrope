@@ -209,7 +209,6 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     start_sim_time = solver.sim_time
 
     try:
-        atmosphere.domain.dist.comm_cart.Barrier()
         start_time = time.time()
         start_iter = solver.iteration
         logger.info('starting main loop')
