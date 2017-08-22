@@ -198,7 +198,11 @@ class OnsetSolver:
         
 
         if not np.isnan(max_val):
-            return max_val
+            val = max_val + 1j*freq
+            if type(val) == np.ndarray:
+                return val[0]
+            else:
+                return val
         else:
             return np.nan
 
