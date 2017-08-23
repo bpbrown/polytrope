@@ -4,6 +4,7 @@ import sys
 import time
 import warnings
 import logging
+logger = logging.getLogger(__name__)
 
 import matplotlib
 matplotlib.use('Agg')
@@ -142,12 +143,12 @@ class OnsetSolver:
         if len(crits) == 2:
             ra_crit, kx_crit = crits
             if self.cf.rank == 0:
-                print('min found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
+                logger.info('Critical value found at ra: {:.5g}, kx: {:.5g}'.format(ra_crit, kx_crit)) 
         elif len(crits) == 3:
             ra_crit, kx_crit, ky_crit = crits
             k_tot = np.sqrt(kx_crit**2 + ky_crit**2)
             if self.cf.rank == 0:
-                print('min found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
+                logger.info('Critical value found at ra: {:.5g}, kx: {:.5g}, ky: {:.5g}, ktot = {:.5g}'.format(ra_crit, kx_crit, ky_crit, k_tot)) 
         if self.cf.comm.rank == 0:
             self.cf.save_grid('{:s}/{:s}'.format(out_dir, out_file))
             self.cf.plot_crit(title= '{:s}/{:s}'.format(out_dir, out_file), xlabel='kx', ylabel='Ra', transpose=True)
@@ -192,9 +193,9 @@ class OnsetSolver:
         max_val, gr_ind, freq = self.eigprob.growth_rate({})
         #Initialize atmosphere
         if self.cf.rank == 0:
-            print('solving for onset with ra {:.8g} / kx {:.8g} / ky {:.8g}'.\
+            logger.info('Solving for onset with ra {:.8g} / kx {:.8g} / ky {:.8g} on proc 0'.\
                     format(ra, kx, ky))
-            print('Maximum eigenvalue found: {:.8g}'.format(max_val))
+            logger.info('Maximum eigenvalue found at those values: {:.8g}'.format(max_val))
         
 
         if not np.isnan(max_val):

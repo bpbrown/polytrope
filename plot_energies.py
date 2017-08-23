@@ -126,7 +126,7 @@ def plot_energies(data, times, output_path='./'):
         ax1.set_xlabel("time")
         figs["Rossby"] = fig_Ro
     except:
-        print("This isn't a rotating run, skipping RMS Rossby number")
+        logger.info("This isn't a rotating run, skipping RMS Rossby number")
 
 
 
