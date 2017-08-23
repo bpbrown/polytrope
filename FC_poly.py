@@ -180,10 +180,10 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
    
-    kwargs = dict()
     if threeD:
-        kwargs['volumes_output'] = not(no_volumes)
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, **kwargs)
+        analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, volumes_output=not(no_volumes))
+    else:
+        analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
 
     #Set up timestep defaults
     max_dt = output_time_cadence/2
@@ -374,18 +374,12 @@ if __name__ == "__main__":
 
     #Base atmosphere
     if args['--rotating']:
-        if args['--Co'] and args['--Taylor']:
+        if not isinstance(args['--Co'], type(None)):
             Co = float(args['--Co'])
             Taylor = float(args['--Taylor'])
             args['--Rayleigh'] = Taylor*float(args['--Prandtl'])*Co**2
             data_dir += "_nrhocz{}_Pr{}".format(args['--n_rho_cz'], args['--Prandtl'])
             data_dir += "_Co{}_Ta{}".format(args['--Co'], args['--Taylor'])
-        elif args['--Co']:
-            Co = float(args['--Co'])
-            Ta = float(args['--Taylor'])
-            Taylor = float(args['--Rayleigh'])/float(args['--Prandtl'])/Co**2
-            data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
-            data_dir += "_Co{}".format(args['--Co'])
         else:
             Taylor = float(args['--Taylor'])
             Co = np.sqrt(float(args['--Rayleigh'])/float(args['--Prandtl'])/Taylor)
