@@ -49,6 +49,7 @@ Options:
     --out_cadence=<out_cad>              The fraction of a buoyancy time to output data at [default: 0.1]
     --writes=<writes>                    Writes per file [default: 20]
     --no_coeffs                          If flagged, coeffs will not be output
+    --no_volumes                         If flagged, volumes will not be output (3D)
     --no_join                            If flagged, skip join operation at end of run.
 
     --verbose                            Do extra output (Peclet and Nusselt numbers) to screen
@@ -68,7 +69,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                  restart=None, start_new_files=False,
                  rk222=False, safety_factor=0.2,
                  max_writes=20,
-                 data_dir='./', out_cadence=0.1, no_coeffs=False, no_join=False,
+                 data_dir='./', out_cadence=0.1, no_coeffs=False, no_volumes=False, no_join=False,
                  verbose=False):
 
     import dedalus.public as de
@@ -178,8 +179,11 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     
     logger.info("stopping after {:g} time units".format(solver.stop_sim_time))
     logger.info("output cadence = {:g}".format(output_time_cadence))
-    
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
+   
+    if threeD:
+        analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes, volumes_output=not(no_volumes))
+    else:
+        analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence, coeffs_output=not(no_coeffs), mode=mode,max_writes=max_writes)
 
     #Set up timestep defaults
     max_dt = output_time_cadence/2
@@ -263,7 +267,6 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                 start_time = time.time()
     except:
         logger.error('Exception raised, triggering end of main loop.')
-        raise
     finally:
         end_time = time.time()
 
@@ -283,16 +286,16 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                 final_checkpoint = Checkpoint(data_dir, checkpoint_name='final_checkpoint')
                 final_checkpoint.set_checkpoint(solver, wall_dt=1, mode="append")
                 solver.step(dt) #clean this up in the future...works for now.
-                post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=True)
+                post.merge_process_files(data_dir+'/final_checkpoint/', cleanup=False)
             except:
                 print('cannot save final checkpoint')
                 
             logger.info(data_dir+'/checkpoint/')
-            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+            post.merge_process_files(data_dir+'/checkpoint/', cleanup=False)
             
             for task in analysis_tasks.keys():
                 logger.info(analysis_tasks[task].base_path)
-                post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)
+                post.merge_process_files(analysis_tasks[task].base_path, cleanup=False)
 
         if (atmosphere.domain.distributor.rank==0):
 
@@ -370,18 +373,21 @@ if __name__ == "__main__":
         data_dir +='_2D'
 
     #Base atmosphere
-    data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
     if args['--rotating']:
-        if args['--Co']:
+        if not isinstance(args['--Co'], type(None)):
             Co = float(args['--Co'])
-            Taylor = float(args['--Rayleigh'])/float(args['--Prandtl'])/Co**2
-            data_dir += "_Co{}".format(args['--Co'])
+            Taylor = float(args['--Taylor'])
+            args['--Rayleigh'] = Taylor*float(args['--Prandtl'])*Co**2
+            data_dir += "_nrhocz{}_Pr{}".format(args['--n_rho_cz'], args['--Prandtl'])
+            data_dir += "_Co{}_Ta{}".format(args['--Co'], args['--Taylor'])
         else:
             Taylor = float(args['--Taylor'])
             Co = np.sqrt(float(args['--Rayleigh'])/float(args['--Prandtl'])/Taylor)
+            data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
             data_dir += "_Ta{}".format(args['--Taylor'])
     else:
         Taylor = None
+        data_dir += "_nrhocz{}_Ra{}_Pr{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--Prandtl'])
     data_dir += "_eps{}_a{}".format(args['--epsilon'], args['--aspect'])
     
     if args['--label'] == None:
@@ -480,6 +486,7 @@ if __name__ == "__main__":
                  max_writes=int(float(args['--writes'])),
                  data_dir=data_dir,
                  no_coeffs=args['--no_coeffs'],
+                 no_volumes=args['--no_volumes'],
                  no_join=args['--no_join'],
                  split_diffusivities=args['--split_diffusivities'],
                  verbose=args['--verbose'])

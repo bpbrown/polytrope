@@ -87,7 +87,7 @@ class Equations():
     def set_eigenvalue_problem(self, *args, ncc_cutoff=1e-10, **kwargs):
         # should be set EVP for consistency with set IVP.  Why do we have P_problem.  Why not IVP, EVP.
         self.problem_type = 'EVP'
-        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff, tolerance=1)
+        self.problem = de.EVP(self.domain, variables=self.variables, eigenvalue='omega', ncc_cutoff=ncc_cutoff, tolerance=1e-10)
         self.problem.substitutions['dt(f)'] = "omega*f"
         self.set_equations(*args, **kwargs)
 
@@ -578,12 +578,12 @@ class FC_equations_2d(FC_equations):
                       kx = 0,
                       split_diffusivities=False):
 
-        self.split_diffusivities = split_diffusivities
-
         if self.dimensions == 1:
             self.problem.parameters['j'] = 1j
             self.problem.substitutions['dx(f)'] = "j*kx*(f)"
             self.problem.parameters['kx'] = kx
+
+        self.split_diffusivities = split_diffusivities
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
                                 split_diffusivities=split_diffusivities)
         
@@ -726,8 +726,13 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['UdotGrad(f, f_z)'] = "(u*dx(f) + v*dy(f) + w*(f_z))"
                     
         # analysis operators
-        self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
-        self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Ly/Lz'
+        if self.dimensions != 1:
+            self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Ly/Lz'
+        else:
+            self.problem.substitutions['plane_avg(A)'] = 'A'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lz'
+
         self.problem.substitutions['plane_std(A)'] = 'sqrt(plane_avg((A - plane_avg(A))**2))'
 
         self.problem.substitutions["σxx"] = "(2*dx(u) - 2/3*Div_u)"
@@ -741,6 +746,7 @@ class FC_equations_3d(FC_equations):
         super(FC_equations_3d, self)._set_subs(**kwargs)
 
     def _set_diffusion_subs(self):
+        # define nu and chi for output
         if self.split_diffusivities:
             self.problem.substitutions['nu']  = '(nu_l + nu_r)'
             self.problem.substitutions['del_nu']  = '(del_nu_l + del_nu_r)'
@@ -758,8 +764,7 @@ class FC_equations_3d(FC_equations):
         self.viscous_term_u_r = " nu_r*(Lap(u, u_z) + 1/3*Div(dx(u), dx(v), dx(w_z)))"
         self.viscous_term_v_r = " nu_r*(Lap(v, v_z) + 1/3*Div(dy(u), dy(v), dy(w_z)))"
         self.viscous_term_w_r = " nu_r*(Lap(w, w_z) + 1/3*Div(  u_z, v_z, dz(w_z)))"
-        # here, nu and chi are constants        
-        
+        # here, nu and chi are constants                
         if not self.constant_mu:
             self.viscous_term_u_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σxz"
             self.viscous_term_w_l += " + (nu_l*del_ln_rho0 + del_nu_l) * σzz"
@@ -771,7 +776,7 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['L_visc_w'] = self.viscous_term_w_l
         self.problem.substitutions['L_visc_u'] = self.viscous_term_u_l
         self.problem.substitutions['L_visc_v'] = self.viscous_term_v_l
-
+        
         self.nonlinear_viscous_u = " nu*(dx(ln_rho1)*σxx + dy(ln_rho1)*σxy + dz(ln_rho1)*σxz)"
         self.nonlinear_viscous_v = " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
         self.nonlinear_viscous_w = " nu*(dx(ln_rho1)*σxz + dy(ln_rho1)*σyz + dz(ln_rho1)*σzz)"
@@ -805,8 +810,15 @@ class FC_equations_3d(FC_equations):
         self.problem.substitutions['R_visc_heat'] = self.viscous_heating
                         
     def set_equations(self, Rayleigh, Prandtl, Taylor=None, theta=0,
-                      kx = 0,
+                      kx = 0, ky = 0,
                       split_diffusivities=False):
+        
+        if self.dimensions == 1:
+            self.problem.parameters['j'] = 1j
+            self.problem.substitutions['dx(f)'] = "j*kx*(f)"
+            self.problem.parameters['kx'] = kx
+            self.problem.substitutions['dy(f)'] = "j*ky*(f)"
+            self.problem.parameters['ky'] = ky
 
         self.split_diffusivities = split_diffusivities
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl)
@@ -867,7 +879,7 @@ class FC_equations_3d(FC_equations):
             self.problem.meta[key]['z']['dirichlet'] = True
 
         
-    def initialize_output(self, solver, data_dir, coeffs_output=False,
+    def initialize_output(self, solver, data_dir, coeffs_output=False, volumes_output=False,
                           max_writes=20, mode="overwrite", **kwargs):
 
         analysis_tasks = super().initialize_output(solver, data_dir, coeffs_output=coeffs_output, max_writes=max_writes, mode=mode, **kwargs)
@@ -888,11 +900,12 @@ class FC_equations_3d(FC_equations):
         analysis_slice.add_task("interp(ω_z,                        z={})".format(0.5*self.Lz),  name="vorticity_z midplane")
         analysis_tasks['slice'] = analysis_slice
 
-        analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=max_writes, parallel=False, 
-                                                            mode=mode, **kwargs)
-        analysis_volume.add_task("enstrophy", name="enstrophy")
-        analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
-        analysis_tasks['volume'] = analysis_volume
+        if volumes_output:
+            analysis_volume = solver.evaluator.add_file_handler(data_dir+"volumes", max_writes=max_writes, parallel=False, 
+                                                                mode=mode, **kwargs)
+            analysis_volume.add_task("enstrophy", name="enstrophy")
+            analysis_volume.add_task("s_fluc+s_mean", name="s_tot")
+            analysis_tasks['volume'] = analysis_volume
 
         if self.rotating:
             analysis_scalar = analysis_tasks['scalar']
@@ -900,7 +913,7 @@ class FC_equations_3d(FC_equations):
 
             analysis_profile = analysis_tasks['profile']
             analysis_profile.add_task("plane_avg(Rossby)", name="Rossby")
-        
+            
         return analysis_tasks
                     
 class FC_equations_rxn(FC_equations):
