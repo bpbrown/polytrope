@@ -51,6 +51,8 @@ Options:
                                             optimization routines
     --out_dir=<out_dir>                 Base output dir [default: ./]
 """
+import logging
+logger = logging.getLogger(__name__)
 from docopt import docopt
 from onset_solver import OnsetSolver
 import numpy as np
@@ -58,10 +60,14 @@ import numpy as np
 args = docopt(__doc__)
 
 if args['--Multitrope']:
+    logger.info("Solving on multitropes")
     polytrope, multitrope = False, True
+    atmo_type = 1
     file_name = 'FC_multi_onsets'
 else:
+    logger.info("Atmosphere type not specified, using polytrope")
     polytrope, multitrope = True, False
+    atmo_type = 0
     file_name = 'FC_poly_onsets'
 
 
@@ -186,13 +192,6 @@ else:
     ky_steps = None
     threeD = False
 
-if polytrope:
-    atmo_type = 0
-elif multitrope:
-    atmo_type = 1
-else:
-    print("Atmosphere type unknown, using polytrope")
-    atmo_type=0
 solver = OnsetSolver(
             eqn_set=0, atmosphere=atmo_type, threeD=threeD,
             ra_steps=(ra_start, ra_stop, ra_steps, ra_log),
