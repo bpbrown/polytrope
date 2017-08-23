@@ -129,8 +129,7 @@ class Equations():
 
     def filter_field(self, field,frac=0.25, fancy_filter=False):
         dom = field.domain
-        logger.info("filtering field with frac={}".format(frac))
-        logger.debug("filtering using set_scales approach.")
+        logger.info("filtering field {} with frac={} using a set-scales approach".format(field.name,frac))
         orig_scale = field.meta[:]['scale']
         field.set_scales(frac, keep_data=True)
         field['c']
@@ -344,15 +343,16 @@ class FC_equations(Equations):
         
     def set_IC(self, solver, A0=1e-6, **kwargs):
         # initial conditions
-        self.T_IC = solver.state['T1']
-        self.ln_rho_IC = solver.state['ln_rho1']
+        T_IC = solver.state['T1']
+        T_z_IC = solver.state['T1_z']
+        ln_rho_IC = solver.state['ln_rho1']
             
         noise = self.global_noise(**kwargs)
         noise.set_scales(self.domain.dealias, keep_data=True)
-        self.T_IC.set_scales(self.domain.dealias, keep_data=True)
+        T_IC.set_scales(self.domain.dealias, keep_data=True)
         self.T0.set_scales(self.domain.dealias, keep_data=True)
-        self.T_IC['g'] = self.epsilon*A0*np.sin(np.pi*self.z_dealias/self.Lz)*noise['g']*self.T0['g']
-        
+        T_IC['g'] = self.epsilon*A0*np.sin(np.pi*self.z_dealias/self.Lz)*noise['g']*self.T0['g']
+        T_IC.differentiate('z', out=T_z_IC)
         logger.info("Starting with T1 perturbations of amplitude A0 = {:g}".format(A0))
 
     def get_full_T(self, solver):
@@ -471,8 +471,10 @@ class FC_equations(Equations):
                                                                mode=mode, **kwargs)
             analysis_coeff.add_task("s_fluc", name="s", layout='c')
             analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
-            analysis_coeff.add_task("T1", name="T", layout='c')
-            analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
+            analysis_coeff.add_task("T1+T0", name="T", layout='c')
+            analysis_coeff.add_task("T1+T0 - plane_avg(T1+T0)", name="T'", layout='c')
+            analysis_coeff.add_task("ln_rho1+ln_rho0", name="ln_rho", layout='c')
+            analysis_coeff.add_task("ln_rho1+ln_rho0 - plane_avg(ln_rho1+ln_rho0)", name="ln_rho'", layout='c')
             analysis_coeff.add_task("u", name="u", layout='c')
             analysis_coeff.add_task("w", name="w", layout='c')
             analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
@@ -609,11 +611,10 @@ class FC_equations_2d(FC_equations):
                                    "(scale_energy)*(-UdotGrad(T1, T1_z) - (gamma-1)*T1*Div_u + R_thermal + R_visc_heat + source_terms)")) 
                             
 
-    def initialize_output(self, solver, data_dir, coeffs_output=True,
+    def initialize_output(self, solver, data_dir, coeffs_output=False,
                           max_writes=20, mode="overwrite", **kwargs):
 
-        analysis_tasks = super(FC_equations_2d, self).initialize_output(solver, data_dir,
-                                                                        max_writes=max_writes, mode=mode, **kwargs)
+        analysis_tasks = super().initialize_output(solver, data_dir, coeffs_output=coeffs_output, max_writes=max_writes, mode=mode, **kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
                                                             mode=mode, **kwargs)
@@ -625,19 +626,6 @@ class FC_equations_2d(FC_equations):
         analysis_slice.add_task("ω_y", name="vorticity")
         analysis_tasks['slice'] = analysis_slice
 
-        if coeffs_output:
-            analysis_coeff = solver.evaluator.add_file_handler(data_dir+"coeffs", max_writes=max_writes, parallel=False,
-                                                               mode=mode, **kwargs)
-            analysis_coeff.add_task("s_fluc", name="s", layout='c')
-            analysis_coeff.add_task("s_fluc - plane_avg(s_fluc)", name="s'", layout='c')
-            analysis_coeff.add_task("T1", name="T", layout='c')
-            analysis_coeff.add_task("ln_rho1", name="ln_rho", layout='c')
-            analysis_coeff.add_task("u", name="u", layout='c')
-            analysis_coeff.add_task("w", name="w", layout='c')
-            analysis_coeff.add_task("enstrophy", name="enstrophy", layout='c')
-            analysis_coeff.add_task("ω_y", name="vorticity", layout='c')
-            analysis_tasks['coeff'] = analysis_coeff
-        
         return analysis_tasks
 
 
@@ -882,8 +870,7 @@ class FC_equations_3d(FC_equations):
     def initialize_output(self, solver, data_dir, coeffs_output=False,
                           max_writes=20, mode="overwrite", **kwargs):
 
-        analysis_tasks = super(FC_equations_3d, self).initialize_output(solver, data_dir, coeffs_output=coeffs_output,
-                                                                        max_writes=max_writes, mode=mode, **kwargs)
+        analysis_tasks = super().initialize_output(solver, data_dir, coeffs_output=coeffs_output, max_writes=max_writes, mode=mode, **kwargs)
         
         analysis_slice = solver.evaluator.add_file_handler(data_dir+"slices", max_writes=max_writes, parallel=False,
                                                            mode=mode, **kwargs)
@@ -1048,8 +1035,8 @@ class FC_equations_rxn(FC_equations):
             width = 0.04 * 18.5/(np.sqrt(np.pi)*6.5/2)
         return 1/2*(1-f((z-center)/width))
 
-    def initialize_output(self, solver, data_dir, coeffs_output=False, **kwargs):
-        analysis_tasks = super().initialize_output(solver, data_dir, coeffs_output=coeffs_output, **kwargs)
+    def initialize_output(self, *args, coeffs_output=False, **kwargs):
+        analysis_tasks = super().initialize_output(*args, coeffs_output=coeffs_output, **kwargs)
 
         analysis_slice = analysis_tasks['slice']
         analysis_slice.add_task("f", name="f")

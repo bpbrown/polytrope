@@ -86,7 +86,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     initial_time = time.time()
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
-
+    
     if nx is None:
         nx = int(np.round(nz*aspect_ratio))
     if threeD and ny is None:
