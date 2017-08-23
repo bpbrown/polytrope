@@ -5,6 +5,7 @@ from mpi4py import MPI
 
 from collections import OrderedDict
 
+import h5py
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -20,6 +21,7 @@ import logging
 logger = logging.getLogger(__name__.split('.')[-1])
 
 from dedalus import public as de
+from dedalus.core.field import Field
 
 class Atmosphere:
     def __init__(self, verbose=False, fig_dir='./', dimensions=2, **kwargs):
@@ -619,6 +621,76 @@ class Polytrope(Atmosphere):
                                                                       self.top_thermal_time))
         self.nu.set_scales(1, keep_data=True)
         self.chi.set_scales(1, keep_data=True)
+
+    def save_atmosphere_file(self, data_dir):
+        #This creates an output file that contains all of the useful atmospheric info at the beginning of the run
+        out_dir = data_dir + '/atmosphere/'
+        out_file = out_dir + 'atmosphere.h5'
+        if self.domain.dist.rank == 0:
+            if not os.path.exists('{:s}'.format(out_dir)):
+                os.mkdir('{:s}'.format(out_dir))
+            f = h5py.File('{:s}'.format(out_file), 'w')
+        indxs = [0]*self.dimensions
+        indxs[-1] = range(self.nz)
+        key_set = list(self.problem.parameters.keys())
+        extended_keys = ['chi','nu','del_chi','del_nu']
+        key_set.extend(extended_keys)
+        logger.debug("Outputing atmosphere parameters for {}".format(key_set))
+        for key in key_set:
+            # Figure out what type of data we're dealing with
+            if 'scale' in key:
+                continue
+            if key in extended_keys:
+                field_key = True
+            elif type(self.problem.parameters[key]) == Field:
+                field_key = True
+                self.problem.parameters[key].set_scales(1, keep_data=True)
+            else:
+                field_key = False
+
+            # Get the proper data
+            if field_key:
+                try:
+                    if key in extended_keys:
+                        self.problem.parameters[key+'_l'].require_layout(self.domain.dist.layouts[1])
+                        self.problem.parameters[key+'_r'].require_layout(self.domain.dist.layouts[1])
+                        array = self.problem.parameters[key+'_l'].data[indxs] +\
+                                self.problem.parameters[key+'_r'].data[indxs]
+                    else:
+                        self.problem.parameters[key].require_layout(self.domain.dist.layouts[1])
+                        array = self.problem.parameters[key].data[indxs]
+                except:
+                    raise
+                    logger.error("key error on atmosphere output {}".format(key))
+                    array = 0
+                if self.domain.dist.rank == 0:
+                    f[key] = array
+            elif self.domain.dist.rank == 0:
+                f[key] = self.problem.parameters[key]
+        
+        z_value = self.domain.bases[-1].grid(1)
+        if self.domain.dist.rank == 0:
+            f['z'] = z_value
+
+        if self.domain.dist.rank == 0:
+            f['dimensions']     = self.dimensions
+            if self.dimensions > 1:
+                f['nx']             = self.nx
+            if self.dimensions > 2:
+                f['ny']             = self.ny
+            f['nz']             = self.nz
+            f['m_ad']           = self.m_ad
+            f['m']              = self.m_ad - self.epsilon
+            f['epsilon']        = self.epsilon
+            f['n_rho_cz']       = self.n_rho_cz
+            f['rayleigh']       = self.Rayleigh
+            f['prandtl']        = self.Prandtl
+            f['aspect_ratio']   = self.aspect_ratio
+            f['atmosphere_name']= self.atmosphere_name
+            f['t_buoy']         = self.buoyancy_time
+            f['t_therm']        = self.thermal_time
+            f.close()
+
 
                       
 class Multitrope(Atmosphere):
