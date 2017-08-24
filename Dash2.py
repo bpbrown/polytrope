@@ -24,16 +24,12 @@ Options:
     --MHD                                Do MHD run
     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1] 
     --B0_amplitude=<B0_amplitude>        Strength of B0_field, scaled to isothermal sound speed at top of domain [default: 1]
-            
+
+    --root_dir=<root_dir>      Root directory to save data dir in [default: ./]    
     --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
 """
 import logging
-logger = logging.getLogger(__name__)
-
-import dedalus.public as de
-from dedalus.tools  import post
-from dedalus.extras import flow_tools
 
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                   MHD=False, MagneticPrandtl=1, B0_amplitude=1,
@@ -43,14 +39,70 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                       width=None,
                       single_chebyshev=True,
                       rk222=False,
-                      restart=None, data_dir='./', verbose=False):
+                      restart=None, data_dir='./', verbose=False, label=None):
     import numpy as np
     import time
     import os
+
+    def format_number(number, no_format_min=0.1, no_format_max=10):
+        if number > no_format_max or number < no_format_min:
+            try:
+                mantissa = "{:e}".format(number).split("+")[0].split("e")[0].rstrip("0") or "0"
+                power    = "{:e}".format(number).split("+")[1].lstrip("0") or "0"
+            except:
+                mantissa = "{:e}".format(number).split("-")[0].split("e")[0].rstrip("0") or "0"
+                power    = "{:e}".format(number).split("-")[1].lstrip("0") or "0"
+                power    = "-"+power
+            if mantissa[-1]==".":
+                mantissa = mantissa[:-1]
+            mantissa += "e"
+        else:
+            mantissa = "{:f}".format(number).rstrip("0") or "0"
+            if mantissa[-1]==".":
+                mantissa = mantissa[:-1]
+            power = ""
+        number_string = mantissa+power
+        return number_string
+             
+    data_dir = './'
+    # save data in directory named after script
+    if data_dir[-1] != '/':
+        data_dir += '/'
+    data_dir += sys.argv[0].split('.py')[0]
+    data_dir += "_nrhocz{}_Ra{}_S{}".format(format_number(n_rho_cz), format_number(Rayleigh), format_number(stiffness))
+    if width:
+        data_dir += "_erf{}".format(format_number(width))
+    if args['--MHD']:
+        data_dir+= '_MHD'
+    if label:
+        data_dir += "_{}".format(label)
+    data_dir += '/'
+
+    from dedalus.tools.config import config
+    
+    config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
+    config['logging']['file_level'] = 'DEBUG'
+
+    import mpi4py.MPI
+    if mpi4py.MPI.COMM_WORLD.rank == 0:
+        if not os.path.exists('{:s}/'.format(data_dir)):
+            os.makedirs('{:s}/'.format(data_dir))
+        logdir = os.path.join(data_dir,'logs')
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+    logger = logging.getLogger(__name__)
+    logger.info("saving run in: {}".format(data_dir))
+    
+    import dedalus.public as de
+    from dedalus.tools  import post
+    from dedalus.extras import flow_tools
+
+
+    from dedalus.core.future import FutureField
     from stratified_dynamics import multitropes
     from tools.checkpointing import Checkpoint
 
-    
+        
     initial_time = time.time()
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
@@ -228,28 +280,18 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
 if __name__ == "__main__":
     from docopt import docopt
     args = docopt(__doc__)
-    
     import sys
-    # save data in directory named after script
-    data_dir = sys.argv[0].split('.py')[0]
-    data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
+    
     if args['--width'] is not None:
         data_dir += "_erf{}".format(args['--width'])
         width = float(args['--width'])
     else:
         width = None
-    if args['--MHD']:
-        data_dir+= '_MHD'
-         
-    if args['--label'] is not None:
-        data_dir += "_{}".format(args['--label'])
-    data_dir += '/'
-    logger.info("saving run in: {}".format(data_dir))
-
+        
     nx =  args['--nx']
     if nx is not None:
         nx = int(nx)
-        
+            
     FC_convection(Rayleigh=float(args['--Rayleigh']),
                       Prandtl=float(args['--Prandtl']),
                       stiffness=float(args['--stiffness']),
@@ -262,7 +304,8 @@ if __name__ == "__main__":
                       nx=nx,
                       restart=(args['--restart']),
                       rk222=args['--rk222'],
-                      data_dir=data_dir,
+                      data_dir=args['--root_dir'],
                       verbose=args['--verbose'],
                       MHD=args['--MHD'],
-                      B0_amplitude=float(args['--B0_amplitude']))
+                      B0_amplitude=float(args['--B0_amplitude']),
+                      label=args['--label'])
