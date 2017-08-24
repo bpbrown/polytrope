@@ -22,6 +22,11 @@ Options:
     --rk222                    Use RK222 as timestepper
 
     --constant_Prandtl         Make Prandtl number constant with depth
+
+     --MHD                                Do MHD run
+     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1] 
+     --B0_amplitude=<B0_amplitude>        Strength of B0_field, scaled to isothermal sound speed at top of domain [default: 1]
+
             
     --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
@@ -34,6 +39,7 @@ from dedalus.tools  import post
 from dedalus.extras import flow_tools
 
 def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
+                  MHD=False, MagneticPrandtl=1, B0_amplitude=1,
                       n_rho_cz=1, n_rho_rz=5, 
                       nz_cz=128, nz_rz=128,
                       nx = None,
@@ -53,11 +59,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
 
-    oz = True
-    if oz:
-        constant_Prandtl=constant_Prandtl
-        stable_top=True
-        mixed_temperature_flux=True
+    constant_Prandtl=True
+    stable_top=True
+    mixed_temperature_flux=True
         
     # Set domain
     if nx is None:
@@ -69,13 +73,23 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
     else:
         nz = nz_rz+nz_cz
         nz_list = [nz_rz, nz_cz]
-
-    atmosphere = multitropes.FC_multitrope(nx=nx, nz=nz_list, stiffness=stiffness, 
-                                         n_rho_cz=n_rho_cz, n_rho_rz=n_rho_rz, 
-                                         verbose=verbose, width=width,
-                                         constant_Prandtl=constant_Prandtl,
-                                         stable_top=stable_top,)
-    atmosphere.set_IVP_problem(Rayleigh, Prandtl)
+    
+    eqns_dict = {'stiffness' : stiffness,
+                 'nx' : nx,
+                 'nz' : nz_list, 
+                 'n_rho_cz' : n_rho_cz,
+                 'n_rho_rz' : n_rho_rz,
+                 'verbose'   : verbose,
+                 'width'    : width,
+                 'constant_Prandtl' : constant_Prandtl,
+                 'stable_top' : stable_top}
+    if MHD:
+         atmosphere = multitropes.FC_MHD_multitrope_guidefield_2d(**eqns_dict)
+         
+         atmosphere.set_IVP_problem(Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude=B0_amplitude)
+    else:
+         atmosphere = multitropes.FC_multitrope(**eqns_dict)      
+         atmosphere.set_IVP_problem(Rayleigh, Prandtl)
         
     atmosphere.set_BC()
     problem = atmosphere.get_problem()
@@ -134,11 +148,15 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                          max_change=1.5, min_change=0.5, max_dt=max_dt, threshold=0.1)
 
     CFL.add_velocities(('u', 'w'))
-
+    if MHD:
+        CFL.add_velocities(('Bx/sqrt(4*pi*rho_full)', 'Bz/sqrt(4*pi*rho_full)'))
+        
     # Flow properties
     flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
     flow.add_property("Re_rms", name='Re')
-    
+    if MHD:
+        flow.add_property("abs(dx(Bx) + dz(Bz))", name='divB')
+        
     try:
         start_time = time.time()
         while solver.ok:
@@ -154,6 +172,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                     solver.ok = False
                 log_string = 'Iteration: {:5d}, Time: {:8.3e} ({:8.3e}), dt: {:8.3e}, '.format(solver.iteration, solver.sim_time, solver.sim_time/atmosphere.buoyancy_time, dt)
                 log_string += 'Re: {:8.3e}/{:8.3e}'.format(Re_avg, flow.max('Re'))
+                if MHD:
+                     log_string += ', divB: {:8.3e}/{:8.3e}'.format(flow.grid_average('divB'), flow.max('divB'))
+
                 logger.info(log_string)
     except:
         logger.error('Exception raised, triggering end of main loop.')
@@ -224,7 +245,9 @@ if __name__ == "__main__":
         width = float(args['--width'])
     else:
         width = None
-        
+    if args['--MHD']:
+        data_dir+= '_MHD'
+         
     if args['--label'] is not None:
         data_dir += "_{}".format(args['--label'])
     data_dir += '/'
@@ -248,4 +271,6 @@ if __name__ == "__main__":
                       rk222=args['--rk222'],
                       data_dir=data_dir,
                       verbose=args['--verbose'],
-                      constant_Prandtl=args['--constant_Prandtl'])
+                      MHD=args['--MHD'],
+                      constant_Prandtl=args['--constant_Prandtl'],
+                      B0_amplitude=float(args['--B0_amplitude']))

@@ -26,8 +26,8 @@ class Equations():
         if not isinstance(nz, list):
             nz = [nz]
         if not isinstance(Lz, list):
-            Lz = [Lz]   
-
+            Lz = [Lz]
+            
         if len(nz)>1:
             logger.info("Setting compound basis in vertical (z) direction")
             z_basis_list = []
@@ -1291,9 +1291,10 @@ class FC_equations_rxn_3d(FC_equations_rxn, FC_equations_3d):
         self.problem.add_equation("(scale)*(dt(G) - L_diff_G + k_chem*rho0*G) = (scale)*(-UdotGrad(G,G_z) + R_diff_G + k_chem*rho0*G_eq)")        
         
 class FC_MHD_equations(FC_equations):
-    def __init__(self):
-        self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD, 2.5D'
-        self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1','Ax','Ay','Az','Bx','By','Phi']
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.equation_set += ' with MHD'
+        self.variables.extend(['Ax','Ay','Az','Bx','By','Phi'])
         
     def _set_subs(self):
         self.problem.substitutions['eta_r'] = '0'
@@ -1302,7 +1303,7 @@ class FC_MHD_equations(FC_equations):
         else:
             self.problem.substitutions['eta']  = '(eta_l)'
             
-        super(FC_MHD_equations, self)._set_subs()
+        super()._set_subs()
         
         self.viscous_term_v_l = " nu_l*(Lap(v, v_z) )" # work through this properly
         self.problem.substitutions['L_visc_v'] = self.viscous_term_v
@@ -1321,7 +1322,7 @@ class FC_MHD_equations(FC_equations):
         self.problem.substitutions['J_squared'] = "(Jx**2 + Jy**2 + Jz**2)"
 
     def _set_diffusivities(self, Rayleigh, Prandtl, MagneticPrandtl, **kwargs):
-        super(FC_MHD_equations, self)._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
+        super()._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl, **kwargs)
         self.eta = self._new_ncc()
         self.necessary_quantities['eta'] = self.eta
         self.eta.set_scales(self.domain.dealias, keep_data=False)
@@ -1329,9 +1330,67 @@ class FC_MHD_equations(FC_equations):
         self.eta['g'] = self.nu['g']/MagneticPrandtl
 
     def _set_parameters(self):
-        super(FC_MHD_equations, self)._set_parameters()
+        super()._set_parameters()
         self.problem.parameters['eta_l'] = self.eta
                 
+    def set_BC(self, **kwargs):
+        
+        super().set_BC(**kwargs)
+
+        self.problem.add_bc( "left(v_z) = 0")
+        self.problem.add_bc("right(v_z) = 0")
+ 
+        # perfectly conducting boundary conditions.
+        self.problem.add_bc("left(Ax) = 0")
+        self.problem.add_bc("left(Ay) = 0")
+        self.problem.add_bc("left(Az) = 0")
+        self.problem.add_bc("right(Ax) = 0")
+        self.problem.add_bc("right(Ay) = 0")
+        self.problem.add_bc("right(Az) = 0", condition="(nx != 0)")
+        self.problem.add_bc("right(Phi) = 0", condition="(nx == 0)")
+
+        self.dirichlet_set.append('Ax')
+        self.dirichlet_set.append('Ay')
+        self.dirichlet_set.append('Az')
+        self.dirichlet_set.append('Phi')
+        for key in self.dirichlet_set:
+            self.problem.meta[key]['z']['dirichlet'] = True
+        
+    def set_IC(self, solver, A0=1e-6, **kwargs):
+        super().set_IC(solver, A0=A0, **kwargs)
+    
+        self.Bx_IC = solver.state['Bx']
+        self.Ay_IC = solver.state['Ay']
+
+        # not in HS balance
+        B0 = 1
+        self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
+
+        self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
+        self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
+        self.Ay_IC['g'] *= -1
+        
+    def initialize_output(self, solver, data_dir, **kwargs):
+        analysis_tasks = super().initialize_output(solver, data_dir, **kwargs)
+
+        analysis_slice = analysis_tasks['slice']
+        analysis_slice.add_task("Jy", name="Jy")
+        analysis_slice.add_task("Bx", name="Bx")
+        analysis_slice.add_task("Bz", name="Bz")
+        analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
+        analysis_slice.add_task("J_squared", name="J_squared")
+            
+        analysis_profile = analysis_tasks['profile']
+        analysis_profile.add_task("plane_avg(ME)", name="ME")
+        analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
+
+        analysis_scalar = analysis_tasks['scalar']
+        analysis_scalar.add_task("vol_avg(ME)", name="ME")
+        analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
+
+        return analysis_tasks
+
+class FC_MHD_equations_2d(FC_MHD_equations):
     def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, split_diffusivities=False, **kwargs):
         # DOES NOT YET INCLUDE Ohmic heating.
 
@@ -1367,71 +1426,12 @@ class FC_MHD_equations(FC_equations):
         self.problem.add_equation("dt(Ay) + eta*Jy                      =  w*Bx - u*Bz")
         self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi)            =  u*By - v*Bx")
         self.problem.add_equation("dx(Ax) + dz(Az) = 0")
-        
-        logger.info("using nonlinear EOS for entropy, via substitution")
-    
-    def set_BC(self, **kwargs):
-        
-        super(FC_MHD_equations, self).set_BC(**kwargs)
-
-        self.problem.add_bc( "left(v_z) = 0")
-        self.problem.add_bc("right(v_z) = 0")
- 
-        # perfectly conducting boundary conditions.
-        self.problem.add_bc("left(Ax) = 0")
-        self.problem.add_bc("left(Ay) = 0")
-        self.problem.add_bc("left(Az) = 0")
-        self.problem.add_bc("right(Ax) = 0")
-        self.problem.add_bc("right(Ay) = 0")
-        self.problem.add_bc("right(Az) = 0", condition="(nx != 0)")
-        self.problem.add_bc("right(Phi) = 0", condition="(nx == 0)")
-
-        self.dirichlet_set.append('Ax')
-        self.dirichlet_set.append('Ay')
-        self.dirichlet_set.append('Az')
-        self.dirichlet_set.append('Phi')
-        for key in self.dirichlet_set:
-            self.problem.meta[key]['z']['dirichlet'] = True
-        
-    def set_IC(self, solver, A0=1e-6, **kwargs):
-        super(FC_MHD_equations, self).set_IC(solver, A0=A0, **kwargs)
-    
-        self.Bx_IC = solver.state['Bx']
-        self.Ay_IC = solver.state['Ay']
-
-        # not in HS balance
-        B0 = 1
-        self.Bx_IC.set_scales(self.domain.dealias, keep_data=True)
-
-        self.Bx_IC['g'] = A0*B0*np.cos(np.pi*self.z_dealias/self.Lz)
-        self.Bx_IC.antidifferentiate('z',('left',0), out=self.Ay_IC)
-        self.Ay_IC['g'] *= -1
-        
-    def initialize_output(self, solver, data_dir, **kwargs):
-        analysis_tasks = super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
-
-        analysis_slice = analysis_tasks['slice']
-        analysis_slice.add_task("Jy", name="Jy")
-        analysis_slice.add_task("Bx", name="Bx")
-        analysis_slice.add_task("Bz", name="Bz")
-        analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
-        analysis_slice.add_task("J_squared", name="J_squared")
-            
-        analysis_profile = analysis_tasks['profile']
-        analysis_profile.add_task("plane_avg(ME)", name="ME")
-        analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
-
-        analysis_scalar = analysis_tasks['scalar']
-        analysis_scalar.add_task("vol_avg(ME)", name="ME")
-        analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
-
-        return analysis_tasks
 
 
 class FC_MHD_equations_guidefield(FC_MHD_equations):
-    def __init__(self):
-        super(FC_MHD_equations_guidefield, self).__init__()
-        self.equation_set = 'Fully Compressible (FC) Navier-Stokes with MHD, 2.5D with guide field'
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.equation_set += ' with guide field'
 
     def _set_subs(self):
         super(FC_MHD_equations_guidefield, self)._set_subs()
@@ -1454,12 +1454,55 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.parameters['Jy_0'] = 0
         self.problem.parameters['Jz_0'] = 0
         logger.info("Constant Bz guidefield, amplitude {}".format(guidefield_amplitude))
+                        
+    def initialize_output(self, solver, data_dir, **kwargs):
+        analysis_tasks = super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
+        analysis_slice = analysis_tasks['slice']
+        analysis_slice.add_task("Jy", name="Jy")
+        analysis_slice.add_task("Bx", name="Bx")
+        analysis_slice.add_task("Bz", name="Bz")
+        analysis_slice.add_task("Ay", name="Ay")
+        analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
 
-    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude, **kwargs):
+        analysis_slice.add_task("J_squared", name="J_squared")
+            
+        analysis_profile = analysis_tasks['profile']
+        analysis_profile.add_task("plane_avg(ME)", name="ME")
+        #analysis_profile.add_task("plane_avg(ME_0)", name="ME_0")
+        analysis_profile.add_task("plane_avg(ME_1)", name="ME_1")
+
+        analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
+        #analysis_profile.add_task("plane_avg(J_squared_0)", name="J_squared_0")
+        analysis_profile.add_task("plane_avg(J_squared_1)", name="J_squared_1")
+
+        analysis_profile.add_task("plane_avg(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full))", name="V_alfven_squared")
+        analysis_profile.add_task("plane_avg(sqrt(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full)/(T1+T0)))", name="Ma_alfven")
+
+        analysis_scalar = analysis_tasks['scalar']
+        analysis_scalar.add_task("vol_avg(ME)", name="ME")
+        #analysis_scalar.add_task("vol_avg(ME_0)", name="ME_0")
+        analysis_scalar.add_task("vol_avg(ME_1)", name="ME_1")
+        
+        analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
+        #analysis_scalar.add_task("vol_avg(J_squared_0)", name="J_squared_0")
+        analysis_scalar.add_task("vol_avg(J_squared_1)", name="J_squared_1")
+
+        analysis_scalar.add_task("vol_avg(abs(dx(Bx) + dz(Bz)))", name="divB")
+        analysis_scalar.add_task("vol_avg(abs(dx(Ax) + dz(Az)))", name="divA")
+        
+        return analysis_tasks
+
+class FC_equations_MHD_guidefield_2d(FC_MHD_equations_guidefield, FC_equations_2d):
+    def __init__(self, **kwargs):
+        FC_equations_2d.__init__(self,**kwargs)
+        FC_MHD_equations_guidefield.__init__(self)
+
+    def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, guidefield_amplitude, split_diffusivities=False,**kwargs):
         # DOES NOT YET INCLUDE Ohmic heating
         # Curently assumes guide field is Bz only and constant;
         # as such it is characterized by a single value (guidefield amplitude)
+        self.split_diffusivities=split_diffusivities
         self._set_diffusivities(Rayleigh, Prandtl, MagneticPrandtl, **kwargs)
         self._set_parameters(guidefield_amplitude)
         self._set_subs()
@@ -1505,44 +1548,7 @@ class FC_MHD_equations_guidefield(FC_MHD_equations):
         self.problem.add_equation("dt(Ay) + eta*Jy           - (w*Bx_0 - u*Bz_0) =  w*Bx - u*Bz - eta*Jy_0")
         self.problem.add_equation("dt(Az) + eta*Jz + dz(Phi) - (u*By_0 - v*Bx_0) =  u*By - v*Bx - eta*Jz_0")
         self.problem.add_equation("dx(Ax) +          dz(Az) = 0")
-                        
-    def initialize_output(self, solver, data_dir, **kwargs):
-        analysis_tasks = super(FC_MHD_equations, self).initialize_output(solver, data_dir, **kwargs)
 
-        analysis_slice = analysis_tasks['slice']
-        analysis_slice.add_task("Jy", name="Jy")
-        analysis_slice.add_task("Bx", name="Bx")
-        analysis_slice.add_task("Bz", name="Bz")
-        analysis_slice.add_task("Ay", name="Ay")
-        analysis_slice.add_task("dx(Bx) + dz(Bz)", name="divB")
-
-        analysis_slice.add_task("J_squared", name="J_squared")
-            
-        analysis_profile = analysis_tasks['profile']
-        analysis_profile.add_task("plane_avg(ME)", name="ME")
-        #analysis_profile.add_task("plane_avg(ME_0)", name="ME_0")
-        analysis_profile.add_task("plane_avg(ME_1)", name="ME_1")
-
-        analysis_profile.add_task("plane_avg(J_squared)", name="J_squared")
-        #analysis_profile.add_task("plane_avg(J_squared_0)", name="J_squared_0")
-        analysis_profile.add_task("plane_avg(J_squared_1)", name="J_squared_1")
-
-        analysis_profile.add_task("plane_avg(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full))", name="V_alfven_squared")
-        analysis_profile.add_task("plane_avg(sqrt(((Bx + Bx_0)**2 + (By + By_0)**2 + (Bz + Bz_0)**2)/(4*pi*rho_full)/(T1+T0)))", name="Ma_alfven")
-
-        analysis_scalar = analysis_tasks['scalar']
-        analysis_scalar.add_task("vol_avg(ME)", name="ME")
-        #analysis_scalar.add_task("vol_avg(ME_0)", name="ME_0")
-        analysis_scalar.add_task("vol_avg(ME_1)", name="ME_1")
-        
-        analysis_scalar.add_task("vol_avg(J_squared)", name="J_squared")
-        #analysis_scalar.add_task("vol_avg(J_squared_0)", name="J_squared_0")
-        analysis_scalar.add_task("vol_avg(J_squared_1)", name="J_squared_1")
-
-        analysis_scalar.add_task("vol_avg(abs(dx(Bx) + dz(Bz)))", name="divB")
-        analysis_scalar.add_task("vol_avg(abs(dx(Ax) + dz(Az)))", name="divA")
-        
-        return analysis_tasks
 
 # needs to be tested again and double-checked
 class AN_equations(Equations):

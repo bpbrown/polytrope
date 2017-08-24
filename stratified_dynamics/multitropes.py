@@ -34,10 +34,10 @@ class FC_multitrope(FC_equations_2d, Multitrope):
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
             # set taper safely in the mid-CZ to avoid leakage of coeffs into RZ chebyshev coeffs
-            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
+            taper = 1-self.match_Phi_multi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
         else:
-            taper = self.match_Phi(z_dealias, center=self.Lz_cz)
+            taper = self.match_Phi_multi(z_dealias, center=self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
         # this will broadcast power back into relatively high Tz; consider widening taper.
@@ -234,14 +234,14 @@ class FC_MHD_multitrope(FC_MHD_equations, Multitrope):
         logger.info("Starting with tapered T1 perturbations of amplitude A0*epsilon = {:g}".format(A0*self.epsilon))
 
             
-class FC_MHD_multitrope_guidefield(FC_MHD_equations_guidefield, Multitrope):
-    def __init__(self, *args, **kwargs):
-        super(FC_MHD_multitrope_guidefield, self).__init__() 
+class FC_MHD_multitrope_guidefield_2d(FC_equations_MHD_guidefield_2d, Multitrope):
+    def __init__(self, *args, dimensions=2, **kwargs):
+        super(FC_MHD_multitrope_guidefield_2d, self).__init__(dimensions=dimensions) 
         Multitrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
     def set_equations(self, *args, **kwargs):
-        super(FC_MHD_multitrope_guidefield, self).set_equations(*args, **kwargs)
+        super().set_equations(*args, **kwargs)
     
     def set_IC(self, solver, A0=1e-3, **kwargs):
         # initial conditions
@@ -254,10 +254,10 @@ class FC_MHD_multitrope_guidefield(FC_MHD_equations_guidefield, Multitrope):
         z_dealias = self.domain.grid(axis=1, scales=self.domain.dealias)
         if self.stable_bottom:
             # set taper safely in the mid-CZ to avoid leakage of coeffs into RZ chebyshev coeffs
-            taper = 1-self.match_Phi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
+            taper = 1-self.match_Phi_multi(z_dealias, center=(self.Lz_rz+self.Lz_cz/2), width=0.1*self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias-self.Lz_rz)/self.Lz_cz)
         else:
-            taper = self.match_Phi(z_dealias, center=self.Lz_cz)
+            taper = self.match_Phi_multi(z_dealias, center=self.Lz_cz)
             taper *= np.sin(np.pi*(z_dealias)/self.Lz_cz)
 
         # this will broadcast power back into relatively high Tz; consider widening taper.

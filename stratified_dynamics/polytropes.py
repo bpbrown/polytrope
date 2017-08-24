@@ -82,7 +82,7 @@ class FC_polytrope_rxn_3d(FC_equations_rxn_3d, Polytrope):
            
 class FC_MHD_polytrope(FC_MHD_equations, Polytrope):
     def __init__(self, *args, **kwargs):
-        super(FC_MHD_polytrope, self).__init__() 
+        super(FC_MHD_polytrope, self).__init__(dimensions=dimensions) 
         Polytrope.__init__(self, *args, **kwargs)
         logger.info("solving {} in a {} atmosphere".format(self.equation_set, self.atmosphere_name))
 
