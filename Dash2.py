@@ -3,12 +3,20 @@ Dedalus script for 2D compressible convection in a polytrope,
 with 3.5 density scale heights of stratification.
 
 Usage:
+    Dash2.py [options] bootstrap
     Dash2.py [options]
 
 Options:
     --Rayleigh=<Rayleigh>      Rayleigh number [default: 1e6]
     --Prandtl=<Prandtl>        Prandtl number = nu/kappa [default: 1]
     --stiffness=<stiffness>    Stiffness of radiative/convective interface [default: 3]
+    --m_rz=<m_rz>              Polytropic index of stable layer [default: 3]
+    --gamma=<gamma>            Gamma of ideal gas (cp/cv) [default: 5/3]
+
+    --MHD                                Do MHD run
+    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1] 
+    --B0_amplitude=<B0_amplitude>        Strength of B0_field, scaled to isothermal sound speed at top of domain [default: 1]
+    
     --restart=<restart_file>   Restart from checkpoint
     --nz_rz=<nz_rz>            Vertical z (chebyshev) resolution in stable region   [default: 128]
     --nz_cz=<nz_cz>            Vertical z (chebyshev) resolution in unstable region [default: 128]
@@ -17,33 +25,61 @@ Options:
     --n_rho_cz=<n_rho_cz>      Density scale heights across unstable layer [default: 1]
     --n_rho_rz=<n_rho_rz>      Density scale heights across stable layer   [default: 5]
 
-    --width=<width>            Width of erf transition between two polytropes
+    --run_time=<run_time>                Run time, in hours [default: 23.5]
+    --run_time_buoy=<run_time_buoy>      Run time, in buoyancy times
+    --run_time_iter=<run_time_iter>      Run time, number of iterations; if not set, n_iter=np.inf
+
+    
+    --fixed_flux               Fixed flux thermal BCs
+    --dynamic_diffusivities    If flagged, use equations formulated in terms of dynamic diffusivities (μ,κ)
 
     --rk222                    Use RK222 as timestepper
 
-    --MHD                                Do MHD run
-    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1] 
-    --B0_amplitude=<B0_amplitude>        Strength of B0_field, scaled to isothermal sound speed at top of domain [default: 1]
-
+    --superstep                Superstep equations by using average rather than actual vertical grid spacing
+    --dense                    Oversample matching region with extra chebyshev domain
+    --nz_dense=<nz_dense>      Vertical z (chebyshev) resolution in oversampling region   [default: 64]
+    
+    --width=<width>            Width of erf transition between two polytropes
+    
     --root_dir=<root_dir>      Root directory to save data dir in [default: ./]    
     --label=<label>            Additional label for run output directory
+    --out_cadence=<out_cad>    The fraction of a buoyancy time to output data at [default: 0.1]
+    --writes=<writes>          Writes per file [default: 20]
+    --no_coeffs                If flagged, coeffs will not be output
+    --no_join                  If flagged, skip join operation at end of run
+
     --verbose                  Produce diagnostic plots
+
+    --init_file=<init_file>    The equilibrated, low Ra run from which the bootstrap process begins
+    --ra_end=<ra_end>          Ending Rayleigh number [default: 1e6]
+    --bsp_nx=<bsp_nx>          If supplied, a list of length equal to the number of steps giving x resolutions
+    --bsp_nz=<bsp_nz>          If supplied, a list of length equal to the number of steps giving z resolutions
+    --bsp_step=<bsp_step> The time in buoyancy  [default: 50.]
 """
 import logging
+import numpy as np
+import time
+import os
+import sys
+from fractions import Fraction
 
-def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
+def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3, m_rz=3, gamma=5/3,
                   MHD=False, MagneticPrandtl=1, B0_amplitude=1,
-                      n_rho_cz=1, n_rho_rz=5, 
-                      nz_cz=128, nz_rz=128,
-                      nx = None,
-                      width=None,
-                      single_chebyshev=True,
-                      rk222=False,
-                      restart=None, data_dir='./', verbose=False, label=None):
-    import numpy as np
-    import time
-    import os
-
+                  n_rho_cz=1, n_rho_rz=5, 
+                  nz_cz=128, nz_rz=128,
+                  nx = None,
+                  width=None,
+                  single_chebyshev=False,
+                  rk222=False,
+                  superstep=False,
+                  dense=False, nz_dense=64,
+                  oz=False,
+                  fixed_flux=False,
+                  run_time=23.5, run_time_buoyancies=np.inf, run_time_iter=np.inf,
+                  dynamic_diffusivities=False,
+                  max_writes=20,out_cadence=0.1, no_coeffs=False, no_join=False,
+                  restart=None, data_dir='./', verbose=False, label=None):
+    
     def format_number(number, no_format_min=0.1, no_format_max=10):
         if number > no_format_max or number < no_format_min:
             try:
@@ -102,6 +138,7 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
     from stratified_dynamics import multitropes
     from tools.checkpointing import Checkpoint
 
+    checkpoint_min = 30
         
     initial_time = time.time()
 
@@ -130,7 +167,9 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                  'verbose'   : verbose,
                  'width'    : width,
                  'constant_Prandtl' : constant_Prandtl,
-                 'stable_top' : stable_top}
+                 'stable_top' : stable_top,
+                 'gamma': gamma,
+                 'm_rz':m_rz}
     if MHD:
          atmosphere = multitropes.FC_MHD_multitrope_guidefield_2d(**eqns_dict)
          
@@ -164,7 +203,6 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
         mode = "append"
 
     checkpoint = Checkpoint(data_dir)
-    checkpoint.set_checkpoint(solver, wall_dt=1800, mode=mode)
 
     # initial conditions
     if restart is None:
@@ -174,21 +212,23 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
         logger.info("restarting from {}".format(restart))
         dt = checkpoint.restart(restart, solver)
         
+    checkpoint.set_checkpoint(solver, wall_dt=checkpoint_min*60, mode=mode)
+        
     logger.info("thermal_time = {:g}, top_thermal_time = {:g}".format(atmosphere.thermal_time, atmosphere.top_thermal_time))
     
     max_dt = atmosphere.min_BV_time 
-    max_dt = atmosphere.buoyancy_time*0.25
+    max_dt = atmosphere.buoyancy_time*out_cadence
     if dt is None: dt = max_dt
     
     report_cadence = 1
-    output_time_cadence = 0.1*atmosphere.buoyancy_time
-    solver.stop_sim_time = np.inf
-    solver.stop_iteration= np.inf
-    solver.stop_wall_time = 23.*3600
-
+    output_time_cadence = out_cadence*atmosphere.buoyancy_time
+    solver.stop_sim_time  = solver.sim_time + run_time_buoyancies*atmosphere.buoyancy_time
+    solver.stop_iteration = solver.iteration + run_time_iter
+    solver.stop_wall_time = run_time*3600
+    
     logger.info("output cadence = {:g}".format(output_time_cadence))
 
-    analysis_tasks = atmosphere.initialize_output(solver, data_dir, sim_dt=output_time_cadence)
+    analysis_tasks = atmosphere.initialize_output(solver, data_dir, coeffs_output=not(no_coeffs), sim_dt=output_time_cadence, max_writes=max_writes, mode=mode)
 
     
     cfl_cadence = 1
@@ -278,10 +318,11 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
             print('-' * 40)
 
 if __name__ == "__main__":
+    from bootstrap import bootstrap
     from docopt import docopt
     args = docopt(__doc__)
-    import sys
-    
+    logger = logging.getLogger(__name__)
+
     if args['--width'] is not None:
         data_dir += "_erf{}".format(args['--width'])
         width = float(args['--width'])
@@ -291,21 +332,63 @@ if __name__ == "__main__":
     nx =  args['--nx']
     if nx is not None:
         nx = int(nx)
-            
-    FC_convection(Rayleigh=float(args['--Rayleigh']),
-                      Prandtl=float(args['--Prandtl']),
-                      stiffness=float(args['--stiffness']),
-                      n_rho_cz=float(args['--n_rho_cz']),
-                      n_rho_rz=float(args['--n_rho_rz']),
-                      nz_rz=int(args['--nz_rz']),
-                      nz_cz=int(args['--nz_cz']),
-                      single_chebyshev=args['--single_chebyshev'],
-                      width=width,
-                      nx=nx,
-                      restart=(args['--restart']),
-                      rk222=args['--rk222'],
-                      data_dir=args['--root_dir'],
-                      verbose=args['--verbose'],
-                      MHD=args['--MHD'],
-                      B0_amplitude=float(args['--B0_amplitude']),
-                      label=args['--label'])
+
+    run_time_buoy = args['--run_time_buoy']
+    if run_time_buoy != None:
+        run_time_buoy = float(run_time_buoy)
+    else:
+        run_time_buoy = np.inf
+        
+    run_time_iter = args['--run_time_iter']
+    if run_time_iter != None:
+        run_time_iter = int(float(run_time_iter))
+    else:
+        run_time_iter = np.inf
+        
+    kwargs = {"Rayleigh":float(args['--Rayleigh']),
+              "Prandtl":float(args['--Prandtl']),
+              "stiffness":float(args['--stiffness']),
+              "m_rz":float(args['--m_rz']),
+              "gamma":float(Fraction(args['--gamma'])),
+              "MHD":args['--MHD'],
+              "MagneticPrandtl":float(args['--MagneticPrandtl']),
+              "B0_amplitude":float(args['--B0_amplitude']),
+              "n_rho_cz":float(args['--n_rho_cz']),
+              "n_rho_rz":float(args['--n_rho_rz']),
+              "nz_rz":int(args['--nz_rz']),
+              "nz_cz":int(args['--nz_cz']),
+              "single_chebyshev":args['--single_chebyshev'],
+              "width":width,
+              "nx":nx,
+              "restart":(args['--restart']),
+              "data_dir":args['--root_dir'],
+              "verbose":args['--verbose'],
+              "no_coeffs":args['--no_coeffs'],
+              "no_join":args['--no_join'],
+              "out_cadence":float(args['--out_cadence']),
+              "fixed_flux":args['--fixed_flux'],
+              "dynamic_diffusivities":args['--dynamic_diffusivities'],
+              "dense":args['--dense'],
+              "nz_dense":int(args['--nz_dense']),
+              "rk222":args['--rk222'],
+              "max_writes":int(float(args['--writes'])),
+              "superstep":args['--superstep'],
+              "run_time":float(args['--run_time']),
+              "run_time_buoyancies":run_time_buoy,
+              "run_time_iter":run_time_iter,
+              "label":args['--label']}
+    
+    if args['bootstrap']:
+        logger.info("Bootstrapping...")
+        if args['--init_file']:
+            init_file = args['--init_file']
+        else:
+            raise ValueError("Must specify a starting file if bootstrapping")
+        ra_end = float(args['--ra_end'])
+        
+        bsp_step_time = float(args['--bsp_step'])
+        bsp_nx = args['--bsp_nx']
+        bsp_nz = args['--bsp_nz']
+        bootstrap(init_file,ra_end,kwargs,nx=bsp_nx,nz=bsp_nz,step_run_time=bsp_step_time)
+    else:
+        FC_convection(**kwargs)
