@@ -571,8 +571,6 @@ class FC_equations_2d(FC_equations):
         
     def _set_subs(self):
         # 2-D specific subs
-        self.problem.substitutions['v']           = '(0)'
-        self.problem.substitutions['v_z']         = '(0)'
         self.problem.substitutions['dy(A)']       = '(0*A)'
         
         # analysis operators
@@ -595,6 +593,9 @@ class FC_equations_2d(FC_equations):
             self.problem.parameters['j'] = 1j
             self.problem.substitutions['dx(f)'] = "j*kx*(f)"
             self.problem.parameters['kx'] = kx
+            
+        self.problem.substitutions['v']           = '(0)'
+        self.problem.substitutions['v_z']         = '(0)'
 
         self.split_diffusivities = split_diffusivities
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
@@ -1068,6 +1069,9 @@ class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
                       kx = 0, 
                       split_diffusivities=False):
 
+        self.problem.substitutions['v']           = '(0)'
+        self.problem.substitutions['v_z']         = '(0)'
+
         self.split_diffusivities = split_diffusivities
 
         self._set_diffusivities(Rayleigh=Rayleigh, Prandtl=Prandtl,
@@ -1181,7 +1185,7 @@ class FC_MHD_equations(FC_equations):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.equation_set += ' with MHD'
-        self.variables.extend(['Ax','Ay','Az','Bx','By','Phi'])
+        self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1', 'Ax','Ay','Az','Bx','By','Phi']
         
     def _set_subs(self):
         self.problem.substitutions['eta_r'] = '0'
@@ -1191,12 +1195,7 @@ class FC_MHD_equations(FC_equations):
             self.problem.substitutions['eta']  = '(eta_l)'
             
         super()._set_subs()
-        
-        self.viscous_term_v_l = " nu_l*(Lap(v, v_z) )" # work through this properly
-        self.problem.substitutions['L_visc_v'] = self.viscous_term_v
-        self.nonlinear_viscous_v =  " 0 " # work through this properly --> was: " nu*(dx(ln_rho1)*σxy + dy(ln_rho1)*σyy + dz(ln_rho1)*σyz)"
-        self.problem.substitutions['R_visc_v'] = self.nonlinear_viscous_v
-        
+                
         self.problem.parameters['pi'] = np.pi
         self.problem.substitutions['Bz'] = '(dx(Ay) )'
         self.problem.substitutions['Jx'] = '( -dz(By))'
@@ -1277,7 +1276,23 @@ class FC_MHD_equations(FC_equations):
 
         return analysis_tasks
 
-class FC_MHD_equations_2d(FC_MHD_equations):
+class FC_MHD_equations_2d(FC_MHD_equations, FC_equations_2d):
+    def _set_subs(self):
+        # 2-D specific subs
+        self.problem.substitutions['dy(A)']       = '(0*A)'
+        
+        # analysis operators
+        if self.dimensions == 1:
+            self.problem.substitutions['plane_avg(A)'] = '(A)'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lz'
+        else:
+            self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
+            self.problem.substitutions['vol_avg(A)']   = 'integ(A)/Lx/Lz'
+
+        self._set_operators()
+        self._set_diffusion_subs()
+        super(FC_MHD_equations_2d, self)._set_subs()
+    
     def set_equations(self, Rayleigh, Prandtl, MagneticPrandtl, split_diffusivities=False, **kwargs):
         # DOES NOT YET INCLUDE Ohmic heating.
 
@@ -1393,7 +1408,6 @@ class FC_equations_MHD_guidefield_2d(FC_MHD_equations_guidefield, FC_equations_2
         self._set_diffusivities(Rayleigh, Prandtl, MagneticPrandtl, **kwargs)
         self._set_parameters(guidefield_amplitude)
         self._set_subs()
-        
         self.problem.add_equation("dz(u) - u_z = 0")
         self.problem.add_equation("dz(v) - v_z = 0")
         self.problem.add_equation("dz(w) - w_z = 0")

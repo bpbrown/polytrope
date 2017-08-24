@@ -21,12 +21,9 @@ Options:
 
     --rk222                    Use RK222 as timestepper
 
-    --constant_Prandtl         Make Prandtl number constant with depth
-
-     --MHD                                Do MHD run
-     --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1] 
-     --B0_amplitude=<B0_amplitude>        Strength of B0_field, scaled to isothermal sound speed at top of domain [default: 1]
-
+    --MHD                                Do MHD run
+    --MagneticPrandtl=<MagneticPrandtl>  Magnetic Prandtl Number = nu/eta [default: 1] 
+    --B0_amplitude=<B0_amplitude>        Strength of B0_field, scaled to isothermal sound speed at top of domain [default: 1]
             
     --label=<label>            Additional label for run output directory
     --verbose                  Produce diagnostic plots
@@ -46,7 +43,6 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
                       width=None,
                       single_chebyshev=True,
                       rk222=False,
-                      constant_Prandtl=False,
                       restart=None, data_dir='./', verbose=False):
     import numpy as np
     import time
@@ -192,9 +188,8 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3,
         logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
         
         logger.info('beginning join operation')
-        if do_checkpointing:
-            logger.info(data_dir+'/checkpoint/')
-            post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
+        logger.info(data_dir+'/checkpoint/')
+        post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
 
         for task in analysis_tasks:
             logger.info(analysis_tasks[task].base_path)
@@ -238,8 +233,6 @@ if __name__ == "__main__":
     # save data in directory named after script
     data_dir = sys.argv[0].split('.py')[0]
     data_dir += "_nrhocz{}_Ra{}_S{}".format(args['--n_rho_cz'], args['--Rayleigh'], args['--stiffness'])
-    if args['--constant_Prandtl']:
-        data_dir+='_constPr'
     if args['--width'] is not None:
         data_dir += "_erf{}".format(args['--width'])
         width = float(args['--width'])
@@ -272,5 +265,4 @@ if __name__ == "__main__":
                       data_dir=data_dir,
                       verbose=args['--verbose'],
                       MHD=args['--MHD'],
-                      constant_Prandtl=args['--constant_Prandtl'],
                       B0_amplitude=float(args['--B0_amplitude']))
