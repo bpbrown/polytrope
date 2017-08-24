@@ -219,6 +219,11 @@ class FC_equations(Equations):
         self.problem.substitutions["σxz"] = "(dx(w) +  u_z )"
         self.problem.substitutions["σyz"] = "(dy(w) +  v_z )"
 
+        self.problem.substitutions['ω_x'] = '(dy(w) - v_z)'        
+        self.problem.substitutions['ω_y'] = '( u_z  - dx(w))'        
+        self.problem.substitutions['ω_z'] = '(dx(v) - dy(u))'        
+        self.problem.substitutions['enstrophy']   = '(ω_x**2 + ω_y**2 + ω_z**2)'
+
     def _set_diffusion_subs(self):        
         # define nu and chi for output
         if self.split_diffusivities:
@@ -566,8 +571,6 @@ class FC_equations_2d(FC_equations):
         
     def _set_subs(self):
         # 2-D specific subs
-        self.problem.substitutions['ω_y']         = '( u_z  - dx(w))'        
-        self.problem.substitutions['enstrophy']   = '(ω_y**2)'
         self.problem.substitutions['v']           = '(0)'
         self.problem.substitutions['v_z']         = '(0)'
         self.problem.substitutions['dy(A)']       = '(0*A)'
@@ -724,13 +727,7 @@ class FC_equations_3d(FC_equations):
         self.equation_set = 'Fully Compressible (FC) Navier-Stokes in 3-D'
         self.variables = ['u','u_z','v','v_z','w','w_z','T1', 'T1_z', 'ln_rho1']
     
-    def _set_subs(self, **kwargs):
-        # 3-D specific subs
-        self.problem.substitutions['ω_x'] = '(dy(w) - v_z)'        
-        self.problem.substitutions['ω_y'] = '( u_z  - dx(w))'        
-        self.problem.substitutions['ω_z'] = '(dx(v) - dy(u))'        
-        self.problem.substitutions['enstrophy']   = '(ω_x**2 + ω_y**2 + ω_z**2)'
-                    
+    def _set_subs(self, **kwargs):                    
         # analysis operators
         if self.dimensions != 1:
             self.problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
