@@ -854,7 +854,51 @@ class FC_equations_rxn(FC_equations):
     def __init__(self):
         self.equation_set += ' with chemical reactions'
         self.variables.extend(['C','C_z','G','G_z','f','f_z'])
+
+    def _set_diffusion_subs(self):
+        super()._set_diffusion_subs()
+        # define nu and chi for output
+        if self.split_diffusivities:
+            self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
+            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
+        else:
+            self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
+            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
+            
+        self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
+        self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
+        self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
+        self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
+        self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
+        self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
+            
+        if not self.constant_mu:
+            self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
+            self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
+                                       " + nu_chem_r *(f_z * dz(ln_rho1) + dx(f) * dx(ln_rho1) + dy(f) * dy(ln_rho1)) "
+            self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
+            self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
+                                       " + nu_chem_r *(C_z * dz(ln_rho1) + dx(C) * dx(ln_rho1) + dy(C) * dy(ln_rho1))"
+            self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
+            self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
+                                       " + nu_chem_r *(G_z * dz(ln_rho1) + dx(G) * dx(ln_rho1) + dy(G) * dy(ln_rho1))"
+                
+        self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
+        self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
+        self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
         
+        self.NL_diff_term_f = " nu_chem_l * (f_z * dz(ln_rho1) + dx(f) * dx(ln_rho1) + dy(f) * dy(ln_rho1))"
+        self.NL_diff_term_C = " nu_chem_l * (C_z * dz(ln_rho1) + dx(C) * dx(ln_rho1) + dy(C) * dy(ln_rho1))"
+        self.NL_diff_term_G = " nu_chem_l * (G_z * dz(ln_rho1) + dx(G) * dx(ln_rho1) + dy(G) * dy(ln_rho1)) "  
+        if self.split_diffusivities:
+            self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
+            self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
+            self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
+            
+        self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
+        self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
+        self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
+
     def _set_parameters(self):
         super(FC_equations_rxn, self)._set_parameters()
 
@@ -1021,50 +1065,6 @@ class FC_equations_rxn_2d(FC_equations_rxn, FC_equations_2d):
     def __init__(self, **kwargs):
         FC_equations_2d.__init__(self,**kwargs)
         FC_equations_rxn.__init__(self)
-        
-    def _set_diffusion_subs(self):
-        super()._set_diffusion_subs()
-        # define nu and chi for output
-        if self.split_diffusivities:
-            self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
-            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
-        else:
-            self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
-            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
-            
-        self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
-        self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
-        self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
-        self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
-        self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
-        self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
-            
-        if not self.constant_mu:
-            self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
-            self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
-                                       " + nu_chem_r * f_z * dz(ln_rho1) + nu_chem_r * dx(f) * dx(ln_rho1) "
-            self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
-            self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
-                                       " + nu_chem_r * C_z * dz(ln_rho1) + nu_chem_r * dx(C) * dx(ln_rho1) "
-            self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
-            self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
-                                       " + nu_chem_r * G_z * dz(ln_rho1) + nu_chem_r * dx(G) * dx(ln_rho1) "
-                
-        self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
-        self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
-        self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
-        
-        self.NL_diff_term_f = " nu_chem_l * f_z * dz(ln_rho1) + nu_chem_l * dx(f) * dx(ln_rho1) "
-        self.NL_diff_term_C = " nu_chem_l * C_z * dz(ln_rho1) + nu_chem_l * dx(C) * dx(ln_rho1) "
-        self.NL_diff_term_G = " nu_chem_l * G_z * dz(ln_rho1) + nu_chem_l * dx(G) * dx(ln_rho1) "  
-        if self.split_diffusivities:
-            self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
-            self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
-            self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
-            
-        self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
-        self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
-        self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
 
     def set_equations(self, Rayleigh, Prandtl, ChemicalPrandtl=1,
                       Qu_0=5e-8, phi_0=10,
@@ -1116,50 +1116,6 @@ class FC_equations_rxn_3d(FC_equations_rxn, FC_equations_3d):
         FC_equations_3d.__init__(self,**kwargs)
         FC_equations_rxn.__init__(self)
         
-    def _set_diffusion_subs(self):
-        super()._set_diffusion_subs()
-        # define nu and chi for output
-        if self.split_diffusivities:
-            self.problem.substitutions['nu_chem']  = '(nu_chem_l + nu_chem_r)'
-            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l + del_nu_chem_r)'
-        else:
-            self.problem.substitutions['nu_chem']  = '(nu_chem_l)'
-            self.problem.substitutions['del_nu_chem']  = '(del_nu_chem_l)'
-            
-        self.diffusion_term_f_l = " nu_chem_l*Lap(f,f_z) "
-        self.diffusion_term_f_r = " nu_chem_r*Lap(f,f_z) "
-        self.diffusion_term_C_l = " nu_chem_l*Lap(C,C_z) "
-        self.diffusion_term_C_r = " nu_chem_r*Lap(C,C_z) "
-        self.diffusion_term_G_l = " nu_chem_l*Lap(G,G_z) "
-        self.diffusion_term_G_r = " nu_chem_r*Lap(G,G_z) "
-            
-        if not self.constant_mu:
-            self.diffusion_term_f_l += " + nu_chem_l * f_z * del_ln_rho0 + f_z * del_nu_chem_l "
-            self.diffusion_term_f_r += " + nu_chem_r * f_z * del_ln_rho0 + f_z * del_nu_chem_r "+\
-                                       " + nu_chem_r *(f_z * dz(ln_rho1) + dx(f) * dx(ln_rho1) + dy(f) * dy(ln_rho1)) "
-            self.diffusion_term_C_l += " + nu_chem_l * C_z * del_ln_rho0 + C_z * del_nu_chem_l "
-            self.diffusion_term_C_r += " + nu_chem_r * C_z * del_ln_rho0 + C_z * del_nu_chem_r "+\
-                                       " + nu_chem_r *(C_z * dz(ln_rho1) + dx(C) * dx(ln_rho1) + dy(C) * dy(ln_rho1))"
-            self.diffusion_term_G_l += " + nu_chem_l * G_z * del_ln_rho0 + G_z * del_nu_chem_l "
-            self.diffusion_term_G_r += " + nu_chem_r * G_z * del_ln_rho0 + G_z * del_nu_chem_r "+\
-                                       " + nu_chem_r *(G_z * dz(ln_rho1) + dx(G) * dx(ln_rho1) + dy(G) * dy(ln_rho1))"
-                
-        self.problem.substitutions['L_diff_f'] = self.diffusion_term_f_l
-        self.problem.substitutions['L_diff_C'] = self.diffusion_term_C_l
-        self.problem.substitutions['L_diff_G'] = self.diffusion_term_G_l
-        
-        self.NL_diff_term_f = " nu_chem_l * (f_z * dz(ln_rho1) + dx(f) * dx(ln_rho1) + dy(f) * dy(ln_rho1))"
-        self.NL_diff_term_C = " nu_chem_l * (C_z * dz(ln_rho1) + dx(C) * dx(ln_rho1) + dy(C) * dy(ln_rho1))"
-        self.NL_diff_term_G = " nu_chem_l * (G_z * dz(ln_rho1) + dx(G) * dx(ln_rho1) + dy(G) * dy(ln_rho1)) "  
-        if self.split_diffusivities:
-            self.NL_diff_term_f += " + {}".format(self.diffusion_term_f_r)
-            self.NL_diff_term_C += " + {}".format(self.diffusion_term_C_r)
-            self.NL_diff_term_G += " + {}".format(self.diffusion_term_G_r)
-            
-        self.problem.substitutions['R_diff_f'] = self.NL_diff_term_f
-        self.problem.substitutions['R_diff_C'] = self.NL_diff_term_C
-        self.problem.substitutions['R_diff_G'] = self.NL_diff_term_G
-
     def set_equations(self, Rayleigh, Prandtl,
                       Taylor=None, theta=0,
                       ChemicalPrandtl=1, Qu_0=5e-8, phi_0=10,

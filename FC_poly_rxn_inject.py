@@ -104,24 +104,28 @@ def FC_polytrope(dynamics_file,
     if threeD and ny is None:
         ny = nx
 
+    eqn_dict = {'nx' : nx,
+                'nz' : nz,
+                'constant_kappa' : const_kappa,
+                'constant_mu' : const_mu,
+                'epsilon' : epsilon,
+                'gamma' : gamma,
+                'n_rho_cz' : n_rho_cz,
+                'aspect_ratio' : aspect_ratio,
+                'fig_dir' : data_dir}
     if threeD:
-        atmosphere = polytropes.FC_polytrope_rxn_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                                epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                fig_dir=data_dir)
+        eqn_dict['mesh'] = mesh
+        eqn_dict['nz'] = nz
+        atmosphere = polytropes.FC_polytrope_rxn_3d(**eqn_dict)
+        
     else:
         if dynamic_diffusivities:
-            atmosphere = polytropes.FC_polytrope_2d_kappa(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                                          epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                          fig_dir=data_dir)
+            atmosphere = polytropes.FC_polytrope_2d_kappa(**eqn_dict)
         else:
             if chemistry:
-                atmosphere = polytropes.FC_polytrope_rxn_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                                    epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                    fig_dir=data_dir)
+                atmosphere = polytropes.FC_polytrope_rxn_2d(**eqn_dict)
             else:
-                atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
-                                                    epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
-                                                    fig_dir=data_dir)
+                atmosphere = polytropes.FC_polytrope_2d(**eqn_dict)
 
     if epsilon < 1e-4:
         ncc_cutoff = 1e-14
@@ -129,16 +133,18 @@ def FC_polytrope(dynamics_file,
         ncc_cutoff = 1e-6
     else:
         ncc_cutoff = 1e-10
-        
-    if threeD:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, Taylor=Taylor, theta=theta, ncc_cutoff=ncc_cutoff,
-                                   split_diffusivities=split_diffusivities,
-                                   ChemicalPrandtl=ChemicalPrandtl,Qu_0=Qu_0,phi_0=phi_0)
-    else:
-        atmosphere.set_IVP_problem(Rayleigh, Prandtl, ncc_cutoff=ncc_cutoff,
-                                   split_diffusivities=split_diffusivities,
-                                   ChemicalPrandtl=ChemicalPrandtl,Qu_0=Qu_0,phi_0=phi_0)
 
+    problem_dict = {'ncc_cutoff' : ncc_cutoff,
+                    'split_diffusivities' : split_diffusivities}
+    if threeD:
+        problem_dict['Taylor'] = Taylor
+        problem_dict['theta']  = theta
+    if chemistry:
+        problem_dict['ChemicalPrandtl'] = ChemicalPrandtl
+        problem_dict['Qu_0'] = Qu_0
+        problem_dict['phi_0'] = phi_0
+        
+    atmosphere.set_IVP_problem(Rayleigh, Prandtl, **problem_dict)
     
     if fixed_flux:
         atmosphere.set_BC(fixed_flux=True, stress_free=True)
