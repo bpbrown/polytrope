@@ -35,16 +35,55 @@ python3 FC_multi.py --help
 ```
 will describe various command-line options.
 
+### Rotating Runs
+To run a rotating polytrope, you could type, for example:
+```
+#!bash
+mpirun -np 64 python3 FC_poly.py --3D --rotating --nz=32 --nx=32 --ny=32 --mesh=8,8
+```
+Which will make a 3D rotating atmosphere, where both the x- and z- directions are
+broken up into 8 pieces (thus the 8,8 in the mesh).  
+
+#### Pleiades unicode fix
+The rotating equations contain some Unicode greek letters which are particularly 
+unhappy in the pleiades environment.  In order to get around errors which
+could be thrown by this, perform the following steps:
+
+First, create a file in your home directory called 
+*._my_mpi*.  Inside of that file, type
+```
+#!bash
+#!/bin/bash
+export LANG=en_US.UTF-8
+/nasa/sgi/mpt/2.14r19/bin/mpiexec_mpt $*
+```
+Save and quit, then run 
+```
+#!bash
+chmod +x $HOME/._my_mpi
+```
+to make that file executable.  Finally, add a line
+to your .profile or .bashrc that aliases mpi to use this file:
+```
+#!bash
+alias mpiexec_mpt="$HOME/._my_mpi"
+```
+Now, any time you call mpiexec_mpt, it will be properly wrapped in the right
+language enviroment so that it understands unicode!  You could go through similar
+steps to wrap python3, and that would allow you to use Unicode when running in serial, as well.
+
 ## Eigenvalue Problems (for finding onset of convection)
 
 To find the critical Rayleigh number for convective onset in a low-Mach number
 polytropic atmosphere, try
 ```
+#!bash
 mpirun -n 200 python3 FC_onset_curve.py --epsilon=1e-4
 ```
 
 For a high-stiffness multitropic atmosphere, try
 ```
+#!bash
 mpirun -n 200 python3 FC_onset_curve.py --Multitrope --nz=96,48 --stiffness=1e3 --rayleigh_steps=20 --kx_steps=20 --kx_start=0.3 --kx_stop=10
 ```
 Images of Rayleigh number / wavenumber space will be output, with the growth rate
