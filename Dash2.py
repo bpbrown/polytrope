@@ -278,14 +278,15 @@ def FC_convection(Rayleigh=1e6, Prandtl=1, stiffness=3, m_rz=3, gamma=5/3,
         logger.info('Iterations: {:d}'.format(N_iterations))
         logger.info('iter/sec: {:g}'.format(N_iterations/(elapsed_time)))
         logger.info('Average timestep: {:e}'.format(elapsed_sim_time / N_iterations))
-        
-        logger.info('beginning join operation')
-        logger.info(data_dir+'/checkpoint/')
-        post.merge_process_files(data_dir+'/checkpoint/', cleanup=True)
 
-        for task in analysis_tasks:
-            logger.info(analysis_tasks[task].base_path)
-            post.merge_process_files(analysis_tasks[task].base_path, cleanup=True)
+        if not no_join:
+            logger.info('beginning join operation')
+            logger.info(data_dir+'/checkpoint/')
+            post.merge_process_files(data_dir+'/checkpoint/', cleanup=False)
+
+            for task in analysis_tasks:
+                logger.info(analysis_tasks[task].base_path)
+                post.merge_process_files(analysis_tasks[task].base_path, cleanup=False)
 
         if (atmosphere.domain.distributor.rank==0):
 
