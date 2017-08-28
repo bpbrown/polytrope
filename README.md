@@ -50,7 +50,7 @@ unhappy in the pleiades environment.  In order to get around errors which
 could be thrown by this, perform the following steps:
 
 First, create a file in your home directory called 
-**._my_mpi**.  Inside of that file, type
+**$HOME/.mpirun**.  Inside of that file, type
 ```
 #!bash
 #!/bin/bash
@@ -60,29 +60,23 @@ export LANG=en_US.UTF-8
 Save and quit, then run 
 ```
 #!bash
-chmod +x $HOME/._my_mpi
+chmod +x $HOME/.mpirun
 ```
-to make that file executable.  Finally, add a line
-to your .profile or .bashrc that aliases mpi to use this file:
-```
-#!bash
-alias mpirun="$HOME/._my_mpi"
-```
-Now, any time you call **mpirun**, it will be a properly wrapped mpiexec_mpt call in the right
+to make that file executable. Now, any time you call **~/.mpirun**, it will be a properly wrapped mpiexec_mpt call in the right
 language enviroment so that it understands unicode!  Python3 often times needs to be wrapped individually,
-so you should make another file, $HOME/.python3, with the following inside:
+so you should make another file, **$HOME/.python3**, with the following inside:
 ```
 #!bash
 #!/bin/bash
 export LANG=en_US.UTF-8
 ~/dedalus/bin/python3 $*
 ```
-(with the appropriate python path for your install).  On subsequent runs, just use:
+(with the appropriate python path for your install). Make it executable, as well.  Then, on subsequent runs, just use:
 ```
 #!bash
-mpirun -np <num procs> ~/.python3 <file name> <file args>,
+~/.mpirun -np <num procs> ~/.python3 <file name> <file args>,
 ```
-and you should have a properly wrapped, unicode version of python!
+and you should have a properly wrapped, unicode version of mpi-ified python!
 
 ## Eigenvalue Problems (for finding onset of convection)
 
