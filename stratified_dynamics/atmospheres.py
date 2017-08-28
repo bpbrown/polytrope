@@ -607,8 +607,8 @@ class Polytrope(Atmosphere):
                         self.problem.parameters[key].require_layout(self.domain.dist.layouts[1])
                         array = self.problem.parameters[key].data[indxs]
                 except:
-                    raise
-                    logger.error("key error on atmosphere output {}".format(key))
+                    if self.domain.dist.rank == 0:
+                        logger.error("key error on atmosphere output {}".format(key))
                     array = 0
                 if self.domain.dist.rank == 0:
                     f[key] = array
