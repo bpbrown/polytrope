@@ -50,7 +50,7 @@ unhappy in the pleiades environment.  In order to get around errors which
 could be thrown by this, perform the following steps:
 
 First, create a file in your home directory called 
-*._my_mpi*.  Inside of that file, type
+**._my_mpi**.  Inside of that file, type
 ```
 #!bash
 #!/bin/bash
@@ -66,11 +66,23 @@ to make that file executable.  Finally, add a line
 to your .profile or .bashrc that aliases mpi to use this file:
 ```
 #!bash
-alias mpiexec_mpt="$HOME/._my_mpi"
+alias mpirun="$HOME/._my_mpi"
 ```
-Now, any time you call mpiexec_mpt, it will be properly wrapped in the right
-language enviroment so that it understands unicode!  You could go through similar
-steps to wrap python3, and that would allow you to use Unicode when running in serial, as well.
+Now, any time you call **mpirun**, it will be a properly wrapped mpiexec_mpt call in the right
+language enviroment so that it understands unicode!  Python3 often times needs to be wrapped individually,
+so you should make another file, $HOME/.python3, with the following inside:
+```
+#!bash
+#!/bin/bash
+export LANG=en_US.UTF-8
+~/dedalus/bin/python3 $*
+```
+(with the appropriate python path for your install).  On subsequent runs, just use:
+```
+#!bash
+mpirun -np <num procs> ~/.python3 <file name> <file args>,
+```
+and you should have a properly wrapped, unicode version of python!
 
 ## Eigenvalue Problems (for finding onset of convection)
 
