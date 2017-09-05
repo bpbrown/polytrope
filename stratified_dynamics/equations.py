@@ -26,8 +26,8 @@ class Equations():
         if not isinstance(nz, list):
             nz = [nz]
         if not isinstance(Lz, list):
-            Lz = [Lz]
-            
+            Lz = [Lz]   
+
         if len(nz)>1:
             logger.info("Setting compound basis in vertical (z) direction")
             z_basis_list = []
@@ -192,6 +192,13 @@ class FC_equations(Equations):
         self.problem.parameters['del_chi_r'] = self.del_chi_r
         self.problem.parameters['del_nu_r'] = self.del_nu_r
 
+        self.IH_flux.differentiate('z', out=self.IH)
+        self.IH.set_scales(1, keep_data=True)
+        self.rho0.set_scales(1, keep_data=True)
+        self.IH['g'] = self.IH['g'] * (self.gamma - 1) / (self.rho0['g']) #divide rho Cv
+        self.problem.parameters['IH'] = self.IH
+        self.problem.parameters['IH_flux'] = self.IH_flux
+
         # Thermo subs that are used later, but before set_subs() is called; okay or not okay?
         self.problem.parameters['delta_s_atm'] = self.delta_s
 
@@ -272,7 +279,7 @@ class FC_equations(Equations):
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff   = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + dy(T1)*dy(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                   " Cv_inv*(chi*(T0_zz))"
+        self.source =                   " (Cv_inv*(chi*(T0_zz)) + IH)"
         if not self.constant_kappa:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
@@ -326,7 +333,7 @@ class FC_equations(Equations):
         self.problem.substitutions['KE_flux_z'] = 'w*(KE)'
         self.problem.substitutions['PE_flux_z'] = 'w*(PE)'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*σxz + v*σyz + w*σzz)'
-        self.problem.substitutions['convective_flux_z'] = '(viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
+        self.problem.substitutions['convective_flux_z'] = '(IH_flux + viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
         
         self.problem.substitutions['evolved_avg_kappa'] = 'vol_avg(rho_full*chi)'
         self.problem.substitutions['kappa_adiabatic_flux_z_G75']  = '(rho0*chi*g/Cp)'
@@ -619,6 +626,7 @@ class FC_equations_2d(FC_equations):
         logger.debug("Setting continuity equation")
         self.problem.add_equation(("(scale_continuity)*( dt(ln_rho1)   + w*del_ln_rho0 + Div_u ) = "
                                    "(scale_continuity)*(-UdotGrad(ln_rho1, dz(ln_rho1)))"))
+
 
         logger.debug("Setting energy equation")
         self.problem.add_equation(("(scale_energy)*( dt(T1)   + w*T0_z  + (gamma-1)*T0*Div_u -  L_thermal) = "
