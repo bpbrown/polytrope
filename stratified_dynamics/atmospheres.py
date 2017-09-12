@@ -447,10 +447,15 @@ class Polytrope(Atmosphere):
 
         rho0_max, rho0_min = self.value_at_boundary(self.rho0)
         if rho0_max is not None:
-            rho0_ratio = rho0_max/rho0_min
-            logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
-            logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
-            logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_m)))
+            try:
+		# For "strange" resolutions (e.g., 96x192), sometimes this crashes.  Need to investigate. (9/12/2017)
+                rho0_ratio = rho0_max/rho0_min
+                logger.info("   density: min {}  max {}".format(rho0_min, rho0_max))
+                logger.info("   density scale heights = {:g} (measured)".format(np.log(rho0_ratio)))
+                logger.info("   density scale heights = {:g} (target)".format(np.log((self.z0)**self.poly_m)))
+            except:
+                if self.domain.distributor.comm_cart.rank == 0:
+                    logger.error("Something went wrong with reporting density range")
             
         H_rho_top = (self.z0-self.Lz)/self.poly_m
         H_rho_bottom = (self.z0)/self.poly_m
@@ -533,7 +538,7 @@ class Polytrope(Atmosphere):
         if self.internal:
             ih = chi_top * excess_flux
             self.rho0.set_scales(1, keep_data=True)
-            self.IH_flux['g'] = - ih * ( self.Lz - self.z )
+            self.IH_flux['g'] = - ih * self.z
 
                     
         #Allows for atmosphere reuse

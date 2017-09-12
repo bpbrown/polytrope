@@ -193,11 +193,13 @@ class FC_equations(Equations):
         self.problem.parameters['del_nu_r'] = self.del_nu_r
 
         self.IH_flux.differentiate('z', out=self.IH)
-        self.IH.set_scales(1, keep_data=True)
-        self.rho0.set_scales(1, keep_data=True)
-        self.IH['g'] = self.IH['g'] * (self.gamma - 1) / (self.rho0['g']) #divide rho Cv
-        self.problem.parameters['IH'] = self.IH
-        self.problem.parameters['IH_flux'] = self.IH_flux
+        self.IH['g'] *= -1  # Go from a LHS flux term to a RHS source term
+        if np.max(self.IH['g']) == 0:
+            self.problem.substitutions['IH'] = "0"
+            self.problem.substitutions['IH_flux'] = "0"
+        else:
+            self.problem.parameters['IH'] = self.IH
+            self.problem.parameters['IH_flux'] = self.IH_flux
 
         # Thermo subs that are used later, but before set_subs() is called; okay or not okay?
         self.problem.parameters['delta_s_atm'] = self.delta_s
@@ -279,7 +281,7 @@ class FC_equations(Equations):
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff   = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + dy(T1)*dy(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                   " (Cv_inv*(chi*(T0_zz)) + IH)"
+        self.source =                   " (Cv_inv*(chi*(T0_zz) + IH/rho_full))"
         if not self.constant_kappa:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
@@ -333,7 +335,7 @@ class FC_equations(Equations):
         self.problem.substitutions['KE_flux_z'] = 'w*(KE)'
         self.problem.substitutions['PE_flux_z'] = 'w*(PE)'
         self.problem.substitutions['viscous_flux_z'] = '- rho_full * nu * (u*σxz + v*σyz + w*σzz)'
-        self.problem.substitutions['convective_flux_z'] = '(IH_flux + viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
+        self.problem.substitutions['convective_flux_z'] = '(viscous_flux_z + KE_flux_z + PE_flux_z + h_flux_z)'
         
         self.problem.substitutions['evolved_avg_kappa'] = 'vol_avg(rho_full*chi)'
         self.problem.substitutions['kappa_adiabatic_flux_z_G75']  = '(rho0*chi*g/Cp)'
@@ -496,9 +498,10 @@ class FC_equations(Equations):
         analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
         analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
         analysis_profile.add_task("plane_avg(h_flux_z)",  name="enthalpy_flux_z")
+        analysis_profile.add_task("plane_avg(IH_flux)",  name="IH_flux_z")
         analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux_z)", name="kappa_flux_z")
-        analysis_profile.add_task("plane_avg(kappa_flux_z) - vol_avg(kappa_flux_z)", name="kappa_flux_fluc_z")
+        analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
         analysis_profile.add_task("plane_avg(kappa_flux_z - kappa_adiabatic_flux_z_G75)", name="kappa_flux_z_minus_ad_G75")
         analysis_profile.add_task("plane_avg(kappa_flux_z - kappa_adiabatic_flux_z_AB17)", name="kappa_flux_z_minus_ad_AB17")
         analysis_profile.add_task("plane_avg(kappa_flux_z-kappa_adiabatic_flux_z_G75)/vol_avg(Nusselt_norm_G75)", name="norm_kappa_flux_z_G75")

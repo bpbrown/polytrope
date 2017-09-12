@@ -89,7 +89,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     initial_time = time.time()
 
     logger.info("Starting Dedalus script {:s}".format(sys.argv[0]))
-    
+
     if nx is None:
         nx = int(np.round(nz*aspect_ratio))
     if threeD and ny is None:
@@ -151,7 +151,7 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
     logger.info("full atm HS check")
     atmosphere.check_atmosphere(make_plots = False, rho=atmosphere.get_full_rho(solver), T=atmosphere.get_full_T(solver))
 
-    if restart is None:
+    if restart is None or start_new_files:
         mode = "overwrite"
     else:
         mode = "append"
