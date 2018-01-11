@@ -110,11 +110,6 @@ class Atmosphere:
         self.necessary_quantities['scale_energy'] = self.scale_energy
         self.necessary_quantities['scale_momentum'] = self.scale_momentum
 
-        self.IH_flux = self._new_ncc()
-        self.IH = self._new_ncc()
-        self.necessary_quantities['IH_flux'] = self.IH_flux
-        self.necessary_quantities['IH']      = self.IH
-
     def copy_atmosphere(self, atmosphere):
         '''
         Copies values from a target atmosphere into the current atmosphere.
@@ -337,13 +332,11 @@ class Polytrope(Atmosphere):
                  n_rho_cz = 3,
                  m_cz=None, epsilon=1e-4, gamma=5/3,
                  constant_kappa=True, constant_mu=True,
-                 internal=False,
                  **kwargs):
         
         self.atmosphere_name = 'single polytrope'
         self.aspect_ratio    = aspect_ratio
         self.n_rho_cz        = n_rho_cz
-        self.internal        = internal
 
         self._set_atmosphere_parameters(gamma=gamma, epsilon=epsilon, poly_m=m_cz)
         if m_cz is None:
@@ -392,9 +385,7 @@ class Polytrope(Atmosphere):
         self.m_ad = 1/(self.gamma-1)
 
         # trap on poly_m/epsilon conflicts?
-        if self.internal:
-            self.poly_m = self.m_ad
-        elif poly_m is None:
+        if poly_m is None:
             self.poly_m = self.m_ad - self.epsilon
         else:
             self.poly_m = poly_m
@@ -484,11 +475,7 @@ class Polytrope(Atmosphere):
         self.Rayleigh, self.Prandtl = Rayleigh, Prandtl
 
         # set nu and chi at top based on Rayleigh number
-        if self.internal:
-            excess_flux = ( 1 - (1 + self.m_ad - self.epsilon)/self.Cp )
-            self.nu_top = nu_top = np.sqrt(Prandtl * (self.Lz**5 * excess_flux * self.g) / Rayleigh)
-        else:
-            self.nu_top = nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
+        self.nu_top = nu_top = np.sqrt(Prandtl*(self.Lz**3*np.abs(self.delta_s/self.Cp)*self.g)/Rayleigh)
         self.chi_top = chi_top = nu_top/Prandtl
 
         if self.constant_diffusivities:
@@ -535,12 +522,6 @@ class Polytrope(Atmosphere):
       
             logger.info("   nu_top = {:g}, chi_top = {:g}".format(nu_top, chi_top))
 
-        if self.internal:
-            ih = chi_top * excess_flux
-            self.rho0.set_scales(1, keep_data=True)
-            self.IH_flux['g'] = - ih * self.z
-
-                    
         #Allows for atmosphere reuse
         self.chi_l.set_scales(1, keep_data=True)
         self.nu_l.set_scales(1, keep_data=True)

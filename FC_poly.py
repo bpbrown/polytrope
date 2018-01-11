@@ -36,7 +36,6 @@ Options:
     --const_nu                           If flagged, use constant nu 
     --const_chi                          If flagged, use constant chi 
     --dynamic_diffusivities              If flagged, use equations formulated in terms of dynamic diffusivities (μ,κ)
-    --internal                           If flagged, use internal heating
     
     --restart=<restart_file>             Restart from checkpoint
     --start_new_files                    Start new files while checkpointing
@@ -62,7 +61,6 @@ import numpy as np
 def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
                  Taylor=None, theta=0,
                  nz=128, nx=None, ny=None, threeD=False, mesh=None,
-                 internal=False,
                  n_rho_cz=3, epsilon=1e-4, gamma=5/3,
                  run_time=23.5, run_time_buoyancies=None, run_time_iter=np.inf,
                  fixed_T=False, fixed_flux=False, mixed_flux_T=False,
@@ -96,16 +94,16 @@ def FC_polytrope(Rayleigh=1e4, Prandtl=1, aspect_ratio=4,
         ny = nx
 
     if threeD:
-        atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu, internal=internal,\
+        atmosphere = polytropes.FC_polytrope_3d(nx=nx, ny=ny, nz=nz, mesh=mesh, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     else:
         if dynamic_diffusivities:
-            atmosphere = polytropes.FC_polytrope_2d_kappa_mu(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,  internal=internal,\
+            atmosphere = polytropes.FC_polytrope_2d_kappa_mu(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
         else:
-            atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,  internal=internal,\
+            atmosphere = polytropes.FC_polytrope_2d(nx=nx, nz=nz, constant_kappa=const_kappa, constant_mu=const_mu,\
                                         epsilon=epsilon, gamma=gamma, n_rho_cz=n_rho_cz, aspect_ratio=aspect_ratio,\
                                         fig_dir=data_dir)
     if epsilon < 1e-4:
@@ -491,5 +489,4 @@ if __name__ == "__main__":
                  no_volumes=args['--no_volumes'],
                  no_join=args['--no_join'],
                  split_diffusivities=args['--split_diffusivities'],
-                 verbose=args['--verbose'],
-                 internal=args['--internal'])
+                 verbose=args['--verbose'])

@@ -192,15 +192,6 @@ class FC_equations(Equations):
         self.problem.parameters['del_chi_r'] = self.del_chi_r
         self.problem.parameters['del_nu_r'] = self.del_nu_r
 
-        self.IH_flux.differentiate('z', out=self.IH)
-        self.IH['g'] *= -1  # Go from a LHS flux term to a RHS source term
-        if np.max(self.IH['g']) == 0:
-            self.problem.substitutions['IH'] = "0"
-            self.problem.substitutions['IH_flux'] = "0"
-        else:
-            self.problem.parameters['IH'] = self.IH
-            self.problem.parameters['IH_flux'] = self.IH_flux
-
         # Thermo subs that are used later, but before set_subs() is called; okay or not okay?
         self.problem.parameters['delta_s_atm'] = self.delta_s
 
@@ -281,7 +272,7 @@ class FC_equations(Equations):
         self.linear_thermal_diff_l    = " Cv_inv*(chi_l*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.linear_thermal_diff_r    = " Cv_inv*(chi_r*(Lap(T1, T1_z) + T0_z*dz(ln_rho1)))"
         self.nonlinear_thermal_diff   = " Cv_inv*chi*(dx(T1)*dx(ln_rho1) + dy(T1)*dy(ln_rho1) + T1_z*dz(ln_rho1))"
-        self.source =                   " (Cv_inv*(chi*(T0_zz) + IH/rho_full))"
+        self.source =                   " (Cv_inv*(chi*(T0_zz)))"
         if not self.constant_kappa:
             self.linear_thermal_diff_l += '+ Cv_inv*(chi_l*del_ln_rho0 + del_chi_l)*T1_z'
             self.linear_thermal_diff_r += '+ Cv_inv*(chi_r*del_ln_rho0 + del_chi_r)*T1_z'
@@ -498,7 +489,6 @@ class FC_equations(Equations):
         analysis_profile.add_task("plane_avg(w*(IE))", name="IE_flux_z")
         analysis_profile.add_task("plane_avg(w*(P))",  name="P_flux_z")
         analysis_profile.add_task("plane_avg(h_flux_z)",  name="enthalpy_flux_z")
-        analysis_profile.add_task("plane_avg(IH_flux)",  name="IH_flux_z")
         analysis_profile.add_task("plane_avg(viscous_flux_z)",  name="viscous_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux_z)", name="kappa_flux_z")
         analysis_profile.add_task("plane_avg(kappa_flux_fluc)", name="kappa_flux_fluc_z")
