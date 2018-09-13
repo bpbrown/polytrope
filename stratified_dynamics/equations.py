@@ -638,7 +638,7 @@ class FC_equations_2d(FC_equations):
         analysis_slice.add_task("u", name="u")
         analysis_slice.add_task("w", name="w")
         analysis_slice.add_task("enstrophy", name="enstrophy")
-        analysis_slice.add_task("ω_y", name="vorticity")
+        analysis_slice.add_task("(u_z  - dx(w))", name="vorticity")
         analysis_tasks['slice'] = analysis_slice
 
         return analysis_tasks
